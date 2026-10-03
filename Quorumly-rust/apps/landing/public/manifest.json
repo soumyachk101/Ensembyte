@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "files": {
+    "orbit-1.0.0-macos-universal-app.tar.gz": {
+      "sha256": "PLACEHOLDER_UPDATED_BY_RELEASE_CI"
+    },
+    "Orbit-1.0.0-macos-universal-app.tar.gz": {
+      "sha256": "PLACEHOLDER_UPDATED_BY_RELEASE_CI"
+    },
+    "orbit-1.0.0-macos-universal.dmg": {
+      "sha256": "PLACEHOLDER_UPDATED_BY_RELEASE_CI"
+    },
+    "Orbit-1.0.0-macos-universal.dmg": {
+      "sha256": "PLACEHOLDER_UPDATED_BY_RELEASE_CI"
+    },
+    "Orbit.dmg": {
+      "sha256": "PLACEHOLDER_UPDATED_BY_RELEASE_CI"
+    }
+  }
+}

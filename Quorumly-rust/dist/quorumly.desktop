@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit
+GenericName=Coding Agent Controller
+Comment=Multi-device controller for coding agents
+Exec=orbit %u
+TryExec=orbit
+Icon=orbit
+Terminal=false
+StartupNotify=true
+Categories=Development;Utility;
+Keywords=agent;claude;codex;ai;coding;
+StartupWMClass=orbit
+MimeType=x-scheme-handler/orbit;

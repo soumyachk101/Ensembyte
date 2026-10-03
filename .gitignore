@@ -1,0 +1,55 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Xcode / Swift
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+build.noindex/
+.build/
+
+# Rust / Cargo
+target/
+**/target/
+**/*.rs.bk
+*.pdb
+
+# Local scratch & signing credentials
+ignore/
+*.pem
+*.p12
+*.key
+*.secret
+.env
+.env.*
+.env.local
+
+# Release archives and installers (releases are published via GitHub Actions/Release scripts)
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+*.msi
+
+# Agent, IDE, & Tool scratch
+.agents/
+.claude/
+.kilo/
+.pheromone/
+.playwright-mcp/
+.quorumly/
+.vscode/
+.idea/
+node_modules/
+.wrangler/
+.vercel/
+__pycache__/
+*.pyc
+CLAUDE.md

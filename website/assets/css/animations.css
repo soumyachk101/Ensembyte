@@ -1,0 +1,193 @@
+/* ==========================================================================
+   Animation Library — Hero Orbs & Card Edge Sweep
+   Adapted for Swarm Code website: uses the site's existing accent tokens.
+   ========================================================================== */
+
+/* ── Design Tokens (map to site.css) ──────────────────────────────────── */
+
+:root {
+  --edge-accent: 79 156 255;
+  --edge-accent-hover: 116 179 255;
+  --hero-glow: 79 156 255;
+  --edge-duration: 3s;
+  --hero-duration: 6s;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+
+@keyframes edge-sweep {
+  0%   { background-position: 0%   0%; }
+  100% { background-position: 200% 0%; }
+}
+
+@keyframes edge-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+@keyframes hero-orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25%      { transform: translate(3%, -2%) scale(1.04); }
+  50%      { transform: translate(-1%, 2%) scale(0.97); }
+  75%      { transform: translate(-3%, -1%) scale(1.02); }
+}
+
+@keyframes hero-orb-enter {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes hero-content-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes card-hover-lift {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-3px); }
+}
+
+/* ── Hero Section ───────────────────────────────────────────────────────── */
+
+/* The .hero wrapper must allow overflow for the orbs */
+.hero {
+  overflow: hidden;
+}
+
+/* Decorative glow orbs behind hero content */
+.hero__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  animation:
+    hero-orb-drift var(--hero-duration) ease-in-out infinite,
+    hero-orb-enter 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hero__orb--primary {
+  width: min(420px, 60vw);
+  height: min(420px, 60vw);
+  background: rgb(var(--hero-glow) / 0.22);
+  top: -12%;
+  right: -6%;
+  animation-delay: 0s, 0s;
+}
+
+.hero__orb--secondary {
+  width: min(280px, 40vw);
+  height: min(280px, 40vw);
+  background: rgb(var(--edge-accent) / 0.14);
+  bottom: -16%;
+  left: -4%;
+  animation-delay: -3s, 0.15s;
+}
+
+/* Inner content layer — raised above orbs */
+.hero__inner {
+  position: relative;
+  z-index: 2;
+}
+
+/* Staggered fade-up for hero children */
+.hero__inner > * {
+  opacity: 0;
+  animation: hero-content-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.hero__inner > *:nth-child(1) { animation-delay: 0.05s; }
+.hero__inner > *:nth-child(2) { animation-delay: 0.15s; }
+.hero__inner > *:nth-child(3) { animation-delay: 0.25s; }
+.hero__inner > *:nth-child(4) { animation-delay: 0.35s; }
+.hero__inner > *:nth-child(5) { animation-delay: 0.45s; }
+
+/* Don't fight the existing reveal animation — pause ours while reveal runs */
+.hero__inner > *.reveal:not(.is-settled) {
+  animation-play-state: paused;
+}
+
+/* ── Card Edge Animations ───────────────────────────────────────────────── */
+
+/* Animated border using a gradient background that sweeps clockwise */
+.card-edge {
+  position: relative;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(var(--edge-accent) / 0.6) 25%,
+    transparent 50%,
+    rgb(var(--edge-accent) / 0.6) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: edge-sweep var(--edge-duration) linear infinite;
+}
+
+/* Inner surface hides the gradient so only the border shows */
+.card-edge__inner {
+  border-radius: inherit;
+  background: inherit;
+}
+
+/* Pulsing glow shadow */
+.card-edge-glow {
+  animation: edge-pulse 2.4s ease-in-out infinite;
+}
+
+/* Combined: animated border + pulsing shadow */
+.card-edge--animated {
+  box-shadow:
+    0 0 0 1px rgb(var(--edge-accent) / 0.35),
+    0 0 12px -4px rgb(var(--edge-accent) / 0.3);
+}
+
+/* Hover state */
+.card-edge--animated:hover,
+.card-edge:hover {
+  box-shadow:
+    0 0 0 1px rgb(var(--edge-accent-hover) / 0.55),
+    0 0 20px -2px rgb(var(--edge-accent-hover) / 0.35);
+}
+
+/* Hover lift on the inner card */
+.card-edge:hover .card-edge__inner {
+  animation: card-hover-lift 0.3s ease-out forwards;
+}
+
+/* ── Utility: light / dark card variants ───────────────────────────────── */
+
+/* For cards on light backgrounds — white edge tint */
+.card-edge--light {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.5) 25%,
+    transparent 50%,
+    rgb(255 255 255 / 0.5) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: edge-sweep var(--edge-duration) linear infinite;
+}
+
+.card-edge--light.card-edge--animated {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.25),
+    0 0 12px -4px rgb(255 255 255 / 0.2);
+}
+
+/* ── Reduced Motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__orb,
+  .hero__inner > *,
+  .card-edge,
+  .card-edge-glow {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .hero__orb { opacity: 0.3; }
+}

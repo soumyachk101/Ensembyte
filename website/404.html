@@ -1,0 +1,1300 @@
+<!--
+  Quorumly — 404: Source code not found
+  ========================================
+  Enhanced edition: WebGL liquid metal waves, particle network, cursor trail,
+  3D floating geometry, glitch 404 digits, typing terminal, scanline overlay.
+  Professional, animated, English. No emojis.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 — The source you are looking for is not here · Quorumly</title>
+  <meta name="description" content="This page has moved, been renamed, or never existed. Head back to the Quorumly home page.">
+  <link rel="canonical" href="https://swarmcode.vercel.app/">
+  <meta name="theme-color" content="#0b0e14">
+  <meta name="color-scheme" content="dark">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Quorumly">
+  <meta property="og:title" content="404 — The source you are looking for is not here">
+  <meta property="og:description" content="This page has moved, been renamed, or never existed.">
+  <meta property="og:url" content="https://swarmcode.vercel.app/404.html">
+
+  <!-- Favicon -->
+  <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="app-icon.svg">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/brand/quorumly-icon-96.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/brand/quorumly-icon-180.png">
+
+  <!-- Fonts: same triple as the main site -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Site shared stylesheet (morph buttons, reveal, glass tokens) -->
+  <link rel="stylesheet" href="assets/css/site.css?v=14">
+
+  <style>
+    /* ================================================================== */
+    /* 404-page additions                                                 */
+    /* ================================================================== */
+
+    /* ---- nav --------------------------------------------------------- */
+    /* Reuse the site's .nav / .nav__pill exactly — they ship in site.css */
+    .nav__logo img { border-radius: 6px; }
+
+    /* ---- hero area -------------------------------------------------- */
+    .notfound {
+      position: relative;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      overflow: hidden;
+    }
+
+    /* Background binary field — matches the hero's canvas treatment */
+    .notfound__field {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .notfound__field canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      opacity: 0.5;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 15%, transparent 70%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 15%, transparent 70%);
+    }
+
+    /* Floating SVG network pattern layer */
+    .notfound__net {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .notfound__net svg {
+      position: absolute;
+      opacity: 0;
+      animation: netDrift 14s ease-in-out infinite;
+    }
+    .notfound__net svg:nth-child(1) { left: 6%;  top: 12%; width: 180px; animation-delay: 0s; }
+    .notfound__net svg:nth-child(2) { right: 8%; top: 18%; width: 140px; animation-delay: 3s; }
+    .notfound__net svg:nth-child(3) { left: 15%; bottom: 20%; width: 200px; animation-delay: 6s; }
+    .notfound__net svg:nth-child(4) { right: 14%; bottom: 26%; width: 160px; animation-delay: 9s; }
+    .notfound__net svg:nth-child(5) { left: 50%; top: 50%; width: 220px; animation-delay: 2s; transform: translate(-50%, -50%); }
+    .notfound__net svg:nth-child(6) { left: 72%; top: 60%; width: 120px; animation-delay: 11s; }
+
+    @keyframes netDrift {
+      0%, 100% { opacity: 0; transform: translateY(0); }
+      20%      { opacity: 0.18; }
+      50%      { opacity: 0.22; transform: translateY(-18px); }
+      80%      { opacity: 0.1; }
+    }
+    /* Keep the centered SVG from also drifting position */
+    .notfound__net svg:nth-child(5) {
+      animation-name: netDriftCenter;
+    }
+    @keyframes netDriftCenter {
+      0%, 100% { opacity: 0; transform: translate(-50%, -50%) translateY(0); }
+      20%      { opacity: 0.18; }
+      50%      { opacity: 0.22; transform: translate(-50%, -50%) translateY(-18px); }
+      80%      { opacity: 0.1; }
+    }
+
+    /* ---- 3D floating geometric shapes --------------------------------- */
+    .geo-shapes {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      perspective: 800px;
+      transform-style: preserve-3d;
+    }
+    .geo-shape {
+      position: absolute;
+      border: 1.5px solid rgba(79, 156, 255, 0.18);
+      animation: geoFloat 20s ease-in-out infinite;
+      will-change: transform;
+    }
+    .geo-shape--cube {
+      width: 70px;
+      height: 70px;
+      border-radius: 8px;
+      top: 8%;
+      left: 10%;
+      transform: rotateX(25deg) rotateY(35deg);
+      border-color: rgba(79, 156, 255, 0.15);
+      box-shadow: inset 0 0 30px rgba(79, 156, 255, 0.05), 0 0 40px rgba(79, 156, 255, 0.03);
+      animation-delay: 0s;
+    }
+    .geo-shape--diamond {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      top: 20%;
+      right: 12%;
+      transform: rotate(45deg) rotateX(30deg);
+      border-color: rgba(120, 180, 255, 0.18);
+      box-shadow: 0 0 35px rgba(79, 156, 255, 0.04);
+      animation-delay: -4s;
+    }
+    .geo-shape--ring {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      border-color: rgba(79, 156, 255, 0.12);
+      bottom: 18%;
+      left: 8%;
+      border-width: 2px;
+      box-shadow: 0 0 50px rgba(79, 156, 255, 0.04), inset 0 0 30px rgba(79, 156, 255, 0.03);
+      animation-delay: -8s;
+    }
+    .geo-shape--triangle {
+      width: 0;
+      height: 0;
+      border: none;
+      border-left: 35px solid transparent;
+      border-right: 35px solid transparent;
+      border-bottom: 60px solid rgba(79, 156, 255, 0.06);
+      filter: drop-shadow(0 0 15px rgba(79, 156, 255, 0.03));
+      top: 60%;
+      right: 18%;
+      animation-delay: -12s;
+    }
+    .geo-shape--hex {
+      width: 65px;
+      height: 38px;
+      border-radius: 0;
+      background: transparent;
+      bottom: 25%;
+      right: 25%;
+      border-color: rgba(79, 156, 255, 0.13);
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      animation-delay: -16s;
+    }
+    .geo-shape--dots {
+      top: 15%;
+      left: 45%;
+      width: auto;
+      height: auto;
+      border: none;
+      display: grid;
+      grid-template-columns: repeat(4, 8px);
+      gap: 12px;
+      animation-delay: -6s;
+    }
+    .geo-shape--dots::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(79, 156, 255, 0.2);
+      box-shadow:
+        16px 0 0 rgba(79, 156, 255, 0.15),
+        32px 0 0 rgba(79, 156, 255, 0.1),
+        0 16px 0 rgba(79, 156, 255, 0.12),
+        16px 16px 0 rgba(79, 156, 255, 0.08),
+        32px 16px 0 rgba(79, 156, 255, 0.14),
+        0 32px 0 rgba(79, 156, 255, 0.1),
+        16px 32px 0 rgba(79, 156, 255, 0.18),
+        32px 32px 0 rgba(79, 156, 255, 0.09);
+    }
+
+    @keyframes geoFloat {
+      0%, 100% {
+        transform: translateY(0) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) rotate(0deg);
+      }
+      25% {
+        transform: translateY(-20px) rotateX(calc(var(--rx, 0deg) + 15deg)) rotateY(calc(var(--ry, 0deg) + 20deg)) rotate(5deg);
+      }
+      50% {
+        transform: translateY(-10px) rotateX(calc(var(--rx, 0deg) - 5deg)) rotateY(calc(var(--ry, 0deg) + 40deg)) rotate(-3deg);
+      }
+      75% {
+        transform: translateY(-30px) rotateX(calc(var(--rx, 0deg) + 25deg)) rotateY(calc(var(--ry, 0deg) + 10deg)) rotate(8deg);
+      }
+    }
+    .geo-shape--cube    { --rx: 25deg; --ry: 35deg; }
+    .geo-shape--diamond { --rx: 30deg; --ry: 0deg; }
+    .geo-shape--ring    { --rx: 0deg; --ry: 45deg; }
+    .geo-shape--hex     { --rx: 60deg; --ry: 30deg; }
+    .geo-shape--dots    { --rx: 0deg; --ry: 0deg; }
+
+    /* ---- content ---------------------------------------------------- */
+    .notfound__content {
+      position: relative;
+      z-index: 3;
+      max-width: 660px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Giant 404 — per-digit stagger + glitch effect */
+    .notfound__code {
+      font-family: "Inter Tight", var(--font-display);
+      font-weight: 700;
+      font-size: clamp(7rem, 20vw, 14rem);
+      line-height: 0.88;
+      letter-spacing: -0.07em;
+      color: var(--text-primary);
+      opacity: 0;
+      animation: nfFadeUp 900ms var(--ease-out) 200ms both;
+      position: relative;
+    }
+    .notfound__code span { display: inline-block; }
+    .notfound__code .d1 { animation: nfDigitIn 650ms var(--ease-out) 350ms both; }
+    .notfound__code .d2 { animation: nfDigitIn 650ms var(--ease-out) 480ms both; }
+    .notfound__code .d3 { animation: nfDigitIn 650ms var(--ease-out) 610ms both; }
+
+    /* Glitch chromatic aberration */
+    .notfound__code::after {
+      content: "404";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      font: inherit;
+      pointer-events: none;
+      text-shadow:
+        -3px 0 rgba(255, 0, 80, 0.6),
+        3px 0 rgba(0, 200, 255, 0.6),
+        0 0 20px rgba(79, 156, 255, 0.3);
+      animation: chromaticShift 4s ease-in-out infinite;
+      clip-path: inset(0 0 65% 0);
+    }
+    .notfound__code::before {
+      content: "404";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      font: inherit;
+      color: var(--accent);
+      opacity: 0;
+      filter: blur(40px);
+      animation: nfGlowIn 1800ms ease-out 900ms both;
+      pointer-events: none;
+    }
+    .notfound__code.glitch-active span {
+      animation: glitchJump 0.15s steps(2) infinite;
+    }
+    .notfound__code.glitch-active .d1 {
+      text-shadow: -4px 0 rgba(255, 0, 80, 0.7), 4px 0 rgba(0, 200, 255, 0.7);
+      transform: translate(-2px, 1px);
+    }
+    .notfound__code.glitch-active .d2 {
+      text-shadow: 3px 0 rgba(255, 0, 80, 0.5), -3px 0 rgba(0, 200, 255, 0.5);
+      transform: translate(2px, -1px);
+    }
+    .notfound__code.glitch-active .d3 {
+      text-shadow: -2px 0 rgba(255, 0, 80, 0.6), 2px 0 rgba(0, 200, 255, 0.6);
+      transform: translate(1px, 2px);
+    }
+
+    @keyframes chromaticShift {
+      0%, 100% { text-shadow: -3px 0 rgba(255, 0, 80, 0.6), 3px 0 rgba(0, 200, 255, 0.6), 0 0 20px rgba(79, 156, 255, 0.3); clip-path: inset(0 0 65% 0); }
+      25% { text-shadow: 3px 0 rgba(255, 0, 80, 0.4), -3px 0 rgba(0, 200, 255, 0.7), 2px 0 rgba(255, 0, 255, 0.2); clip-path: inset(20% 0 40% 0); }
+      50% { text-shadow: -2px 0 rgba(255, 0, 80, 0.7), 2px 0 rgba(0, 200, 255, 0.4), -1px 0 rgba(0, 255, 100, 0.2); clip-path: inset(50% 0 10% 0); }
+      75% { text-shadow: 4px 0 rgba(255, 0, 80, 0.5), -4px 0 rgba(0, 200, 255, 0.5), 1px 2px rgba(255, 255, 0, 0.15); clip-path: inset(5% 0 70% 0); }
+    }
+    @keyframes glitchJump {
+      0%   { transform: translate(0, 0); }
+      25%  { transform: translate(-3px, 2px); }
+      50%  { transform: translate(2px, -1px); }
+      75%  { transform: translate(-1px, -2px); }
+      100% { transform: translate(3px, 1px); }
+    }
+
+    @keyframes nfDigitIn {
+      0%   { opacity: 0; transform: translateY(50px) scale(0.6) rotateX(40deg); }
+      65%  { opacity: 1; transform: translateY(-4px) scale(1.03) rotateX(-2deg); }
+      100% { opacity: 1; transform: translateY(0) scale(1) rotateX(0deg); }
+    }
+    @keyframes nfGlowIn {
+      0%   { opacity: 0; transform: scale(0.7); }
+      40%  { opacity: 0.5; }
+      100% { opacity: 0.18; transform: scale(1.2); }
+    }
+    @keyframes nfFadeUp {
+      0%   { opacity: 0; transform: translateY(30px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- headline -------------------------------------------------- */
+    .notfound__headline {
+      margin-top: 8px;
+      font-family: "Inter Tight", var(--font-display);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      font-size: clamp(1.5rem, 3.8vw, 2.3rem);
+      line-height: 1.12;
+      color: var(--text-primary);
+      opacity: 0;
+      animation: nfFadeUp 900ms var(--ease-out) 750ms both;
+    }
+
+    /* ---- glass card ------------------------------------------------- */
+    .notfound__card {
+      margin-top: 28px;
+      width: 100%;
+      border-radius: 32px;
+      background: var(--bg-well);
+      padding: 36px 32px;
+      text-align: left;
+      opacity: 0;
+      animation: nfFadeUp 900ms var(--ease-out) 950ms both;
+      transition: transform 0.4s ease, box-shadow 0.4s ease;
+      transform-style: preserve-3d;
+      perspective: 600px;
+    }
+    .notfound__card:hover {
+      transform: perspective(600px) rotateX(2deg) rotateY(-2deg) translateY(-4px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(79, 156, 255, 0.05);
+    }
+    .notfound__card p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    .notfound__card p:last-child { margin-bottom: 0; }
+    .notfound__card strong { color: var(--text-primary); font-weight: 600; }
+    .notfound__card code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .notfound__card a {
+      color: var(--accent-text);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: color var(--dur-fast) var(--ease-out);
+    }
+    .notfound__card a:hover { color: var(--text-primary); }
+
+    /* ---- terminal block -------------------------------------------- */
+    .notfound__terminal {
+      margin-top: 22px;
+      width: 100%;
+      border-radius: 16px;
+      background: var(--ink);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+      opacity: 0;
+      animation: nfFadeUp 900ms var(--ease-out) 1150ms both;
+    }
+    .notfound__terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .notfound__terminal-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .notfound__terminal-dot--red    { background: #ff5f57; }
+    .notfound__terminal-dot--yellow { background: #febc2e; }
+    .notfound__terminal-dot--green  { background: #28c840; }
+    .notfound__terminal-title {
+      margin-left: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-quaternary);
+    }
+    .notfound__terminal-body {
+      padding: 20px 22px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--text-tertiary);
+      text-align: left;
+      min-height: 180px;
+    }
+    .t-prompt   { color: var(--accent-text); }
+    .t-cmd     { color: var(--text-primary); }
+    .t-error   { color: #ff6b6b; }
+    .t-comment { color: var(--text-quaternary); }
+    .t-glow    { color: var(--accent); }
+
+    .cursor-blink {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0; }
+    }
+
+    /* Typing cursor animation */
+    .typing-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+      margin-left: 1px;
+    }
+
+    /* ---- buttons — use the site's classes so morph-hover works ----- */
+    .notfound__actions {
+      margin-top: 34px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      opacity: 0;
+      animation: nfFadeUp 900ms var(--ease-out) 1350ms both;
+    }
+
+    /* The .btn--applepill and .btn--darkpill styles ship in site.css.
+       We only need to ensure the Apple logo renders inline. */
+    .btn--applepill svg,
+    .btn--darkpill svg {
+      flex-shrink: 0;
+    }
+
+    /* ---- footer note ------------------------------------------------ */
+    .notfound__foot {
+      margin-top: 44px;
+      font-size: 13px;
+      color: var(--text-quaternary);
+      opacity: 0;
+      animation: nfFadeUp 900ms var(--ease-out) 1550ms both;
+    }
+    .notfound__foot a {
+      color: var(--text-tertiary);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: color var(--dur-fast) var(--ease-out);
+    }
+    .notfound__foot a:hover { color: var(--text-primary); }
+
+    /* ================================================================== */
+    /* GLITCH KEYFRAMES                                                   */
+    /* ================================================================== */
+    @keyframes glitchClip1 {
+      0%   { clip-path: inset(20% 0 60% 0); transform: translate(-4px, 0); }
+      20%  { clip-path: inset(60% 0 10% 0); transform: translate(4px, 0); }
+      40%  { clip-path: inset(40% 0 30% 0); transform: translate(-2px, 0); }
+      60%  { clip-path: inset(80% 0 5% 0);  transform: translate(3px, 0); }
+      80%  { clip-path: inset(10% 0 70% 0); transform: translate(-3px, 0); }
+      100% { clip-path: inset(50% 0 20% 0); transform: translate(2px, 0); }
+    }
+    @keyframes glitchClip2 {
+      0%   { clip-path: inset(65% 0 10% 0); transform: translate(4px, 0); }
+      20%  { clip-path: inset(15% 0 50% 0); transform: translate(-4px, 0); }
+      40%  { clip-path: inset(50% 0 20% 0); transform: translate(3px, 0); }
+      60%  { clip-path: inset(5% 0 80% 0);  transform: translate(-3px, 0); }
+      80%  { clip-path: inset(70% 0 15% 0); transform: translate(4px, 0); }
+      100% { clip-path: inset(30% 0 40% 0); transform: translate(-2px, 0); }
+    }
+
+    /* Glitch pseudo-element layers */
+    .notfound__code .glitch-layer-1,
+    .notfound__code .glitch-layer-2 {
+      position: absolute;
+      inset: 0;
+      font: inherit;
+      font-family: "Inter Tight", var(--font-display);
+      font-weight: 700;
+      font-size: clamp(7rem, 20vw, 14rem);
+      line-height: 0.88;
+      letter-spacing: -0.07em;
+      color: var(--text-primary);
+      pointer-events: none;
+      opacity: 0;
+    }
+    .notfound__code.glitch-active .glitch-layer-1 {
+      opacity: 0.8;
+      color: rgba(255, 0, 80, 0.7);
+      animation: glitchClip1 0.3s steps(3) infinite;
+    }
+    .notfound__code.glitch-active .glitch-layer-2 {
+      opacity: 0.8;
+      color: rgba(0, 200, 255, 0.7);
+      animation: glitchClip2 0.3s steps(3) infinite;
+    }
+
+    /* ================================================================== */
+    /* SCANLINE OVERLAY                                                    */
+    /* ================================================================== */
+    .notfound::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 4px
+      );
+      opacity: 0.4;
+    }
+
+    /* ================================================================== */
+    /* RESPONSIVE                                                          */
+    /* ================================================================== */
+    @media (max-width: 560px) {
+      .notfound { padding: 100px 18px 60px; }
+      .notfound__card { padding: 28px 22px; border-radius: 26px; }
+      .notfound__terminal-body { font-size: 11px; padding: 14px 16px; }
+      .notfound__actions { flex-direction: column; width: 100%; }
+      .notfound__actions > * { width: 100%; justify-content: center; }
+      .notfound__net svg { display: none; }
+      .notfound__net svg:nth-child(5) { display: block; width: 140px; }
+      .geo-shape { display: none; }
+      .geo-shape--ring { display: block; width: 60px; height: 60px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .notfound__code, .notfound__code span, .notfound__headline,
+      .notfound__card, .notfound__terminal, .notfound__actions,
+      .notfound__foot { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+      .notfound__code::before { animation: none; opacity: 0.15; }
+      .notfound__net svg { animation: none; opacity: 0.12; }
+      .geo-shape { animation: none; opacity: 0.12; }
+      .notfound__code::after { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- One Apple mark for the Home button -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="apple-mark" viewBox="0 0 16 19.81"><path d="M 15.489 6.754 C 15.375 6.843 13.362 7.986 13.362 10.528 C 13.362 13.468 15.923 14.508 16 14.534 C 15.988 14.597 15.593 15.958 14.65 17.345 C 13.809 18.565 12.93 19.784 11.594 19.784 C 10.257 19.784 9.913 19.001 8.37 19.001 C 6.867 19.001 6.332 19.81 5.11 19.81 C 3.887 19.81 3.035 18.68 2.054 17.293 C 0.918 15.665 0 13.135 0 10.734 C 0 6.883 2.484 4.84 4.929 4.84 C 6.228 4.84 7.311 5.7 8.127 5.7 C 8.903 5.7 10.114 4.788 11.592 4.788 C 12.152 4.788 14.164 4.84 15.489 6.754 Z M 10.89 3.158 C 11.501 2.427 11.934 1.413 11.934 0.398 C 11.934 0.258 11.922 0.115 11.896 0 C 10.902 0.038 9.719 0.668 9.005 1.502 C 8.445 2.144 7.922 3.158 7.922 4.186 C 7.922 4.341 7.948 4.495 7.96 4.545 C 8.023 4.557 8.125 4.571 8.227 4.571 C 9.119 4.571 10.241 3.968 10.89 3.158 Z" fill="currentColor"/></symbol>
+  </svg>
+
+  <!-- ================================================================ -->
+  <!-- WebGL canvas for liquid metal waves                              -->
+  <!-- ================================================================ -->
+  <canvas id="webglCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.6;" aria-hidden="true"></canvas>
+
+  <!-- ================================================================ -->
+  <!-- Particle network canvas                                          -->
+  <!-- ================================================================ -->
+  <canvas id="particleCanvas" style="position:fixed;inset:0;z-index:1;pointer-events:none;" aria-hidden="true"></canvas>
+
+  <!-- ================================================================ -->
+  <!-- Cursor trail container                                           -->
+  <!-- ================================================================ -->
+  <div id="cursorTrail" style="position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden;" aria-hidden="true"></div>
+
+  <!-- ================================================================ -->
+  <!-- 3D Floating geometric shapes                                     -->
+  <!-- ================================================================ -->
+  <div class="geo-shapes" aria-hidden="true">
+    <div class="geo-shape geo-shape--cube"></div>
+    <div class="geo-shape geo-shape--diamond"></div>
+    <div class="geo-shape geo-shape--ring"></div>
+    <div class="geo-shape geo-shape--triangle"></div>
+    <div class="geo-shape geo-shape--hex"></div>
+    <div class="geo-shape geo-shape--dots"></div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Notch navigation (identical markup to index.html)                -->
+  <!-- ================================================================ -->
+  <nav class="nav">
+    <div class="nav__pill">
+      <a class="nav__logo" href="index.html" aria-label="Quorumly home">
+        <img src="assets/brand/quorumly-icon-96.png" alt="" width="24" height="24">
+        <span>Quorumly</span>
+      </a>
+      <div class="nav__links">
+        <a class="nav__link" href="index.html#hydra">Hydra</a>
+        <a class="nav__link" href="index.html#highlights">Highlights</a>
+        <a class="nav__link" href="index.html#features">Features</a>
+        <a class="nav__link" href="index.html#mac">Mac</a>
+        <a class="nav__link" href="index.html#faq">FAQ</a>
+      </div>
+      <button class="nav__menu" type="button" aria-expanded="false" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <a class="btn btn--sm nav__cta" href="index.html#download">Download</a>
+    </div>
+  </nav>
+
+  <!-- ================================================================ -->
+  <!-- 404 stage                                                         -->
+  <!-- ================================================================ -->
+  <div class="notfound">
+
+    <!-- Background binary field (matches hero__field) -->
+    <div class="notfound__field" aria-hidden="true">
+      <canvas id="binaryField"></canvas>
+    </div>
+
+    <!-- Floating network SVG pattern -->
+    <div class="notfound__net" aria-hidden="true">
+      <!-- SVG 1: small cluster -->
+      <svg viewBox="0 0 120 120" fill="none" stroke="rgba(79,156,255,0.35)" stroke-width="1.2" stroke-linecap="round">
+        <circle cx="30" cy="30" r="3" fill="rgba(79,156,255,0.5)"/>
+        <circle cx="85" cy="20" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <circle cx="60" cy="70" r="3.5" fill="rgba(79,156,255,0.55)"/>
+        <circle cx="95" cy="80" r="2" fill="rgba(79,156,255,0.35)"/>
+        <circle cx="20" cy="90" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <line x1="30" y1="30" x2="85" y2="20"/><line x1="30" y1="30" x2="60" y2="70"/>
+        <line x1="60" y1="70" x2="95" y2="80"/><line x1="60" y1="70" x2="20" y2="90"/>
+        <line x1="85" y1="20" x2="95" y2="80"/><line x1="30" y1="30" x2="20" y2="90"/>
+      </svg>
+      <!-- SVG 2: chain -->
+      <svg viewBox="0 0 100 100" fill="none" stroke="rgba(79,156,255,0.3)" stroke-width="1" stroke-linecap="round">
+        <circle cx="15" cy="50" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <circle cx="40" cy="25" r="2" fill="rgba(79,156,255,0.35)"/>
+        <circle cx="70" cy="40" r="3" fill="rgba(79,156,255,0.5)"/>
+        <circle cx="55" cy="75" r="2" fill="rgba(79,156,255,0.3)"/>
+        <circle cx="85" cy="80" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <line x1="15" y1="50" x2="40" y2="25"/><line x1="40" y1="25" x2="70" y2="40"/>
+        <line x1="70" y1="40" x2="55" y2="75"/><line x1="55" y1="75" x2="85" y2="80"/>
+      </svg>
+      <!-- SVG 3: star burst -->
+      <svg viewBox="0 0 140 140" fill="none" stroke="rgba(79,156,255,0.28)" stroke-width="1" stroke-linecap="round">
+        <circle cx="70" cy="70" r="4" fill="rgba(79,156,255,0.5)"/>
+        <circle cx="25" cy="30" r="2.5" fill="rgba(79,156,255,0.35)"/>
+        <circle cx="115" cy="35" r="2" fill="rgba(79,156,255,0.3)"/>
+        <circle cx="110" cy="110" r="3" fill="rgba(79,156,255,0.4)"/>
+        <circle cx="20" cy="105" r="2" fill="rgba(79,156,255,0.3)"/>
+        <line x1="70" y1="70" x2="25" y2="30"/><line x1="70" y1="70" x2="115" y2="35"/>
+        <line x1="70" y1="70" x2="110" y2="110"/><line x1="70" y1="70" x2="20" y2="105"/>
+        <line x1="25" y1="30" x2="115" y2="35"/><line x1="115" y1="35" x2="110" y2="110"/>
+        <line x1="110" y1="110" x2="20" y2="105"/><line x1="20" y1="105" x2="25" y2="30"/>
+      </svg>
+      <!-- SVG 4: cross -->
+      <svg viewBox="0 0 100 100" fill="none" stroke="rgba(79,156,255,0.3)" stroke-width="1.2" stroke-linecap="round">
+        <circle cx="50" cy="50" r="3.5" fill="rgba(79,156,255,0.5)"/>
+        <circle cx="15" cy="15" r="2" fill="rgba(79,156,255,0.3)"/>
+        <circle cx="85" cy="20" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <circle cx="80" cy="85" r="2" fill="rgba(79,156,255,0.3)"/>
+        <circle cx="18" cy="82" r="2.5" fill="rgba(79,156,255,0.35)"/>
+        <line x1="50" y1="50" x2="15" y2="15"/><line x1="50" y1="50" x2="85" y2="20"/>
+        <line x1="50" y1="50" x2="80" y2="85"/><line x1="50" y1="50" x2="18" y2="82"/>
+        <line x1="15" y1="15" x2="85" y2="20"/><line x1="85" y1="20" x2="80" y2="85"/>
+      </svg>
+      <!-- SVG 5: ring (centered behind the content) -->
+      <svg viewBox="0 0 200 200" fill="none" stroke="rgba(79,156,255,0.12)" stroke-width="0.8" stroke-linecap="round">
+        <circle cx="100" cy="100" r="70"/>
+        <circle cx="100" cy="100" r="50"/>
+        <circle cx="100" cy="100" r="30"/>
+        <circle cx="100" cy="100" r="3" fill="rgba(79,156,255,0.25)"/>
+        <circle cx="100" cy="30" r="2" fill="rgba(79,156,255,0.2)"/>
+        <circle cx="170" cy="100" r="2" fill="rgba(79,156,255,0.2)"/>
+        <circle cx="100" cy="170" r="2" fill="rgba(79,156,255,0.2)"/>
+        <circle cx="30" cy="100" r="2" fill="rgba(79,156,255,0.2)"/>
+        <line x1="100" y1="100" x2="100" y2="30"/><line x1="100" y1="100" x2="170" y2="100"/>
+        <line x1="100" y1="100" x2="100" y2="170"/><line x1="100" y1="100" x2="30" y2="100"/>
+      </svg>
+      <!-- SVG 6: triangle mesh -->
+      <svg viewBox="0 0 110 100" fill="none" stroke="rgba(79,156,255,0.3)" stroke-width="1" stroke-linecap="round">
+        <circle cx="55" cy="20" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <circle cx="20" cy="75" r="2" fill="rgba(79,156,255,0.35)"/>
+        <circle cx="90" cy="75" r="2.5" fill="rgba(79,156,255,0.4)"/>
+        <circle cx="55" cy="55" r="2" fill="rgba(79,156,255,0.3)"/>
+        <line x1="55" y1="20" x2="20" y2="75"/><line x1="55" y1="20" x2="90" y2="75"/>
+        <line x1="20" y1="75" x2="90" y2="75"/><line x1="55" y1="20" x2="55" y2="55"/>
+        <line x1="55" y1="55" x2="20" y2="75"/><line x1="55" y1="55" x2="90" y2="75"/>
+      </svg>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Content                                                       -->
+    <!-- ============================================================ -->
+    <div class="notfound__content">
+
+      <div class="notfound__code" id="glitchCode" aria-label="404 error">
+        <span class="d1">4</span><span class="d2">0</span><span class="d3">4</span>
+        <span class="glitch-layer-1" aria-hidden="true">404</span>
+        <span class="glitch-layer-2" aria-hidden="true">404</span>
+      </div>
+
+      <h1 class="notfound__headline">
+        The source you are looking for<br>is not here.
+      </h1>
+
+      <div class="notfound__card">
+        <p>
+          The page you requested does not exist on this server.
+          It may have been renamed, moved, or it never existed at all.
+          The actual source code for Quorumly lives on GitHub under
+          the MIT license -- no secrets, no hidden files, nothing to see here.
+        </p>
+        <p>
+          If you were looking for the app itself, it is a native macOS
+          application built entirely in Swift and SwiftUI with Liquid Glass.
+          The source is open, the build is clean, and we tested it twice.
+        </p>
+      </div>
+
+      <!-- Terminal with git-flavored error messages -->
+      <div class="notfound__terminal">
+        <div class="notfound__terminal-bar">
+          <span class="notfound__terminal-dot notfound__terminal-dot--red"></span>
+          <span class="notfound__terminal-dot notfound__terminal-dot--yellow"></span>
+          <span class="notfound__terminal-dot notfound__terminal-dot--green"></span>
+          <span class="notfound__terminal-title">error -- pathspec 'this-page' did not match any file(s) known to git</span>
+        </div>
+        <div class="notfound__terminal-body" id="terminalBody">
+          <!-- Content injected by typing animation -->
+        </div>
+      </div>
+
+      <div class="notfound__actions">
+        <a class="btn--applepill" href="index.html" data-morph-glyph="house" aria-label="Back to Quorumly home">
+          <svg width="14" height="17" aria-hidden="true" focusable="false"><use href="#apple-mark"/></svg>
+          <span>Back to Quorumly</span>
+        </a>
+        <a class="btn--darkpill" href="https://github.com/soumyachk101/Quorumly" target="_blank" rel="noopener" data-morph-glyph="arrow-up-right">
+          <span>View source on GitHub</span>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 12 4M5 4h7v7"/></svg>
+        </a>
+      </div>
+
+      <p class="notfound__foot">
+        Quorumly is free and open source under the
+        <a href="https://github.com/soumyachk101/Quorumly/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.
+      </p>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Binary field canvas (same approach as the hero)                  -->
+  <!-- ================================================================ -->
+  <script>
+    (function () {
+      var canvas = document.getElementById('binaryField');
+      if (!canvas) return;
+      var ctx = canvas.getContext('2d');
+      var chars = '01';
+      var fontSize = 14;
+      var columns, drops = [];
+      var raf;
+
+      function resize () {
+        canvas.width  = canvas.offsetWidth  || window.innerWidth;
+        canvas.height = canvas.offsetHeight || window.innerHeight;
+        columns = Math.floor(canvas.width / fontSize);
+        drops = [];
+        for (var i = 0; i < columns; i++) {
+          drops[i] = Math.random() * -canvas.height / fontSize;
+        }
+      }
+
+      function draw () {
+        ctx.fillStyle = 'rgba(11, 14, 20, 0.12)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = fontSize + 'px ui-monospace, SF Mono, Menlo, monospace';
+        for (var i = 0; i < columns; i++) {
+          var ch = chars[Math.floor(Math.random() * chars.length)];
+          var bright = Math.random() > 0.96;
+          ctx.fillStyle = bright
+            ? 'rgba(140, 196, 255, 0.7)'
+            : 'rgba(79, 156, 255, 0.16)';
+          ctx.fillText(ch, i * fontSize, drops[i] * fontSize);
+          if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+          drops[i] += 0.55;
+        }
+        raf = requestAnimationFrame(draw);
+      }
+
+      resize();
+      draw();
+      window.addEventListener('resize', function () {
+        cancelAnimationFrame(raf);
+        resize();
+        draw();
+      });
+    })();
+  </script>
+
+  <!-- ================================================================ -->
+  <!-- WebGL Liquid Metal Waves                                         -->
+  <!-- ================================================================ -->
+  <script>
+    (function () {
+      var canvas = document.getElementById('webglCanvas');
+      if (!canvas) return;
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) { canvas.style.display = 'none'; return; }
+
+      function resize () {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      var vertSrc = [
+        'attribute vec2 a_pos;',
+        'void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }'
+      ].join('\n');
+
+      var fragSrc = [
+        'precision mediump float;',
+        'uniform float u_time;',
+        'uniform vec2  u_res;',
+        'uniform vec2  u_mouse;',
+        '',
+        'float hash(vec2 p) {',
+        '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);',
+        '}',
+        '',
+        'float noise(vec2 p) {',
+        '  vec2 i = floor(p);',
+        '  vec2 f = fract(p);',
+        '  f = f * f * (3.0 - 2.0 * f);',
+        '  float a = hash(i);',
+        '  float b = hash(i + vec2(1.0, 0.0));',
+        '  float c = hash(i + vec2(0.0, 1.0));',
+        '  float d = hash(i + vec2(1.0, 1.0));',
+        '  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);',
+        '}',
+        '',
+        'float fbm(vec2 p) {',
+        '  float v = 0.0;',
+        '  float a = 0.5;',
+        '  for (int i = 0; i < 5; i++) {',
+        '    v += a * noise(p);',
+        '    p *= 2.0;',
+        '    a *= 0.5;',
+        '  }',
+        '  return v;',
+        '}',
+        '',
+        'void main() {',
+        '  vec2 uv = gl_FragCoord.xy / u_res;',
+        '  float t = u_time * 0.15;',
+        '  vec2 mouse = u_mouse / u_res;',
+        '',
+        '  float n1 = fbm(uv * 3.0 + vec2(t, t * 0.7));',
+        '  float n2 = fbm(uv * 2.5 + vec2(-t * 0.5, t * 0.3) + mouse * 0.5);',
+        '  float n3 = fbm(uv * 4.0 + vec2(t * 0.2, -t * 0.4));',
+        '',
+        '  float wave = sin(uv.x * 6.0 + n1 * 4.0 + t * 2.0) * 0.5 + 0.5;',
+        '  wave += sin(uv.y * 5.0 + n2 * 3.5 - t * 1.5) * 0.3;',
+        '  wave += cos((uv.x + uv.y) * 4.0 + n3 * 3.0 + t) * 0.2;',
+        '  wave = wave / 1.0;',
+        '  wave = smoothstep(0.2, 0.8, wave);',
+        '',
+        '  float highlight = smoothstep(0.55, 0.75, wave) * 0.6;',
+        '  float shadow   = smoothstep(0.45, 0.25, wave) * 0.4;',
+        '',
+        '  vec3 col1 = vec3(0.05, 0.07, 0.14);',
+        '  vec3 col2 = vec3(0.10, 0.16, 0.35);',
+        '  vec3 col3 = vec3(0.18, 0.30, 0.65);',
+        '  vec3 col4 = vec3(0.35, 0.50, 0.90);',
+        '  vec3 col5 = vec3(0.55, 0.72, 1.00);',
+        '',
+        '  vec3 color = mix(col1, col2, wave);',
+        '  color = mix(color, col3, highlight);',
+        '  color = mix(color, col4, shadow * 0.5);',
+        '  color += col5 * highlight * 0.3;',
+        '',
+        '  float ca = 0.003;',
+        '  float r = fbm(uv * 3.0 + vec2(t, t * 0.7) + vec2(ca, 0.0));',
+        '  float b = fbm(uv * 3.0 + vec2(t, t * 0.7) - vec2(ca, 0.0));',
+        '  color.r = mix(color.r, 0.5 + 0.5 * r, 0.3);',
+        '  color.b = mix(color.b, 0.5 + 0.5 * b, 0.3);',
+        '',
+        '  color += vec3(0.02, 0.03, 0.06) * highlight;',
+        '  gl_FragColor = vec4(color, 0.85);',
+        '}'
+      ].join('\n');
+
+      function compile (type, src) {
+        var s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          gl.deleteShader(s);
+          return null;
+        }
+        return s;
+      }
+
+      var vs = compile(gl.VERTEX_SHADER, vertSrc);
+      var fs = compile(gl.FRAGMENT_SHADER, fragSrc);
+      if (!vs || !fs) { canvas.style.display = 'none'; return; }
+
+      var prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        canvas.style.display = 'none'; return;
+      }
+      gl.useProgram(prog);
+
+      var buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1,  -1, 1,
+        -1,  1,  1, -1,   1, 1
+      ]), gl.STATIC_DRAW);
+
+      var aPos = gl.getAttribLocation(prog, 'a_pos');
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+      var uTime = gl.getUniformLocation(prog, 'u_time');
+      var uRes  = gl.getUniformLocation(prog, 'u_res');
+      var uMouse = gl.getUniformLocation(prog, 'u_mouse');
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+
+      var mx = canvas.width / 2, my = canvas.height / 2;
+      document.addEventListener('mousemove', function (e) {
+        mx = e.clientX;
+        my = canvas.height - e.clientY;
+      });
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+      var start = performance.now();
+      function frame () {
+        var t = (performance.now() - start) / 1000;
+        gl.uniform1f(uTime, t);
+        gl.uniform2f(uMouse, mx, my);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(frame);
+      }
+      frame();
+    })();
+  </script>
+
+  <!-- ================================================================ -->
+  <!-- Particle Network                                                 -->
+  <!-- ================================================================ -->
+  <script>
+    (function () {
+      var canvas = document.getElementById('particleCanvas');
+      if (!canvas) return;
+      var ctx = canvas.getContext('2d');
+      var particles = [];
+      var PARTICLE_COUNT = 80;
+      var CONNECT_DIST = 120;
+      var raf;
+
+      function resize () {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', function () {
+        resize();
+        initParticles();
+      });
+
+      function initParticles () {
+        particles = [];
+        for (var i = 0; i < PARTICLE_COUNT; i++) {
+          particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.6,
+            vy: (Math.random() - 0.5) * 0.6,
+            r: Math.random() * 2 + 0.8,
+            o: Math.random() * 0.5 + 0.2
+          });
+        }
+      }
+      initParticles();
+
+      var mouseX = -999, mouseY = -999;
+      document.addEventListener('mousemove', function (e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      });
+
+      function draw () {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (var i = 0; i < particles.length; i++) {
+          var p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+
+          if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+          if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+          p.x = Math.max(0, Math.min(canvas.width, p.x));
+          p.y = Math.max(0, Math.min(canvas.height, p.y));
+
+          // Mouse repulsion
+          var dx = p.x - mouseX;
+          var dy = p.y - mouseY;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 150 && dist > 0) {
+            var force = (150 - dist) / 150 * 0.02;
+            p.vx += (dx / dist) * force;
+            p.vy += (dy / dist) * force;
+          }
+          // Clamp velocity
+          var speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+          if (speed > 1.5) {
+            p.vx = (p.vx / speed) * 1.5;
+            p.vy = (p.vy / speed) * 1.5;
+          }
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(79, 156, 255, ' + p.o + ')';
+          ctx.fill();
+
+          // Connect nearby particles
+          for (var j = i + 1; j < particles.length; j++) {
+            var q = particles[j];
+            var ddx = p.x - q.x;
+            var ddy = p.y - q.y;
+            var d = Math.sqrt(ddx * ddx + ddy * ddy);
+            if (d < CONNECT_DIST) {
+              var alpha = (1 - d / CONNECT_DIST) * 0.15;
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(q.x, q.y);
+              ctx.strokeStyle = 'rgba(79, 156, 255, ' + alpha + ')';
+              ctx.lineWidth = 0.6;
+              ctx.stroke();
+            }
+          }
+        }
+        raf = requestAnimationFrame(draw);
+      }
+      draw();
+    })();
+  </script>
+
+  <!-- ================================================================ -->
+  <!-- Cursor Trail                                                     -->
+  <!-- ================================================================ -->
+  <script>
+    (function () {
+      var container = document.getElementById('cursorTrail');
+      if (!container) return;
+      var trail = [];
+      var MAX_TRAIL = 30;
+      var hue = 210;
+
+      document.addEventListener('mousemove', function (e) {
+        if (trail.length >= MAX_TRAIL) {
+          var old = trail.shift();
+          if (old && old.parentNode) old.parentNode.removeChild(old);
+        }
+        var dot = document.createElement('div');
+        var size = Math.random() * 4 + 2;
+        dot.style.cssText = [
+          'position:absolute',
+          'left:' + e.clientX + 'px',
+          'top:' + e.clientY + 'px',
+          'width:' + size + 'px',
+          'height:' + size + 'px',
+          'border-radius:50%',
+          'background:hsla(' + hue + ', 80%, 65%, 0.6)',
+          'transform:translate(-50%,-50%)',
+          'pointer-events:none',
+          'transition:all 0.6s ease-out'
+        ].join(';');
+        container.appendChild(dot);
+        trail.push(dot);
+
+        // Fade out
+        requestAnimationFrame(function () {
+          dot.style.opacity = '0';
+          dot.style.transform = 'translate(-50%,-50%) scale(0)';
+        });
+
+        // Remove after transition
+        setTimeout(function () {
+          if (dot.parentNode) dot.parentNode.removeChild(dot);
+          var idx = trail.indexOf(dot);
+          if (idx > -1) trail.splice(idx, 1);
+        }, 600);
+
+        hue = (hue + 3) % 360;
+      });
+    })();
+  </script>
+
+  <!-- ================================================================ -->
+  <!-- Glitch effect for 404 digits                                     -->
+  <!-- ================================================================ -->
+  <script>
+    (function () {
+      var code = document.getElementById('glitchCode');
+      if (!code) return;
+      var glitchInterval = null;
+
+      function triggerGlitch () {
+        code.classList.add('glitch-active');
+        var duration = 80 + Math.random() * 250;
+        setTimeout(function () {
+          code.classList.remove('glitch-active');
+        }, duration);
+
+        // Schedule next glitch
+        var nextDelay = 2000 + Math.random() * 6000;
+        glitchInterval = setTimeout(triggerGlitch, nextDelay);
+      }
+
+      // Start glitching after initial digit animation completes
+      setTimeout(function () {
+        triggerGlitch();
+      }, 1500);
+
+      // Pause glitch on hover for readability
+      code.addEventListener('mouseenter', function () {
+        clearTimeout(glitchInterval);
+        code.classList.remove('glitch-active');
+      });
+      code.addEventListener('mouseleave', function () {
+        triggerGlitch();
+      });
+    })();
+  </script>
+
+  <!-- ================================================================ -->
+  <!-- Typing animation for terminal                                    -->
+  <!-- ================================================================ -->
+  <script>
+    (function () {
+      var terminalBody = document.getElementById('terminalBody');
+      if (!terminalBody) return;
+
+      var lines = [
+        { prompt: 'soumya@swarmcode', path: '~/Swarm-Code', cmd: 'git ls-files 404.html', cls: 't-cmd', type: 'input' },
+        { text: "fatal: pathspec '404.html' did not match any file(s) known to git", cls: 't-error', type: 'output' },
+        { text: '# (this page has never been committed. Honest.)', cls: 't-comment', type: 'output' },
+        { prompt: 'soumya@swarmcode', path: '~/Swarm-Code', cmd: 'git log --all --oneline -- 404.html', cls: 't-cmd', type: 'input' },
+        { text: '# (no commits found -- the file exists only in your imagination)', cls: 't-comment', type: 'output' },
+        { text: '', type: 'spacer' },
+        { prompt: 'soumya@swarmcode', path: '~/Swarm-Code', cmd: '', cls: 't-cmd', type: 'input-final' }
+      ];
+
+      var charDelay = 28;
+      var linePause = 200;
+      var outputPause = 400;
+
+      function createSpan (text, cls) {
+        var span = document.createElement('span');
+        span.className = cls;
+        span.textContent = text;
+        return span;
+      }
+
+      function buildLineDOM (lineData, fullText) {
+        var div = document.createElement('div');
+        if (lineData.type === 'spacer') {
+          div.innerHTML = '&nbsp;';
+          return div;
+        }
+        if (lineData.type === 'input' || lineData.type === 'input-final') {
+          var promptSpan = createSpan(lineData.prompt + ':', 't-prompt');
+          var pathSpan = createSpan(lineData.path, 't-glow');
+          div.appendChild(promptSpan);
+          div.appendChild(pathSpan);
+          div.appendChild(document.createTextNode('$ '));
+          var cmdSpan = createSpan('', lineData.cls);
+          cmdSpan.className = 't-cmd typing-cmd';
+          div.appendChild(cmdSpan);
+          if (lineData.type === 'input-final') {
+            var cursor = document.createElement('span');
+            cursor.className = 'cursor-blink';
+            cmdSpan._cursor = cursor;
+          }
+          return { div: div, cmdSpan: cmdSpan, text: lineData.cmd, final: lineData.type === 'input-final' };
+        } else {
+          var outSpan = createSpan(fullText, lineData.cls);
+          div.appendChild(outSpan);
+          return { div: div, cmdSpan: null, text: fullText, final: false };
+        }
+      }
+
+      function typeText (element, text, index, callback) {
+        if (index >= text.length) {
+          if (callback) callback();
+          return;
+        }
+        element.textContent += text.charAt(index);
+        setTimeout(function () {
+          typeText(element, text, index + 1, callback);
+        }, charDelay);
+      }
+
+      function runTyping (linesData, index, callback) {
+        if (index >= linesData.length) {
+          if (callback) callback();
+          return;
+        }
+        var lineData = linesData[index];
+        var result = buildLineDOM(lineData, lineData.text || '');
+
+        if (lineData.type === 'input' || lineData.type === 'input-final') {
+          terminalBody.appendChild(result.div);
+          typeText(result.cmdSpan, result.text, 0, function () {
+            if (result.final && result.cmdSpan._cursor) {
+              result.cmdSpan.appendChild(result.cmdSpan._cursor);
+            }
+            var pause = result.final ? 0 : linePause;
+            setTimeout(function () {
+              runTyping(linesData, index + 1, callback);
+            }, pause);
+          });
+        } else {
+          terminalBody.appendChild(result.div);
+          setTimeout(function () {
+            runTyping(linesData, index + 1, callback);
+          }, outputPause);
+        }
+      }
+
+      // Start terminal animation after a delay matching the page load sequence
+      setTimeout(function () {
+        runTyping(lines, 0, function () {
+          // Flash the final cursor periodically after typing completes
+          setInterval(function () {
+            var finalCursor = terminalBody.querySelector('.cursor-blink');
+            if (finalCursor) {
+              finalCursor.style.animation = 'none';
+              finalCursor.offsetHeight;
+              finalCursor.style.animation = 'blink 1s step-end infinite';
+            }
+          }, 5000);
+        });
+      }, 1800);
+    })();
+  </script>
+
+  <!-- ================================================================ -->
+  <!-- Site shared script (reveal, morph, FAQ, nav, guard)              -->
+  <!-- ================================================================ -->
+  <script src="assets/js/site.js?v=5" defer></script>
+
+</body>
+</html>
