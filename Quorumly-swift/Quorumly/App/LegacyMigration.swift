@@ -17,10 +17,13 @@ enum LegacyMigration {
         }
         let fileManager = FileManager.default
         let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let formerLibrary = support.appendingPathComponent(formerSupportFolder, isDirectory: true)
-        let library = support.appendingPathComponent("Swarm Code", isDirectory: true)
-        if fileManager.fileExists(atPath: formerLibrary.path), !fileManager.fileExists(atPath: library.path) {
-            try? fileManager.moveItem(at: formerLibrary, to: library)
+        let library = support.appendingPathComponent("Quorumly", isDirectory: true)
+        for formerFolder in ["Swarm Code", formerSupportFolder] {
+            let formerLibrary = support.appendingPathComponent(formerFolder, isDirectory: true)
+            if fileManager.fileExists(atPath: formerLibrary.path), !fileManager.fileExists(atPath: library.path) {
+                try? fileManager.moveItem(at: formerLibrary, to: library)
+                break
+            }
         }
         defaults.set(true, forKey: marker)
     }

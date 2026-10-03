@@ -421,7 +421,7 @@ enum CommandCodeAPI {
               let answer: any = {}
               try { answer = JSON.parse(raw) } catch {}
               if (answer.decision === 'allow') return
-              return {block: true, additionalContext: answer.reason || 'The user declined this in Swarm Code.'}
+              return {block: true, additionalContext: answer.reason || 'The user declined this in Quorumly.'}
             }
             if (ctx && ctx.signal && ctx.signal.aborted) {
               try { fs.unlinkSync(request) } catch {}
@@ -429,7 +429,7 @@ enum CommandCodeAPI {
             }
             if (process.ppid === 1 || Date.now() - started > 6 * 60 * 60 * 1000) {
               try { fs.unlinkSync(request) } catch {}
-              return {block: true, additionalContext: 'Swarm Code did not answer.'}
+              return {block: true, additionalContext: 'Quorumly did not answer.'}
             }
             await sleep(40)
           }

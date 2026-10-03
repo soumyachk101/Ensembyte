@@ -1571,7 +1571,7 @@ private struct GitActionsMenu: View {
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 url = try await repository.createPullRequest(
                     title: subject.isEmpty ? "Update" : subject,
-                    body: body.isEmpty ? "Opened from Swarm Code." : body
+                    body: body.isEmpty ? "Opened from Quorumly." : body
                 )
             }
             if let error {
@@ -1717,7 +1717,7 @@ private struct ScriptsEditor: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Project scripts")
                 .font(.system(size: 17, weight: .semibold))
-            Text("Scripts run in a terminal at the project root. Swarm Code also picks up scripts from swarm-code.json.")
+            Text("Scripts run in a terminal at the project root. Quorumly also picks up scripts from quorumly.json or swarm-code.json.")
                 .font(.system(size: 12))
                 .foregroundStyle(Chrome.secondaryText)
             ScrollView {

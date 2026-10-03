@@ -772,7 +772,7 @@ final class CopilotSession: ProviderSession {
             // A rate limit offered a switch to the Auto model tier: keep the model the user chose.
             connection?.respond(to: id, result: ["response": "no"])
         default:
-            connection?.respond(to: id, errorCode: -32601, message: "Swarm Code does not support \(method).")
+            connection?.respond(to: id, errorCode: -32601, message: "Quorumly does not support \(method).")
         }
     }
 

@@ -124,7 +124,7 @@ final class ACPSession: ProviderSession {
         let initialized = try await connection.request("initialize", [
             "protocolVersion": 1,
             "clientCapabilities": clientCapabilities,
-            "clientInfo": ["name": "swarm-code", "title": "Swarm Code", "version": .string(AppInfo.version)],
+            "clientInfo": ["name": "quorumly", "title": "Quorumly", "version": .string(AppInfo.version)],
         ])
         canLoadSessions = initialized["agentCapabilities"]?["loadSession"]?.bool ?? false
         supportsHTTPMCP = initialized["agentCapabilities"]?["mcpCapabilities"]?["http"]?.bool ?? false

@@ -316,7 +316,7 @@ final class UpdateChecker {
         guard defaults.string(forKey: Keys.notifiedVersion) != update.version else { return }
         defaults.set(update.version, forKey: Keys.notifiedVersion)
         let content = UNMutableNotificationContent()
-        content.title = "Swarm Code \(update.version) is available"
+        content.title = "Quorumly \(update.version) is available"
         content.body = "Open Settings › About to update and restart."
         content.userInfo = ["update": update.version]
         let request = UNNotificationRequest(identifier: "update-\(update.version)", content: content, trigger: nil)

@@ -14,7 +14,7 @@ enum PiCLI {
     static var supportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: LoginEnvironment.homeDirectory).appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("Swarm Code/pi", isDirectory: true)
+        return base.appendingPathComponent("Quorumly/pi", isDirectory: true)
     }
 
     /// `PI_CODING_AGENT_DIR` when set, else `<home>/.pi/agent`.

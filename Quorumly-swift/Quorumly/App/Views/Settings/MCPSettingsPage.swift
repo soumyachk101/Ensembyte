@@ -57,7 +57,7 @@ struct MCPSettingsPage: View {
                 }
                 .animation(.spring(duration: 0.35), value: celebrating)
             }
-            Text("Connected servers reach every provider when a thread starts: the CLIs at launch, the API models through Swarm Code itself.")
+            Text("Connected servers reach every provider when a thread starts: the CLIs at launch, the API models through Quorumly itself.")
                 .font(.system(size: 11))
                 .foregroundStyle(Chrome.secondaryText)
         }

@@ -88,7 +88,7 @@ enum HangWatchdog {
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let file = folder.appendingPathComponent("hang-\(stamp).txt")
 
-        var header = "Swarm Code main thread unresponsive for \(String(format: "%.1f", stalledFor))s\n"
+        var header = "Quorumly main thread unresponsive for \(String(format: "%.1f", stalledFor))s\n"
         header += "Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))\n"
         header += "Sampled at \(Date())\n\n"
 
@@ -117,7 +117,7 @@ enum HangWatchdog {
 
     private static func reportsFolder() -> URL {
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory() + "/Library")
-        return library.appendingPathComponent("Logs/Swarm Code", isDirectory: true)
+        return library.appendingPathComponent("Logs/Quorumly", isDirectory: true)
     }
 
     private static func trimReports(in folder: URL) {

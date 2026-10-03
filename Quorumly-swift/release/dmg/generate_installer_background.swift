@@ -154,11 +154,11 @@ func drawIcon(_ image: NSImage?, center: CGPoint, label: String, in context: CGC
     image?.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     drawText(label, font: .systemFont(ofSize: 12), color: textPrimary, center: CGPoint(x: center.x, y: center.y + iconSize / 2 + 12))
 }
-// The preview's app icon: an optional third argument names an .icns, else the installed Swarm Code's.
+// The preview's app icon: an optional third argument names an .icns, else the installed Quorumly's.
 let previewIconPath = CommandLine.arguments.dropFirst(2).first { $0.hasSuffix(".icns") }
 let appIcon = previewIconPath.flatMap { NSImage(contentsOfFile: $0) }
-    ?? NSImage(contentsOfFile: "/Applications/Swarm Code.app/Contents/Resources/AppIcon.icns")
-    ?? NSWorkspace.shared.icon(forFile: "/Applications/Swarm Code.app")
+    ?? NSImage(contentsOfFile: "/Applications/Quorumly.app/Contents/Resources/AppIcon.icns")
+    ?? NSWorkspace.shared.icon(forFile: "/Applications/Quorumly.app")
 let applicationsIcon = NSWorkspace.shared.icon(forFile: "/Applications")
 let preview = render(scale: 2) { context in
     drawIcon(appIcon, center: appIconCenter, label: wordmark, in: context)

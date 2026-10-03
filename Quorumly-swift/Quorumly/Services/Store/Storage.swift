@@ -41,8 +41,14 @@ enum Storage {
     static let patchesDirectory: URL = stateDirectory("patches")
 
     private static func stateDirectory(_ name: String) -> URL {
-        let url = URL(fileURLWithPath: LoginEnvironment.homeDirectory)
-            .appendingPathComponent(AppInfo.stateDirectoryName + "/" + name, isDirectory: true)
+        let home = URL(fileURLWithPath: LoginEnvironment.homeDirectory)
+        let url = home.appendingPathComponent(AppInfo.stateDirectoryName + "/" + name, isDirectory: true)
+        let legacyName = AppInfo.isDevelopment ? ".swarm-code-dev" : ".swarm-code"
+        let legacyDir = home.appendingPathComponent(legacyName + "/" + name, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: url.path), FileManager.default.fileExists(atPath: legacyDir.path) {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.moveItem(at: legacyDir, to: url)
+        }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -396,7 +402,7 @@ final class DiskWriter: Sendable {
             try data.write(to: url, options: .atomic)
             return data.count
         } catch {
-            NSLog("Swarm Code could not save %@: %@", url.lastPathComponent, error.localizedDescription)
+            NSLog("Quorumly could not save %@: %@", url.lastPathComponent, error.localizedDescription)
             return nil
         }
     }

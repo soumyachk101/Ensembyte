@@ -376,7 +376,7 @@ private struct GeneralSettingsPage: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.orange)
                                 .font(.system(size: 12))
-                            Text("Notifications are turned off for Swarm Code in macOS System Settings.")
+                            Text("Notifications are turned off for Quorumly in macOS System Settings.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -1009,8 +1009,8 @@ private struct AboutSettingsPage: View {
                 ChromeCard {
                     MadeByRow()
                     ChromeRowDivider()
-                    ChromeRow(title: "Website", detail: "swarmcode.vercel.app") {
-                        CreditLink(title: "Open website", url: URL(string: "https://swarmcode.vercel.app")!)
+                    ChromeRow(title: "Website", detail: "quorumly.org") {
+                        CreditLink(title: "Open website", url: URL(string: "https://quorumly.org")!)
                     }
                     ChromeRowDivider()
                     ChromeRow(title: "GitHub Profile", detail: "Soumya Chakraborty on GitHub (@soumyachk101)") {
@@ -1050,7 +1050,7 @@ private struct AboutSettingsPage: View {
                     .resizable()
                     .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Swarm Code")
+                    Text("Quorumly")
                         .font(.system(size: 15, weight: .semibold))
                     Text(verbatim: "Version \(AppInfo.version) (\(AppInfo.build))")
                         .font(.system(size: 12))
@@ -1072,7 +1072,7 @@ private struct AboutSettingsPage: View {
                 .padding(.trailing, Chrome.rowControlTrailingPadding)
                 .padding(.vertical, 11)
             ChromeRowDivider()
-            Text("Swarm Code and SwiftTerm are MIT licensed.")
+            Text("Quorumly and SwiftTerm are MIT licensed.")
                 .font(.system(size: 12))
                 .foregroundStyle(Chrome.secondaryText)
                 .padding(.leading, 16)
@@ -1088,7 +1088,7 @@ private struct LicensesRow: View {
     @State private var isPresented = false
 
     private static let files: [(title: String, resource: String)] = [
-        ("Swarm Code", "LICENSE"),
+        ("Quorumly", "LICENSE"),
         ("Third-party notices", "THIRD_PARTY_NOTICES"),
         ("Trademarks", "TRADEMARK"),
     ]
@@ -1134,7 +1134,7 @@ private struct LicensesRow: View {
     }
 }
 
-/// Swarm Code's logo and name, showing attribution that the app is made by Soumya Chakraborty.
+/// Quorumly's logo and name, showing attribution that the app is made by Soumya Chakraborty.
 private struct MadeByRow: View {
     var body: some View {
         HStack(spacing: 12) {
@@ -1147,13 +1147,13 @@ private struct MadeByRow: View {
                 Text("Made by Soumya Chakraborty")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Chrome.primaryText)
-                Text("Swarm Code is a coding app by Soumya Chakraborty for Mac.")
+                Text("Quorumly is a coding app by Soumya Chakraborty for Mac.")
                     .font(.system(size: 11))
                     .foregroundStyle(Chrome.secondaryText)
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
-                CreditLink(title: "Website", url: URL(string: "https://swarmcode.vercel.app")!)
+                CreditLink(title: "Website", url: URL(string: "https://quorumly.org")!)
                 CreditLink(title: "GitHub", url: URL(string: "https://github.com/soumyachk101")!)
             }
         }

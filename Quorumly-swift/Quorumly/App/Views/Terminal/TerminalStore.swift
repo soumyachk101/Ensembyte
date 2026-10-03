@@ -29,7 +29,8 @@ final class TerminalSession: Identifiable {
         var environment = LoginEnvironment.current
         environment["TERM"] = "xterm-256color"
         environment["COLORTERM"] = "truecolor"
-        environment["TERM_PROGRAM"] = "Swarm Code"
+        environment["TERM_PROGRAM"] = "Quorumly"
+        environment["QUORUMLY_PROJECT_ROOT"] = directory
         environment["SWARM_CODE_PROJECT_ROOT"] = directory
         let pairs = environment.map { "\($0.key)=\($0.value)" }
         let shellName = "-" + (shell as NSString).lastPathComponent

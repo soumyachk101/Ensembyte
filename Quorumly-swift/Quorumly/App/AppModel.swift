@@ -1328,14 +1328,14 @@ final class AppModel {
                     self.isNotificationPermissionDenied = true
                     showToast(
                         title: "Notifications Disabled in macOS",
-                        message: "Turn on notifications for Swarm Code in System Settings."
+                        message: "Turn on notifications for Quorumly in System Settings."
                     )
                     openNotificationSettings()
                 }
             } else {
                 await MainActor.run {
                     self.isNotificationPermissionDenied = false
-                    notify(threadID: UUID(), title: "Swarm Code", body: "Task notifications are working properly!", sound: .default)
+                    notify(threadID: UUID(), title: "Quorumly", body: "Task notifications are working properly!", sound: .default)
                 }
             }
         }

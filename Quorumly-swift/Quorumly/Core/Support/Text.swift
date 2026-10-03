@@ -1,9 +1,9 @@
 import Foundation
 
 enum AppInfo {
-    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Swarm Code"
-    static let isDevelopment = Bundle.main.bundleIdentifier == "iordv.swarmcode.dev"
-    static let stateDirectoryName = isDevelopment ? ".swarm-code-dev" : ".swarm-code"
+    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Quorumly"
+    static let isDevelopment = Bundle.main.bundleIdentifier == "org.quorumly.desktop.dev" || Bundle.main.bundleIdentifier == "iordv.swarmcode.dev"
+    static let stateDirectoryName = isDevelopment ? ".quorumly-dev" : ".quorumly"
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
     static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
 }

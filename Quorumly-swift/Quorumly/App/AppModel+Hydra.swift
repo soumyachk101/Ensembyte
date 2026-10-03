@@ -49,7 +49,7 @@ private enum HydraTreeCache {
             let tree = try await git.captureTree()
             // The commit is the heads' starting point and no branch ever sees it, so it
             // carries no head's name: several heads share this one.
-            let commit = try await git.commitTree(tree, message: "Swarm Code: a Hydra head's starting point")
+            let commit = try await git.commitTree(tree, message: "Quorumly: a Hydra head's starting point")
             return (tree, commit)
         }
         inFlight[checkout] = task
@@ -82,7 +82,7 @@ private enum HydraWatchdog {
     static var labelled: Set<UUID> = []
     static var stalledHeadIDs: Set<UUID> = []
 
-    static let stalledNote = "Stalled: no edits for 10 minutes; stopped by Swarm Code. Resend with a sharper brief."
+    static let stalledNote = "Stalled: no edits for 10 minutes; stopped by Quorumly. Resend with a sharper brief."
 }
 
 extension AppModel {

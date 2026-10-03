@@ -184,7 +184,7 @@ enum AppShortcut: String, CaseIterable, Identifiable {
         case .toggleChanges: "Toggle changes"
         case .toggleHydraPanel: "Toggle Hydra panel"
         case .toggleActivityView: "Activity view"
-        case .showMainWindow: "Show Swarm Code"
+        case .showMainWindow: "Show Quorumly"
         case .openSettings: "Settings"
         }
     }
@@ -330,7 +330,7 @@ final class ShortcutStore {
             return "Add ⌘, ⌃ or ⌥ so typing still works."
         }
         if chord.keyboardShortcut == nil { return "Menus cannot use this key." }
-        if Self.reserved.contains(chord) { return "macOS or Swarm Code already uses this chord." }
+        if Self.reserved.contains(chord) { return "macOS or Quorumly already uses this chord." }
         if let owner = AppShortcut.allCases.first(where: { $0 != shortcut && self.chord(for: $0) == chord }) {
             return "\(owner.title) already uses this chord."
         }

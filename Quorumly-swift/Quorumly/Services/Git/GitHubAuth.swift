@@ -4,8 +4,8 @@ import Security
 
 /// Manages GitHub authentication token resolution and secure Keychain storage.
 public enum GitHubAuth {
-    private static let service = "SwarmCode"
-    private static let legacyService = "SwarmAI"
+    private static let service = "Quorumly"
+    private static let legacyService = "SwarmCode"
     private static let account = "GitHub Update Token"
     private static let fallbackKey = "github_token_custom"
 

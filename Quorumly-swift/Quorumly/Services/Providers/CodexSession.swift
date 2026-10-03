@@ -534,7 +534,7 @@ final class CodexSession: ProviderSession {
         defer { watchdog.cancel() }
         do {
             _ = try await connection.request("initialize", [
-                "clientInfo": ["name": "swarm-code", "title": "Swarm Code", "version": .string(AppInfo.version)],
+                "clientInfo": ["name": "quorumly", "title": "Quorumly", "version": .string(AppInfo.version)],
                 "capabilities": ["experimentalApi": true],
             ])
         } catch {
@@ -987,9 +987,9 @@ final class CodexSession: ProviderSession {
         case "mcpServer/elicitation/request":
             connection?.respond(to: id, result: ["action": "decline"])
             let server = params["serverName"]?.string ?? "An MCP server"
-            onEvent?(.notice(Notice(level: .warning, message: "\(server) asked for input, which Swarm Code cannot show yet.")))
+            onEvent?(.notice(Notice(level: .warning, message: "\(server) asked for input, which Quorumly cannot show yet.")))
         default:
-            connection?.respond(to: id, errorCode: -32601, message: "Swarm Code does not support \(method).")
+            connection?.respond(to: id, errorCode: -32601, message: "Quorumly does not support \(method).")
         }
     }
 

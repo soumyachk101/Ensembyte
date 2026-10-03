@@ -2251,7 +2251,7 @@ final class ThreadRuntime {
         let command = provider == .claude ? "claude update" : "codex update"
         await app.providers.updateCLIIfDue(provider, force: true)
         guard let version = await app.providers.installedCLIVersion(provider), cliResendVersions[provider] != version else {
-            appendNotice(.error, "\(error)\n\nSwarm Code could not bring \(provider.displayName) up to date. Run `\(command)` in Terminal, then send the message again.")
+            appendNotice(.error, "\(error)\n\nQuorumly could not bring \(provider.displayName) up to date. Run `\(command)` in Terminal, then send the message again.")
             return
         }
         cliResendVersions[provider] = version

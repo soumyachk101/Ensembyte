@@ -306,7 +306,7 @@ final class AppUpdater {
             throw UpdateInstallError("The downloaded disk image could not be opened. \(attach.failureMessage)")
         }
         // The copy is what gets checked and installed; the image is let go as soon as it is made.
-        let targetName = "Swarm Code.app"
+        let targetName = "Quorumly.app"
         let staged = staging.appending(path: targetName, directoryHint: .isDirectory)
         let copy: ShellResult
         do {
@@ -378,11 +378,11 @@ final class AppUpdater {
             let status = SecStaticCodeCheckValidityWithErrors(code, flags, requirement, &error)
             guard status == errSecSuccess else {
                 let reason = error?.takeRetainedValue().localizedDescription ?? "OSStatus \(status)"
-                throw UpdateInstallError("The downloaded app is not signed by the Swarm Code developer. \(reason)")
+                throw UpdateInstallError("The downloaded app is not signed by the Quorumly developer. \(reason)")
             }
         } else {
             // Ad-hoc or local release: verify matching bundle ID and code signature validity
-            let text = "identifier \"\(bundleID)\" or identifier \"iordv.swarmai\" or identifier \"iordv.swarmcode\" or identifier \"Swarm Code\" or identifier \"Swarm Code Dev\""
+            let text = "identifier \"\(bundleID)\" or identifier \"org.quorumly.desktop\" or identifier \"Quorumly\" or identifier \"Quorumly Dev\" or identifier \"iordv.swarmcode\" or identifier \"Swarm Code\""
             var requirement: SecRequirement?
             guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement else {
                 throw UpdateInstallError("The signature requirement could not be built.")
@@ -403,9 +403,9 @@ final class AppUpdater {
     private func handOff(staged: URL, version: String) throws {
         let currentApp = Bundle.main.bundleURL
         let parent = currentApp.deletingLastPathComponent()
-        let destination = parent.appending(path: "Swarm Code.app")
+        let destination = parent.appending(path: "Quorumly.app")
         guard FileManager.default.isWritableFile(atPath: parent.path) else {
-            throw UpdateInstallError("Swarm Code cannot replace itself in \(parent.path). Move it to your Applications folder and try again.")
+            throw UpdateInstallError("Quorumly cannot replace itself in \(parent.path). Move it to your Applications folder and try again.")
         }
         let script = staged.deletingLastPathComponent().appending(path: "install.sh")
         try Self.installerScript.write(to: script, atomically: true, encoding: .utf8)
@@ -444,7 +444,7 @@ final class AppUpdater {
     /// puts the old app back. Everything it was given is cleaned up at the end.
     private static let installerScript = """
     #!/bin/sh
-    # Swarm Code update installer: waits for the app to quit, swaps in the update, relaunches.
+    # Quorumly update installer: waits for the app to quit, swaps in the update, relaunches.
     trap '' HUP
     PID="$1"; NEW="$2"; DEST="$3"; OLD="$4"
     STAGING="$(dirname "$NEW")"

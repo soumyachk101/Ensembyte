@@ -15,7 +15,7 @@ struct QuorumlyApp: App {
         // Before anything reads settings or the library.
         WebsiteCaptures.prepare()
         LegacyMigration.run()
-        // A frozen main thread gets its stacks written to ~/Library/Logs/Swarm Code.
+        // A frozen main thread gets its stacks written to ~/Library/Logs/Quorumly.
         HangWatchdog.start()
         SwitchLatency.start()
     }

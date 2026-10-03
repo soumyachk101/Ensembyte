@@ -4,7 +4,7 @@
 #
 # Geometry must stay in lockstep with generate_installer_background.swift:
 #   window content: 660x370 (WindowBounds adds ~28pt of titlebar)
-#   Swarm Code.app at (165, 208), Applications at (495, 208), icon size 128
+#   Quorumly.app at (165, 208), Applications at (495, 208), icon size 128
 import os.path
 
 # dmgbuild exec()s this file without __file__; pass -D here=<this directory>.

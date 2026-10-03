@@ -842,7 +842,7 @@ extension AppModel {
 
     /// The request's description: what the team did and how the lead summed it up.
     private func mergeRequestBody(for lead: ChatThread, files: [DiffFile], through: Set<UUID>, runtime: ThreadRuntime) -> String {
-        var lines = ["Opened by Swarm Code once its Hydra team finished.", ""]
+        var lines = ["Opened by Quorumly once its Hydra team finished.", ""]
         let heads = hydraTeam(of: lead.id).compactMap(\.hydra).filter { !$0.task.isEmpty }
         if !heads.isEmpty {
             lines.append("## Heads")

@@ -97,7 +97,7 @@ struct ProjectGuidance: Sendable {
         }
         guard !sections.isEmpty else { return nil }
         return """
-        Project guidelines from \(directory). They supplement the rules above; where they conflict, the Swarm Code rules take priority.
+        Project guidelines from \(directory). They supplement the rules above; where they conflict, the Quorumly rules take priority.
         \(sections.joined(separator: "\n\n"))
         """
     }

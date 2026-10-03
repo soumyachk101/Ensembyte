@@ -135,7 +135,7 @@ enum MCPBridge {
         };
         const callTool = (name, args) => request("tools/call", { name, arguments: args });
         (async () => {
-          await request("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "Swarm Code" } });
+          await request("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "Quorumly" } });
           notify("notifications/initialized", {});
           let cursor = undefined;
           const tools = [];
@@ -200,7 +200,7 @@ enum MCPBridge {
             sessionId = outcome.sessionId;
           } catch {}
         };
-        await request("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "Swarm Code" } });
+        await request("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "Quorumly" } });
         await notify("notifications/initialized", {});
         let cursor = undefined;
         const tools = [];

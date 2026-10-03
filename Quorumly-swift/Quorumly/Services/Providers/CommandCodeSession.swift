@@ -750,7 +750,7 @@ final class CommandCodeSession: ProviderSession {
         guard let approvalDirectory else { return }
         let reply: JSONValue = allow
             ? ["decision": "allow"]
-            : ["decision": "deny", "reason": "The user declined this in Swarm Code. Do not retry it; take another approach or explain what you would need."]
+            : ["decision": "deny", "reason": "The user declined this in Quorumly. Do not retry it; take another approach or explain what you would need."]
         let file = approvalDirectory.appendingPathComponent("\(id).reply.json")
         let temporary = approvalDirectory.appendingPathComponent("\(id).reply.json.tmp")
         do {

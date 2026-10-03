@@ -292,12 +292,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Quorumly";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Swarm Code, the coding app by Soumya Chakraborty. MIT License.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Quorumly, the coding app by Soumya Chakraborty. MIT License.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = iordv.swarmcode;
+				PRODUCT_BUNDLE_IDENTIFIER = org.quorumly.desktop;
 				PRODUCT_MODULE_NAME = Quorumly;
 				PRODUCT_NAME = "Quorumly";
 				SDKROOT = macosx;
@@ -316,12 +316,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Quorumly Dev";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Swarm Code, the coding app by Soumya Chakraborty. MIT License.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Quorumly, the coding app by Soumya Chakraborty. MIT License.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = iordv.swarmcode.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = org.quorumly.desktop.dev;
 				PRODUCT_MODULE_NAME = Quorumly;
 				PRODUCT_NAME = "Quorumly Dev";
 				SDKROOT = macosx;

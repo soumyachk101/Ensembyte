@@ -77,7 +77,7 @@ class OpenAICompatibleSession: ProviderSession {
     private static let condenseHistoryAt = 160_000
     private static let condenseHistoryTo = 100_000
     private static let condenseKeepsRecent = 10
-    private static let condensedMarker = "…[Swarm Code condensed this output"
+    private static let condensedMarker = "…[Quorumly condensed this output"
 
     /// A lost connection is retried twice before the turn reports it: once after a
     /// second, once after two more. The request is the same payload over the same
@@ -1179,9 +1179,9 @@ class OpenAICompatibleSession: ProviderSession {
         case (.plan, _):
             "You are in PLAN mode: research the project, then write a clear step-by-step plan. Do not edit files or run commands that change anything; reads, lists and searches are fine."
         case (.build, .supervised):
-            "You are in BUILD mode with supervised permissions: use tools freely but the user approves each one in Swarm Code."
+            "You are in BUILD mode with supervised permissions: use tools freely but the user approves each one in Quorumly."
         case (.build, .autoAcceptEdits), (.build, .auto):
-            "You are in BUILD mode: read and edit files freely; the user approves shell commands in Swarm Code."
+            "You are in BUILD mode: read and edit files freely; the user approves shell commands in Quorumly."
         case (.build, .fullAccess):
             "You are in BUILD mode with full access: use tools freely without asking."
         }
@@ -1199,7 +1199,7 @@ class OpenAICompatibleSession: ProviderSession {
             .compactMap { $0 }
             .joined(separator: "\n\n")
         return """
-        You are Swarm Code's \(config.agentIdentity(currentModel)), working inside \(workingDirectory) on macOS.
+        You are Quorumly's \(config.agentIdentity(currentModel)), working inside \(workingDirectory) on macOS.
         \(modeLine)
         Rules:
         - Prefer the provided tools over asking the user to run things. Read files before editing them.

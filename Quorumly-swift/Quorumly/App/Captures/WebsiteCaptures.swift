@@ -118,9 +118,9 @@ enum WebsiteCaptures {
         let repos = output.appendingPathComponent("repos", isDirectory: true)
         var library = Library()
         library.projects = [
-            project(ID.swarmCode, "Swarm Code", repos, ["SwarmCode/App/Views/Composer/ComposerView.swift": composerSource]),
-            project(ID.site, "getswarm.app", repos, ["docs/index.html": "<!doctype html>\n<html lang=\"en\">\n</html>\n"]),
-            project(ID.ios, "swarm-ios", repos, ["Swarm/LiveActivity.swift": "import ActivityKit\n"]),
+            project(ID.swarmCode, "Quorumly", repos, ["Quorumly/App/Views/Composer/ComposerView.swift": composerSource]),
+            project(ID.site, "quorumly.org", repos, ["docs/index.html": "<!doctype html>\n<html lang=\"en\">\n</html>\n"]),
+            project(ID.ios, "quorumly-ios", repos, ["Quorumly/LiveActivity.swift": "import ActivityKit\n"]),
         ]
         library.projects[0].scripts = [
             ProjectScript(name: "Quick run", command: "scripts/quick_run.sh", symbol: "hammer"),

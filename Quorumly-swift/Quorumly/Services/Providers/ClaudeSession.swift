@@ -601,7 +601,7 @@ final class ClaudeSession: ProviderSession {
         guard request["subtype"]?.string == "can_use_tool" else {
             process?.send([
                 "type": "control_response",
-                "response": ["subtype": "error", "request_id": .string(requestID), "error": "Swarm Code does not support this request."],
+                "response": ["subtype": "error", "request_id": .string(requestID), "error": "Quorumly does not support this request."],
             ])
             return
         }

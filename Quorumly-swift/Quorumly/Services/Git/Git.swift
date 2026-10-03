@@ -267,7 +267,7 @@ struct Git: Sendable {
     /// happens to be uncommitted alongside it.
     func captureTree(paths: [String]) async throws -> String {
         let fileManager = FileManager.default
-        let index = fileManager.temporaryDirectory.appendingPathComponent("swarm-code-index-\(UUID().uuidString)")
+        let index = fileManager.temporaryDirectory.appendingPathComponent("quorumly-index-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: index) }
         let environment = ["GIT_INDEX_FILE": index.path]
         if await hasCommits() { try Self.check(await run(["read-tree", "HEAD"], environment: environment)) }
@@ -288,7 +288,7 @@ struct Git: Sendable {
     /// holds every three-way result, for the checkout to take once the work has landed.
     func captureTree(paths: [String], onto base: String, from head: String) async throws -> (tree: String, merged: [String: Data])? {
         let fileManager = FileManager.default
-        let scratch = fileManager.temporaryDirectory.appendingPathComponent("swarm-code-rebase-\(UUID().uuidString)", isDirectory: true)
+        let scratch = fileManager.temporaryDirectory.appendingPathComponent("quorumly-rebase-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: scratch) }
         let environment = ["GIT_INDEX_FILE": scratch.appendingPathComponent("index").path]
@@ -512,7 +512,7 @@ struct Git: Sendable {
     // MARK: - Checkpoints
 
     static func checkpointRef(thread: UUID, turn: Int, phase: String) -> String {
-        "refs/swarm-code/checkpoints/\(thread.uuidString.lowercased())/\(turn)-\(phase)"
+        "refs/quorumly/checkpoints/\(thread.uuidString.lowercased())/\(turn)-\(phase)"
     }
 
     /// Snapshots the working tree into a hidden ref without touching the user's index or
@@ -525,7 +525,7 @@ struct Git: Sendable {
         if let known = watch?.commit(of: tree) {
             commit = known
         } else {
-            let result = try await run(["commit-tree", tree, "-m", "Swarm Code checkpoint"], environment: Self.identity)
+            let result = try await run(["commit-tree", tree, "-m", "Quorumly checkpoint"], environment: Self.identity)
             try Self.check(result)
             commit = result.trimmedOutput
             watch?.remember(commit: commit, of: tree)
@@ -576,7 +576,7 @@ struct Git: Sendable {
     /// diff, with no commit and nothing referenced. Respects .gitignore.
     func captureTree() async throws -> String {
         let fileManager = FileManager.default
-        let index = fileManager.temporaryDirectory.appendingPathComponent("swarm-code-index-\(UUID().uuidString)")
+        let index = fileManager.temporaryDirectory.appendingPathComponent("quorumly-index-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: index) }
         let environment = ["GIT_INDEX_FILE": index.path]
 
@@ -753,18 +753,19 @@ struct Git: Sendable {
     }
 
     func deleteCheckpoints(thread: UUID) async {
-        let prefix = "refs/swarm-code/checkpoints/\(thread.uuidString.lowercased())/"
-        guard let refs = try? await output(["for-each-ref", "--format=%(refname)", prefix]) else { return }
-        let commands = refs.split(separator: "\n").map { "delete \($0)\n" }.joined()
-        guard !commands.isEmpty else { return }
-        _ = try? await run(["update-ref", "--stdin"], input: Data(commands.utf8))
+        for prefix in ["refs/quorumly/checkpoints/\(thread.uuidString.lowercased())/", "refs/swarm-code/checkpoints/\(thread.uuidString.lowercased())/"] {
+            guard let refs = try? await output(["for-each-ref", "--format=%(refname)", prefix]) else { continue }
+            let commands = refs.split(separator: "\n").map { "delete \($0)\n" }.joined()
+            guard !commands.isEmpty else { continue }
+            _ = try? await run(["update-ref", "--stdin"], input: Data(commands.utf8))
+        }
     }
 
     // MARK: - Copies of the checkout
 
     private static let identity = [
-        "GIT_AUTHOR_NAME": "Swarm Code", "GIT_AUTHOR_EMAIL": "swarm-code@localhost",
-        "GIT_COMMITTER_NAME": "Swarm Code", "GIT_COMMITTER_EMAIL": "swarm-code@localhost",
+        "GIT_AUTHOR_NAME": "Quorumly", "GIT_AUTHOR_EMAIL": "quorumly@localhost",
+        "GIT_COMMITTER_NAME": "Quorumly", "GIT_COMMITTER_EMAIL": "quorumly@localhost",
     ]
 
     /// A commit of `tree` on top of HEAD that no ref points at: the checkout as it is,
@@ -801,7 +802,7 @@ struct Git: Sendable {
         // The three-way merge works through an index that matches the working tree, so
         // it gets a throwaway one that does, and the real index never changes.
         let fileManager = FileManager.default
-        let index = fileManager.temporaryDirectory.appendingPathComponent("swarm-code-apply-\(UUID().uuidString)")
+        let index = fileManager.temporaryDirectory.appendingPathComponent("quorumly-apply-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: index) }
         let environment = ["GIT_INDEX_FILE": index.path]
         if let indexPath = await indexPath(), fileManager.fileExists(atPath: indexPath) {
