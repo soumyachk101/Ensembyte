@@ -11,8 +11,8 @@ concurrency:
   group: preview-tests-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  # The Rust networking tests run in `core-tests` (ui-tests.yml, Linux) and
-  # `macos-native` (macos.yml); this workflow keeps the edge coordinator.
+  # The Rust networking tests run in `core-tests` (ui-tests.yml, Linux);
+  # this workflow keeps the edge coordinator.
   coordinator:
     runs-on: ubuntu-latest
     timeout-minutes: 10

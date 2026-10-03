@@ -1,0 +1,85 @@
+name: Windows & Linux Desktop (Rust)
+
+# Quorumly-rust builds exclusively for Windows and Linux.
+# No macOS jobs are built or tested in this workflow.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Quorumly-rust/**'
+      - '.github/workflows/rust-windows-linux.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Quorumly-rust/**'
+      - '.github/workflows/rust-windows-linux.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rust-desktop-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  windows-build:
+    name: Windows (x64)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Quorumly-rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Locate Windows SDK shader compiler (GPUI FXC)
+        run: |
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/fxc.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $fxc) { throw 'Windows SDK fxc.exe is required for GPUI release shaders' }
+          "GPUI_FXC_PATH=$($fxc.FullName)" >> $env:GITHUB_ENV
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Quorumly-rust
+
+      - name: Cargo Check Windows
+        run: cargo check -p quorumly
+
+  linux-build:
+    name: Linux (x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: Quorumly-rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies for GPUI
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxcb1-dev libx11-xcb-dev \
+            libfontconfig1-dev libfreetype-dev libasound2-dev \
+            libvulkan-dev pkg-config cmake libwebkit2gtk-4.1-dev libjson-glib-dev
+
+      - name: Setup Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Quorumly-rust
+
+      - name: Cargo Check Linux
+        run: cargo check -p quorumly

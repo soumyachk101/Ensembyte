@@ -1,0 +1,194 @@
+name: Release Pipeline
+
+# Unified Quorumly multi-platform release pipeline:
+#   - macOS: Quorumly-swift produces Quorumly.dmg (Apple silicon)
+#   - Windows: Quorumly-rust produces Quorumly-1.0.0-windows-x86_64-setup.exe & zip
+#   - Linux: Quorumly-rust produces Quorumly-1.0.0-linux-x86_64.tar.gz & AppImage
+# All artifacts are published directly to soumyachk101/Quorumly releases.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  # =========================================================================
+  # macOS Build (Exclusively Quorumly-swift)
+  # =========================================================================
+  build-macos:
+    name: Build macOS (Quorumly-swift)
+    runs-on: macos-14
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: Quorumly-swift
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Build and Package Quorumly DMG
+        run: |
+          mkdir -p build.noindex
+          xcodebuild \
+            -project Quorumly.xcodeproj \
+            -scheme Quorumly \
+            -configuration Release \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build \
+            CONFIGURATION_BUILD_DIR=build.noindex/app
+
+          # Package DMG using installer styling
+          scripts/package_dmg.sh \
+            --app "build.noindex/app/Quorumly.app" \
+            --output "build.noindex/Quorumly.dmg"
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: Quorumly-swift/build.noindex/Quorumly.dmg
+          if-no-files-found: error
+
+  # =========================================================================
+  # Windows Build (Exclusively Quorumly-rust)
+  # =========================================================================
+  build-windows:
+    name: Build Windows (Quorumly-rust)
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Quorumly-rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Locate Windows SDK shader compiler (GPUI FXC)
+        run: |
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/fxc.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $fxc) { throw 'Windows SDK fxc.exe is required for GPUI release shaders' }
+          "GPUI_FXC_PATH=$($fxc.FullName)" >> $env:GITHUB_ENV
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Quorumly-rust
+
+      - name: Package Windows Installer and Portable Zip
+        run: ./scripts/package-windows.ps1 -ReleasesUrl "https://github.com/soumyachk101/Quorumly/releases/latest/download"
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: |
+            Quorumly-rust/target/package/*.exe
+            Quorumly-rust/target/package/*.zip
+          if-no-files-found: error
+
+  # =========================================================================
+  # Linux Build (Exclusively Quorumly-rust)
+  # =========================================================================
+  build-linux:
+    name: Build Linux (Quorumly-rust)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: Quorumly-rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies for GPUI
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxcb1-dev libx11-xcb-dev \
+            libfontconfig1-dev libfreetype-dev libasound2-dev \
+            libvulkan-dev pkg-config cmake libwebkit2gtk-4.1-dev libjson-glib-dev
+
+      - name: Setup Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Quorumly-rust
+
+      - name: Package Linux Tarball & Binaries
+        run: scripts/package-linux.sh
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: Quorumly-rust/target/package/*.tar.gz
+          if-no-files-found: error
+
+  # =========================================================================
+  # Publish Unified Release
+  # =========================================================================
+  publish:
+    name: Publish Release to GitHub
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Organize Artifacts
+        run: |
+          mkdir -p dist
+          find release-artifacts -type f -exec cp {} dist/ \;
+          ls -la dist/
+
+      - name: Publish Release Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+
+          if ! gh release view "$TAG" --repo soumyachk101/Quorumly >/dev/null 2>&1; then
+            gh release create "$TAG" dist/* \
+              --repo soumyachk101/Quorumly \
+              --title "Quorumly $TAG" \
+              --generate-notes
+          else
+            gh release upload "$TAG" dist/* \
+              --repo soumyachk101/Quorumly \
+              --clobber
+          fi
