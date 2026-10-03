@@ -1,7 +1,7 @@
 # Quorumly
 
 <p align="center">
-  <img src="assets/app-icon.svg" width="120" height="120" alt="Quorumly" />
+  <img src="assets/quorumly-logo.png" width="120" height="120" alt="Quorumly" />
 </p>
 
 <p align="center">
