@@ -77,11 +77,62 @@ it in that moment.
 - "Finish", "merge", "done", or "test it" do not imply relaunch — only
   an explicit request to run/relaunch the app does.
 
-## Releases (only to release repo)
+## Building (local, native)
+
+Build each app on its native OS. Do not rely on GitHub Actions to produce
+binaries — the CI runners are unreliable; build locally and push the
+artifacts to GitHub Releases yourself.
+
+**Quorumly-swift** — macOS only. Xcode and SwiftUI require macOS. Build on
+a Mac:
+
+```sh
+cd Quorumly-swift
+xcodebuild -project Quorumly.xcodeproj \
+  -scheme Quorumly \
+  -configuration Release \
+  build
+./scripts/package_dmg.sh   # produces Quorumly.dmg
+```
+
+**Quorumly-rust** — Linux and Windows only. Build on each target OS (or
+cross-compile from Linux):
+
+```sh
+cd Quorumly-rust
+
+# Linux (x86_64)
+cargo build --release --target x86_64-unknown-linux-gnu
+./scripts/package-linux.sh   # produces tar.gz
+
+# Linux (aarch64)
+cargo build --release --target aarch64-unknown-linux-gnu
+
+# Windows (x86_64) — on Windows or via cross-compile
+cargo build --release --target x86_64-pc-windows-msvc
+```
+
+## Releases
 
 All DMG releases, app updates, and GitHub release publications must
 ONLY be made to the designated release repository. Never publish
 releases or upload binaries or assets to the main source repository.
+
+Build locally per the section above, then publish the artifacts:
+
+```sh
+# macOS
+gh release create v1.0.0 build.noindex/Quorumly-1.0.0.dmg \
+  --repo soumyachk101/Quorumly \
+  --title "v1.0.0"
+
+# Linux / Windows
+gh release create v1.0.0 \
+  dist/quorumly-linux-x86_64.tar.gz \
+  dist/Quorumly-Setup.exe \
+  --repo soumyachk101/Quorumly \
+  --title "v1.0.0"
+```
 
 **Every release must update the website.** After publishing a new
 version:

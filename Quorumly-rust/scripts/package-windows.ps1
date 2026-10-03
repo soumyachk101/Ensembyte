@@ -73,7 +73,10 @@ try {
     New-Item -ItemType Directory -Force -Path $stage | Out-Null
     Copy-Item -LiteralPath './target/release/quorumly.exe' -Destination (Join-Path $stage 'quorumly.exe')
     @{ releases_url = $ReleasesUrl } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM -LiteralPath (Join-Path $stage 'quorumly-update.json')
-    Copy-Item -LiteralPath 'LICENSE','THIRD_PARTY_NOTICES.md' -Destination $stage
+    $licensePath = if (Test-Path -LiteralPath (Join-Path $root 'LICENSE')) { Join-Path $root 'LICENSE' } elseif (Test-Path -LiteralPath (Join-Path $root '../LICENSE')) { Join-Path $root '../LICENSE' } else { $null }
+    $noticesPath = if (Test-Path -LiteralPath (Join-Path $root 'THIRD_PARTY_NOTICES.md')) { Join-Path $root 'THIRD_PARTY_NOTICES.md' } elseif (Test-Path -LiteralPath (Join-Path $root '../THIRD_PARTY_NOTICES.md')) { Join-Path $root '../THIRD_PARTY_NOTICES.md' } else { $null }
+    if ($licensePath) { Copy-Item -LiteralPath $licensePath -Destination $stage }
+    if ($noticesPath) { Copy-Item -LiteralPath $noticesPath -Destination $stage }
     $licenses = Join-Path $stage 'licenses/fonts'
     New-Item -ItemType Directory -Force -Path $licenses | Out-Null
     Copy-Item -Path 'crates/ui/assets/fonts/licenses/*' -Destination $licenses

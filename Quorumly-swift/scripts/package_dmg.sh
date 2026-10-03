@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Package a built Swarm Code.app into the styled installer DMG.
+# Package a built Quorumly.app into the styled installer DMG.
 #
 # Stages the app + Applications symlink together with the pre-baked window
 # styling from release/dmg (background, .DS_Store, volume icon), then builds
@@ -58,7 +58,7 @@ trap cleanup EXIT
 
 STAGE_PATH="$WORK_DIR/dmg-root"
 DSSTORE_PATH="$WORK_DIR/DS_Store"
-RW_DMG_PATH="$WORK_DIR/swarm-code-rw.dmg"
+RW_DMG_PATH="$WORK_DIR/quorumly-rw.dmg"
 MOUNT_POINT="$WORK_DIR/mnt"
 
 # Decoded before any disk-image work so a bad asset fails in a second, not a
@@ -109,7 +109,7 @@ if [ "$detached" -ne 1 ]; then
 fi
 ACTIVE_MOUNT_POINT=""
 
-# ULMO is supported since macOS 10.15, below Swarm Code's macOS 26 minimum.
+# ULMO is supported since macOS 10.15, below Quorumly's macOS minimum.
 # It preserves every byte and compresses the measured installer about 19%
 # smaller than the previous maximum-zlib UDZO image.
 rm -f "$OUTPUT_PATH"
