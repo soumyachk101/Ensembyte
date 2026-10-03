@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/soumyachk101/Quorumly/releases">⬇ Download</a>
+  <a href="https://github.com/soumyachk101/Quorumly/releases"> Download</a>
   &nbsp;·&nbsp;
-  <a href="https://quorumly.org">🌐 Website</a>
+  <a href="https://quorumly.org"> Website</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/soumyachk101/Quorumly/blob/main/CONTRIBUTING.md">🤝 Contributing</a>
+  <a href="https://github.com/soumyachk101/Quorumly/blob/main/CONTRIBUTING.md"> Contributing</a>
 </p>
 
 <p align="center">
@@ -47,7 +47,7 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 | **Stack** | Swift 6 / SwiftUI + Liquid Glass | Rust 2024 / GPUI (GPU-accelerated) |
 | **Source** | [`Quorumly-swift/`](Quorumly-swift/) | [`Quorumly-rust/`](Quorumly-rust/) |
 | **Packages** | Signed & Notarized `.dmg` | `.exe` / `.zip`, `.tar.gz` / `.AppImage` / `.deb` |
-| **Multi-Agent** | 🔱 Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
+| **Multi-Agent** |  Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
 | **Design** | 26 tinted-glass themes, Liquid Glass | Minimalist dark/light, immediate-mode GPU |
 | **Sync** | Local-first, hidden git checkpoints | Local-first, optional Loro CRDT sync |
 
@@ -60,7 +60,7 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 
 Here's what Quorumly looks and feels like in action:
 
-### 🖥 The Main Window
+###  The Main Window
 
 <p align="center">
   <img src="assets/hero.webp" alt="Quorumly main window" />
@@ -68,7 +68,7 @@ Here's what Quorumly looks and feels like in action:
 
 A beautiful Liquid Glass workspace with project sidebar, thread list, and streaming agent output — all in one view.
 
-### 🔀 Multi-Agent Queue
+###  Multi-Agent Queue
 
 <p align="center">
   <img src="assets/queue.webp" alt="Multi-agent queue" />
@@ -76,7 +76,7 @@ A beautiful Liquid Glass workspace with project sidebar, thread list, and stream
 
 <span align="center">Monitor multiple agents running in parallel — each in its own isolated git worktree, with live status, progress, and merge results.</span>
 
-### 🔍 Turn-by-Turn Diff Inspector
+###  Turn-by-Turn Diff Inspector
 
 <p align="center">
   <img src="assets/diff.webp" alt="Diff inspector" />
@@ -84,7 +84,7 @@ A beautiful Liquid Glass workspace with project sidebar, thread list, and stream
 
 Every model turn produces a hidden git checkpoint. Inspect precise line-by-line file modifications, accept or reject hunks, and navigate the full timeline of changes.
 
-### 💬 Inline Permission Prompts
+###  Inline Permission Prompts
 
 <p align="center">
   <img src="assets/question.webp" alt="Permission prompts" />
@@ -92,7 +92,7 @@ Every model turn produces a hidden git checkpoint. Inspect precise line-by-line 
 
 Answer approval requests, tool execution dialogs, and decision questions right in the streaming output — no terminal switching required.
 
-### 🔔 Live Notifications
+###  Live Notifications
 
 <p align="center">
   <img src="assets/notify.webp" alt="Notifications" />
@@ -100,7 +100,7 @@ Answer approval requests, tool execution dialogs, and decision questions right i
 
 Get notified when a background agent completes, hits an error, or needs your attention — without losing your current context.
 
-### 🎨 Theme Palette — 26 Liquid Glass Themes
+###  Theme Palette — 26 Liquid Glass Themes
 
 <p align="center">
   <img src="assets/palette.webp" alt="Theme palette" />
@@ -108,7 +108,7 @@ Get notified when a background agent completes, hits an error, or needs your att
 
 Twenty-six handcrafted tinted-glass color themes, from Midnight Ocean to Sunset Glow. Your workspace, your vibe.
 
-### 🧵 Thread Management
+###  Thread Management
 
 <p align="center">
   <img src="assets/threads.webp" alt="Thread management" />
@@ -116,7 +116,7 @@ Twenty-six handcrafted tinted-glass color themes, from Midnight Ocean to Sunset 
 
 Organize conversations into threads, pin important ones, search across history, and pick up right where you left off.
 
-### ⚡ Slash Commands
+###  Slash Commands
 
 <p align="center">
   <img src="assets/slash.webp" alt="Slash commands" />
@@ -124,7 +124,7 @@ Organize conversations into threads, pin important ones, search across history, 
 
 A powerful slash-command palette for quick actions — spawn agents, switch models, open files, manage worktrees, and more — all from the keyboard.
 
-### 🛠 Plan Rendering & Tool Execution
+###  Plan Rendering & Tool Execution
 
 <p align="center">
   <img src="assets/plans.webp" alt="Plan rendering" />
@@ -132,7 +132,7 @@ A powerful slash-command palette for quick actions — spawn agents, switch mode
 
 Watch your agent's thinking unfold in real-time with streaming markdown, tool-call plans, to-do lists, and reasoning disclosures.
 
-### ⚙️ Provider & Plan Limits
+###  Provider & Plan Limits
 
 <p align="center">
   <img src="assets/limits.webp" alt="Provider limits" />
@@ -140,7 +140,7 @@ Watch your agent's thinking unfold in real-time with streaming markdown, tool-ca
 
 Live token expenditure, rolling rate-limit counters, and provider quota transparency — so you always know where you stand.
 
-### 🔄 Agent Switcher
+###  Agent Switcher
 
 <p align="center">
   <img src="assets/switcher.webp" alt="Agent switcher" />
@@ -148,7 +148,7 @@ Live token expenditure, rolling rate-limit counters, and provider quota transpar
 
 Instantly switch between coding agents, models, and sessions — your context and history preserved across every transition.
 
-### 🎚 Model & Temperature Slider
+###  Model & Temperature Slider
 
 <p align="center">
   <img src="assets/slider.webp" alt="Model slider" />
@@ -156,7 +156,7 @@ Instantly switch between coding agents, models, and sessions — your context an
 
 Fine-tune your model selection and temperature with a smooth, native macOS slider. Pick the right tool for the right job.
 
-### 💡 Quoted Reasoning Blocks
+###  Quoted Reasoning Blocks
 
 <p align="center">
   <img src="assets/quote.webp" alt="Quoted reasoning" />
@@ -164,7 +164,7 @@ Fine-tune your model selection and temperature with a smooth, native macOS slide
 
 Collapsible, beautifully styled reasoning blocks that reveal the agent's chain of thought — clean, readable, and optionally expandable.
 
-### 📋 Quick Recipes
+###  Quick Recipes
 
 <p align="center">
   <img src="assets/recipes.webp" alt="Quick recipes" />
@@ -172,7 +172,7 @@ Collapsible, beautifully styled reasoning blocks that reveal the agent's chain o
 
 Pre-built workflow recipes for common tasks: code review, bug investigation, feature implementation, refactoring — one click to spawn a specialized agent.
 
-### 📁 Sidebar & Project Explorer
+###  Sidebar & Project Explorer
 
 <p align="center">
   <img src="assets/sidebar.webp" alt="Sidebar" />
@@ -186,7 +186,7 @@ Resizable project sidebar with file trees, worktree indicators, and context-awar
 
 Both clients deliver the same powerful, keyboard-first experience — optimized for their respective platforms:
 
-### 🔱 One Workspace, Any Agent
+###  One Workspace, Any Agent
 Project and thread sidebars, search, pinning, and per-thread runtimes. Real-time streaming of **thoughts, reasoning, tool execution, terminal outputs, and file diffs** — all in one pane.
 
 ### 🔒 Inline Permission Prompts
@@ -518,7 +518,7 @@ Quorumly is open source under the **MIT License** and actively welcomes contribu
 4. **Follow Guidelines** — Adhere to our [Code of Conduct](CODE_OF_CONDUCT.md) and [Contributing Guide](CONTRIBUTING.md)
 5. **Sign Off** — All commits must include `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 
-> 💡 The macOS app uses **worktrees for all experimental work**. See [`AGENTS.md`](AGENTS.md) for the workflow.
+>  The macOS app uses **worktrees for all experimental work**. See [`AGENTS.md`](AGENTS.md) for the workflow.
 
 ---
 
@@ -539,7 +539,7 @@ Copyright © Soumya Chakraborty ([@soumyachk101](https://github.com/soumyachk101
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/soumyachk101">Soumya Chakraborty</a>
+  Made with  by <a href="https://github.com/soumyachk101">Soumya Chakraborty</a>
   <br/>
   <a href="https://quorumly.org">quorumly.org</a> · <a href="https://github.com/soumyachk101/Quorumly">GitHub</a> · <a href="https://github.com/soumyachk101/Quorumly/releases">Releases</a>
 </p>
