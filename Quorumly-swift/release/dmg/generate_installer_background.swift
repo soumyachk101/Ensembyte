@@ -30,7 +30,7 @@ let iconSize: CGFloat = 128
 let backgroundColor = NSColor(srgbRed: 0x0b / 255.0, green: 0x0e / 255.0, blue: 0x14 / 255.0, alpha: 1)
 let textPrimary = NSColor(srgbRed: 0xe8 / 255.0, green: 0xea / 255.0, blue: 0xed / 255.0, alpha: 1)
 let accent = NSColor(srgbRed: 0x4f / 255.0, green: 0x9c / 255.0, blue: 0xff / 255.0, alpha: 1)
-let wordmark = "Swarm Code"
+let wordmark = "Quorumly"
 let outputStem = "installer-background"
 
 guard CommandLine.arguments.count >= 2 else {

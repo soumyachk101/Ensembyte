@@ -10,12 +10,12 @@ import os.path
 # dmgbuild exec()s this file without __file__; pass -D here=<this directory>.
 HERE = os.path.abspath(defines.get("here", "."))  # noqa: F821 - injected by dmgbuild
 
-volume_name = "Swarm Code"
+volume_name = "Quorumly"
 format = "UDZO"
 filesystem = "HFS+"
 
-# Any minimal stub named Swarm Code.app works: only the NAME is baked into .DS_Store.
-files = [os.path.join(HERE, "stub", "Swarm Code.app")]
+# Any minimal stub named Quorumly.app works: only the NAME is baked into .DS_Store.
+files = [os.path.join(HERE, "stub", "Quorumly.app")]
 symlinks = {"Applications": "/Applications"}
 
 # dmgbuild copies this to /.background.tiff on the volume and the baked alias
@@ -37,6 +37,6 @@ show_icon_preview = False
 arrange_by = None
 
 icon_locations = {
-    "Swarm Code.app": (165, 208),
+    "Quorumly.app": (165, 208),
     "Applications": (495, 208),
 }

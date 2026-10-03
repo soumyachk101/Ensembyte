@@ -171,7 +171,21 @@ jobs:
         run: |
           mkdir -p dist
           find release-artifacts -type f -exec cp {} dist/ \;
-          ls -la dist/
+          cd dist
+          # Provide both lowercase and capitalized aliases so website and direct downloads always resolve
+          for f in quorumly*; do
+            cap="Quorumly${f#quorumly}"
+            if [ -f "$f" ] && [ ! -f "$cap" ]; then
+              cp "$f" "$cap"
+            fi
+          done
+          if [ -f "Quorumly.dmg" ] && [ ! -f "Quorumly-1.0.0.dmg" ]; then
+            cp "Quorumly.dmg" "Quorumly-1.0.0.dmg"
+          fi
+          if [ -f "Quorumly-1.0.0.dmg" ] && [ ! -f "Quorumly.dmg" ]; then
+            cp "Quorumly-1.0.0.dmg" "Quorumly.dmg"
+          fi
+          ls -la
 
       - name: Publish Release Assets
         env:

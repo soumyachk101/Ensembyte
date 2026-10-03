@@ -68,9 +68,9 @@ LC_ALL=C grep -a -q -- "/Volumes/$VOLNAME" "$DSSTORE_PATH" \
     || error "The installer .DS_Store does not point its background at /Volumes/$VOLNAME; re-bake it (see release/dmg/README.md)"
 
 mkdir -p "$STAGE_PATH"
-# Ensure the app bundle has the canonical bundle identifier "iordv.swarmcode"
+# Ensure the app bundle has the canonical bundle identifier "org.quorumly.desktop"
 # so macOS Keychain attributes and access control lists match across all versions.
-codesign --force --deep --sign - --identifier iordv.swarmcode "$APP_PATH" 2>/dev/null || true
+codesign --force --deep --sign - --identifier org.quorumly.desktop "$APP_PATH" 2>/dev/null || true
 # ditto, not cp: it keeps the bundle's signature, extended attributes and the
 # stapled notarization ticket intact.
 ditto "$APP_PATH" "$STAGE_PATH/$APP_BUNDLE_NAME"
