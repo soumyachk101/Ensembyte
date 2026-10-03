@@ -47,16 +47,22 @@ jobs:
             -project Quorumly.xcodeproj \
             -scheme Quorumly \
             -configuration Release \
+            -derivedDataPath build.noindex/DerivedData \
             -skipPackagePluginValidation \
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
-            build \
-            CONFIGURATION_BUILD_DIR=build.noindex/app
+            build
+
+          APP_PATH="build.noindex/DerivedData/Build/Products/Release/Quorumly.app"
+          if [ ! -d "$APP_PATH" ]; then
+            APP_PATH=$(find build.noindex/DerivedData -name "Quorumly.app" -type d | head -1)
+          fi
+          echo "Found app at: $APP_PATH"
 
           # Package DMG using installer styling
           scripts/package_dmg.sh \
-            --app "build.noindex/app/Quorumly.app" \
+            --app "$APP_PATH" \
             --output "build.noindex/Quorumly.dmg"
 
       - name: Upload macOS Artifact
