@@ -2663,6 +2663,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
+name = "ensembyte"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "embed-resource",
+ "libc",
+ "mimalloc",
+ "orbit-engine",
+ "orbit-mcp",
+ "orbit-rpc",
+ "orbit-ui",
+ "orbit-update",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ensure-cov"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8094,28 +8116,6 @@ dependencies = [
  "libc",
  "log",
  "socket2",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "ensembyte"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "embed-resource",
- "libc",
- "mimalloc",
- "orbit-engine",
- "orbit-mcp",
- "orbit-rpc",
- "orbit-ui",
- "orbit-update",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
  "windows-sys 0.61.2",
 ]
 
