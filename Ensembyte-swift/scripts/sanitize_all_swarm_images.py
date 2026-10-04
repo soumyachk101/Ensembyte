@@ -390,7 +390,7 @@ def sanitize_threads():
         inpaint_v(arr, 273, 420, y_top - 4, y_top + 26)
 
     # Terminal line
-    inpaint_v(arr, 708, 890, 834, 862)
+    inpaint_v(arr, 690, 890, 834, 862)
 
     im_out = Image.fromarray(arr.astype(np.uint8))
     d = ImageDraw.Draw(im_out)
@@ -404,7 +404,25 @@ def sanitize_threads():
 
     font_term = ImageFont.truetype(FONT_PATH, 14)
     font_term.set_variation_by_name('Regular')
-    d.text((711, 837), 'Ensembyte build', fill=(150, 160, 172, 255), font=font_term)
+    d.text((695, 837), 'Ensembyte build', fill=(150, 160, 172, 255), font=font_term)
+
+    im_out.convert('RGB').save(p, 'WEBP', quality=95, method=6)
+    print(f"  Updated {p}")
+
+
+def sanitize_intro():
+    print("Sanitizing app/intro.webp...")
+    p = APP_DIR / "intro.webp"
+    im = Image.open(p).convert('RGBA')
+    arr = np.array(im, dtype=np.float32)
+
+    inpaint_v(arr, 755, 910, 882, 908)
+    im_out = Image.fromarray(arr.astype(np.uint8))
+    d = ImageDraw.Draw(im_out)
+
+    font_term = ImageFont.truetype(FONT_PATH, 14)
+    font_term.set_variation_by_name('Medium')
+    d.text((760, 887), "Ensembyte build", fill=(150, 160, 172, 255), font=font_term)
 
     im_out.convert('RGB').save(p, 'WEBP', quality=95, method=6)
     print(f"  Updated {p}")
@@ -635,6 +653,19 @@ def sanitize_diagrams():
         print(f"  Updated {hydra_path.name}")
 
 
+def sync_root_assets():
+    print("Syncing root assets/...")
+    root_assets = WORKSPACE_ROOT / "assets"
+    if not root_assets.exists():
+        return
+    import shutil
+    for app_webp in APP_DIR.glob("*.webp"):
+        dst = root_assets / app_webp.name
+        if dst.exists():
+            shutil.copy2(app_webp, dst)
+            print(f"  Synced to root assets: {dst.name}")
+
+
 def main():
     print("=== Starting Ensembyte Image Sanitization Pipeline ===")
     sanitize_window()
@@ -651,6 +682,7 @@ def main():
     sanitize_threads()
     sanitize_notify()
     sanitize_switcher()
+    sanitize_intro()
 
     sanitize_themes_all()
     sanitize_og()
@@ -658,6 +690,7 @@ def main():
     generate_posters()
     update_xcassets()
     sync_release_screenshots()
+    sync_root_assets()
     sanitize_diagrams()
 
     print("=== Sanitization Pipeline Complete! ===")
