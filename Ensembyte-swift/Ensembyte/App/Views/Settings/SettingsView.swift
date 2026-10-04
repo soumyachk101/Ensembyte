@@ -1009,8 +1009,8 @@ private struct AboutSettingsPage: View {
                 ChromeCard {
                     MadeByRow()
                     ChromeRowDivider()
-                    ChromeRow(title: "Website", detail: "ensembyte.org") {
-                        CreditLink(title: "Open website", url: URL(string: "https://ensembyte.org")!)
+                    ChromeRow(title: "Website", detail: "ensembyte.vercel.app") {
+                        CreditLink(title: "Open website", url: URL(string: "https://ensembyte.vercel.app")!)
                     }
                     ChromeRowDivider()
                     ChromeRow(title: "GitHub Profile", detail: "Soumya Chakraborty on GitHub (@soumyachk101)") {
@@ -1153,7 +1153,7 @@ private struct MadeByRow: View {
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
-                CreditLink(title: "Website", url: URL(string: "https://ensembyte.org")!)
+                CreditLink(title: "Website", url: URL(string: "https://ensembyte.vercel.app")!)
                 CreditLink(title: "GitHub", url: URL(string: "https://github.com/soumyachk101")!)
             }
         }

@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://github.com/soumyachk101/Ensembyte/releases"> Download</a>
   &nbsp;·&nbsp;
-  <a href="https://ensembyte.org"> Website</a>
+  <a href="https://ensembyte.vercel.app"> Website</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/soumyachk101/Ensembyte/blob/main/CONTRIBUTING.md"> Contributing</a>
 </p>
@@ -541,5 +541,5 @@ Copyright © Soumya Chakraborty ([@soumyachk101](https://github.com/soumyachk101
 <p align="center">
   Made with  by <a href="https://github.com/soumyachk101">Soumya Chakraborty</a>
   <br/>
-  <a href="https://ensembyte.org">ensembyte.org</a> · <a href="https://github.com/soumyachk101/Ensembyte">GitHub</a> · <a href="https://github.com/soumyachk101/Ensembyte/releases">Releases</a>
+  <a href="https://ensembyte.vercel.app">ensembyte.vercel.app</a> · <a href="https://github.com/soumyachk101/Ensembyte">GitHub</a> · <a href="https://github.com/soumyachk101/Ensembyte/releases">Releases</a>
 </p>

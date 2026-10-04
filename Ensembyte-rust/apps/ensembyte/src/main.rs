@@ -77,9 +77,9 @@ enum DaemonCommand {
     Status,
 }
 
-/// Production edge (Cloudflare Worker + Durable Objects on the orbit.sh zone).
+/// Production edge (Cloudflare Worker + Durable Objects on the ensembyte.org zone).
 /// `ENSEMBYTE_EDGE_URL` / `ORBIT_EDGE_URL` overrides (local dev / self-hosting).
-const DEFAULT_EDGE_URL: &str = "https://edge.orbit.sh";
+const DEFAULT_EDGE_URL: &str = "https://edge.ensembyte.org";
 
 /// Production WorkOS AuthKit client id — public knowledge (it appears in every
 /// authorize URL), so baking it in is safe. Overridden by `ENSEMBYTE_WORKOS_CLIENT_ID` /

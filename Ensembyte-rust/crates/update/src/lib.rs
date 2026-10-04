@@ -339,7 +339,7 @@ fn release_base(edge_url: &str) -> anyhow::Result<String> {
     if let Some(url) = windows::release_url()? {
         return Ok(url.trim_end_matches('/').to_owned());
     }
-    if edge_url.is_empty() || edge_url == "https://edge.orbit.sh" {
+    if edge_url.is_empty() || edge_url == "https://edge.ensembyte.org" || edge_url == "https://edge.orbit.sh" {
         return Ok(DEFAULT_RELEASES_URL.to_owned());
     }
     Ok(format!("{}/releases", edge_url.trim_end_matches('/')))

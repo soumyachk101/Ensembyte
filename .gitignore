@@ -55,3 +55,6 @@ __pycache__/
 CLAUDE.md
 .vercel
 .env*
+
+# Website clone (experiment)
+website_try/

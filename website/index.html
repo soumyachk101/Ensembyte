@@ -15,17 +15,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="glfROTt1yu8Q3W5gDcss1lagtgNtfoB2_ZhcWabVNhA" />
-  <title>Ensembyte. Supercharged coding agent for Mac</title>
-  <meta name="description" content="Ensembyte is the supercharged coding agent for Mac. Hydra turns one chat into a team of heads working in parallel, on Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code, Pi, DeepSeek, Meta and Z.ai, from one native Liquid Glass window. Free and open source.">
+  <title>Ensembyte — Supercharged coding agent for Mac, Windows &amp; Linux</title>
+  <meta name="description" content="Ensembyte is the supercharged coding agent for Mac, Windows and Linux. Hydra turns one chat into a team of heads working in parallel, on Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code, Pi, DeepSeek, Meta and Z.ai, from one native Liquid Glass window. Free and open source.">
   <link rel="canonical" href="https://ensembyte.vercel.app/">
+  <meta name="author" content="Soumya Chakraborty">
   <meta name="theme-color" content="#0b0e14">
   <meta name="color-scheme" content="dark">
+
+  <!-- Hreflang -->
+  <link rel="alternate" hreflang="en" href="https://ensembyte.vercel.app/">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Ensembyte">
   <meta property="og:locale" content="en_US">
-  <meta property="og:title" content="Ensembyte. Supercharged coding agent for Mac">
+  <meta property="og:title" content="Ensembyte — Supercharged coding agent for Mac, Windows &amp; Linux">
   <meta property="og:description" content="Ensembyte is the supercharged coding agent for Mac. Hydra turns one chat into a team of heads working in parallel, on Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code, Pi, DeepSeek, Meta and Z.ai, from one native Liquid Glass window. Free and open source.">
   <meta property="og:url" content="https://ensembyte.vercel.app/">
   <meta property="og:image" content="https://ensembyte.vercel.app/assets/og/og-home.png?v=2">
@@ -37,7 +41,7 @@
 
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Ensembyte. Supercharged coding agent for Mac">
+  <meta name="twitter:title" content="Ensembyte — Supercharged coding agent for Mac, Windows &amp; Linux">
   <meta name="twitter:description" content="Ensembyte is the supercharged coding agent for Mac. Hydra turns one chat into a team of heads working in parallel, on Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code, Pi, DeepSeek, Meta and Z.ai, from one native Liquid Glass window. Free and open source.">
   <meta name="twitter:image" content="https://ensembyte.vercel.app/assets/og/og-home.png?v=2">
   <meta name="twitter:image:alt" content="Ensembyte. The coding app by Soumya Chakraborty.">
@@ -77,6 +81,86 @@
     "url": "https://ensembyte.vercel.app/",
     "license": "https://opensource.org/licenses/MIT",
     "sameAs": "https://github.com/soumyachk101/Ensembyte"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is Ensembyte?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Ensembyte is the coding app by Soumya Chakraborty: a native desktop app that drives the coding agents you already have installed. It gives Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code, Pi, DeepSeek, Meta and  one shared window with projects, threads, streaming replies, approvals, diffs, git and a terminal."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it really free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Ensembyte is free and open source under the MIT License. You pay your agent providers as you already do; Ensembyte never sits in between, never proxies a request and never adds a markup."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it open source?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, all of it. The app lives on GitHub, with macOS, Windows, and Linux releases all published directly to Ensembyte Releases. Read it, build it, or contribute."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need an API key?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Not for Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code or Pi: sign in once in your terminal, for example codex login or claude auth login, and Ensembyte uses that session and your subscription. DeepSeek, Meta and  talk to their APIs directly, so those three take a key, stored securely on your machine."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which operating systems and hardware are supported?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Ensembyte supports macOS (Apple silicon, macOS 26 or later), Windows 10 and 11 (64-bit x64), and modern Linux distributions (via standalone x86_64 AppImage and Debian/Ubuntu .deb packages). All platforms share the full Hydra parallel agent workflow and terminal integration."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does it send anything anywhere?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Only what your agents send to their own providers. Ensembyte has no telemetry, no analytics, no account and no cloud sync. Remote access, mobile apps and a web client are left out on purpose. Your threads, checkpoints and settings stay on your Mac."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are checkpoints and worktrees?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "After every turn Ensembyte records a hidden git checkpoint of your project, so each reply comes with a diff and a revert button, and a thread can be rewound to any earlier turn. A new thread can also start in its own git worktree, a separate copy of the repository on its own branch, so several agents can work on one project at the same time without touching each other\'s files."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is Hydra?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Hydra turns one chat into a team, and it is on from your first chat. The agent becomes the lead: it writes the briefs, sends helper agents called heads out in parallel, each in its own copy of your project, checks their work when they report back and lands it in your checkout as one merge."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I see my usage limits?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. The ring beside the send button opens a popover with the context window, every rolling limit of your plan with its reset time, and the credit left on a pay-as-you-go key. Codex, Claude, Antigravity, Copilot, Command Code and  report plan limits; DeepSeek and Command Code report credits."
+        }
+      }
+    ]
   }
   </script>
 </head>

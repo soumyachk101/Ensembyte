@@ -1,7 +1,7 @@
 #!/bin/sh
 # Ensembyte (native) headless installer.
 #
-#   curl -fsSL https://orbit.sh/install.sh | sh
+#   curl -fsSL https://ensembyte.vercel.app/install.sh | sh
 #
 # Installs the native binary (requires the system ALSA runtime) to
 # ~/.ensembyte/app, puts `ensembyte` on PATH, adds a launcher entry and icon under
@@ -14,7 +14,7 @@
 # client-id configuration needed. Overrides (if any) go in ~/.ensembyte/env.
 set -eu
 
-BASE="${ENSEMBYTE_BASE_URL:-${ORBIT_BASE_URL:-https://orbit.sh}}"
+BASE="${ENSEMBYTE_BASE_URL:-https://ensembyte.vercel.app}"
 
 # --- platform ---------------------------------------------------------------
 os="$(uname -s)"
