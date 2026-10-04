@@ -64,11 +64,14 @@ echo "✓ DMGs packaged successfully."
 echo "==> Step 3: Uploading to GitHub Release ($TAG)..."
 # Check if release exists; if not, create it
 if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-    echo "Creating new release $TAG on $REPO..."
+    NOTES_FLAG=(--notes "Ensembyte $TAG release")
+    if [ -f "$SWIFT_DIR/ReleaseNotes/$VERSION.md" ]; then
+        NOTES_FLAG=(--notes-file "$SWIFT_DIR/ReleaseNotes/$VERSION.md")
+    fi
     gh release create "$TAG" "$DMG_PATH" "$VERSIONED_DMG_PATH" \
       --repo "$REPO" \
       --title "$TAG" \
-      --notes "Ensembyte $TAG release"
+      "${NOTES_FLAG[@]}"
 else
     echo "Uploading DMG assets to existing release $TAG..."
     gh release upload "$TAG" "$DMG_PATH" "$VERSIONED_DMG_PATH" \
