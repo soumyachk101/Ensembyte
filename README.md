@@ -408,7 +408,7 @@ gh release create v1.0.0 build.noindex/Ensembyte-1.0.0.dmg \
 gh release create v1.0.0 \
   dist/ensembyte-linux-x86_64.tar.gz \
   dist/Ensembyte-Setup.exe \
-  --repo soumyachk101/Orbit-Code \
+  --repo soumyachk101/Ensembyte \
   --title "v1.0.0"
 ```
 

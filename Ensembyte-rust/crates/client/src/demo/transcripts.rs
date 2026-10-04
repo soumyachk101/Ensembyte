@@ -145,7 +145,7 @@ pub fn veil_alpha(elapsed_ms: f32, duration_ms: f32) -> f32 {
 }
 ```
 
-The row keeps one `RowVeil` while streaming and drops it on the live→complete flip, exactly like the desktop lifecycle. Details in [the veil design note](https://github.com/orbit-sh/orbit/blob/main/docs/design/transcript-veil.md#lifecycle)."#;
+The row keeps one `RowVeil` while streaming and drops it on the live→complete flip, exactly like the desktop lifecycle. Details in [the veil design note](https://github.com/soumyachk101/Ensembyte/blob/main/docs/design/transcript-veil.md#lifecycle)."#;
 
 const CJK_REPLY: &str = r#"### Grapheme-safe fading
 
@@ -198,7 +198,7 @@ git push -u origin veil-fade
 gh pr create --base main --title "Stream pull request status on every client"
 ```
 
-PR **#90** is open: https://github.com/orbit-sh/orbit/pull/90"#;
+PR **#90** is open: https://github.com/soumyachk101/Ensembyte/pull/90"#;
 
 fn veil(host: &str, now: i64) -> Vec<SessionMessageEntry> {
     let attach = crate::attachments::with_attachments(

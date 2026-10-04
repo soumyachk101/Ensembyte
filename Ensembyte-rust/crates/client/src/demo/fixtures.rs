@@ -431,7 +431,7 @@ pub(crate) fn seed(
                     provider: "github".into(),
                     number,
                     title: title.into(),
-                    url: format!("https://github.com/orbit-sh/orbit/pull/{number}"),
+                    url: format!("https://github.com/soumyachk101/Ensembyte/pull/{number}"),
                     state,
                     base_ref: "main".into(),
                     head_ref: source.branch.clone(),
