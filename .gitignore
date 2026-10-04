@@ -53,3 +53,5 @@ node_modules/
 __pycache__/
 *.pyc
 CLAUDE.md
+.vercel
+.env*
