@@ -1,10 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+    xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://ensembyte.vercel.app/</loc>
     <lastmod>2026-10-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://ensembyte.vercel.app/assets/app/tour/hero.webp</image:loc>
+      <image:title>Ensembyte app with Hydra team at work</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://ensembyte.vercel.app/assets/app/tour/hydra.webp</image:loc>
+      <image:title>Ensembyte Hydra parallel agent workflow</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://ensembyte.vercel.app/assets/app/tour/slider.webp</image:loc>
+      <image:title>Ensembyte effort slider for model control</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://ensembyte.vercel.app/assets/app/tour/panels.webp</image:loc>
+      <image:title>Ensembyte floating panels for agent heads</image:title>
+    </image:image>
   </url>
   <url>
     <loc>https://ensembyte.vercel.app/changelog.html</loc>
