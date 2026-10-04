@@ -5,7 +5,7 @@
       "version": "1.0.0",
       "date": "2026-10-03",
       "platform": "mac",
-      "summary": "Initial public release of Quorumly for macOS: a high-performance native desktop app for coding agents. Apple silicon, macOS 26 or later.",
+      "summary": "Initial public release of Ensembyte for macOS: a high-performance native desktop app for coding agents. Apple silicon, macOS 26 or later.",
       "sections": [
         {
           "title": "New features",

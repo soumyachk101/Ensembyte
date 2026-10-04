@@ -1,6 +1,6 @@
-# Contributing to Quorumly
+# Contributing to Ensembyte
 
-Thanks for helping build Quorumly. This guide covers how to set up, what a
+Thanks for helping build Ensembyte. This guide covers how to set up, what a
 good pull request looks like, and the handful of rules that keep a
 local-first, multi-device, multi-platform app working across versions.
 
@@ -19,7 +19,7 @@ local-first, multi-device, multi-platform app working across versions.
 By contributing, you certify that:
 
 > You have the right to submit your work under the MIT License.
-> You are granting Soumya Chakraborty and Quorumly Contributors a license
+> You are granting Soumya Chakraborty and Ensembyte Contributors a license
 > to use your contributions under the same terms.
 > You agree that your contributions may be relicensed under future
 > compatible open source licenses if the project changes license.
@@ -30,7 +30,7 @@ PR constitutes your agreement.
 
 ## Setup
 
-Quorumly ships as two implementations under one umbrella. Set up only
+Ensembyte ships as two implementations under one umbrella. Set up only
 the one you intend to change.
 
 ### Swift app (macOS only)
@@ -38,8 +38,8 @@ the one you intend to change.
 The Swift app targets macOS only (Apple silicon / macOS 26+) and requires Xcode with the Swift
 toolchain.
 
-- Open `Quorumly-swift/Quorumly.xcodeproj` in Xcode.
-- Select the `Quorumly` scheme and build (Cmd-B).
+- Open `Ensembyte-swift/Ensembyte.xcodeproj` in Xcode.
+- Select the `Ensembyte` scheme and build (Cmd-B).
 - Use `scripts/quick_run.sh` to build and launch the app from the
   terminal.
 
@@ -49,7 +49,7 @@ worktree (see [AGENTS.md](AGENTS.md)), never in the main checkout.
 ### Rust app (Windows & Linux)
 
 The toolchain is pinned by
-[`rust-toolchain.toml`](Quorumly-rust/rust-toolchain.toml) (stable, with
+[`rust-toolchain.toml`](Ensembyte-rust/rust-toolchain.toml) (stable, with
 `rustfmt` and `clippy`).
 
 **Linux** needs the GPUI system libraries CI installs:
@@ -61,12 +61,12 @@ sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
 ```
 
 **Windows** is covered in
-[docs/reference/windows-development.md](Quorumly-rust/docs/reference/windows-development.md).
+[docs/reference/windows-development.md](Ensembyte-rust/docs/reference/windows-development.md).
 
 Build and run the app with:
 
 ```sh
-cargo run -p quorumly
+cargo run -p ensembyte
 ```
 
 #### Running a dev build next to an installed app
@@ -75,7 +75,7 @@ An installed daemon holds the default data directory and IPC port. Give
 your dev build its own so the two never share state:
 
 ```sh
-QUORUMLY_DATA_DIR=~/.quorumly-dev QUORUMLY_IPC_PORT=27700 cargo run -p quorumly
+ENSEMBYTE_DATA_DIR=~/.ensembyte-dev ENSEMBYTE_IPC_PORT=27700 cargo run -p ensembyte
 ```
 
 Useful knobs for exercising the UI without a real agent or account:
@@ -94,7 +94,7 @@ Useful knobs for exercising the UI without a real agent or account:
 There is no formal test suite. The build itself is the check:
 
 ```sh
-xcodebuild -project Quorumly-swift/Quorumly.xcodeproj -scheme Quorumly -configuration Debug build
+xcodebuild -project Ensembyte-swift/Ensembyte.xcodeproj -scheme Ensembyte -configuration Debug build
 ```
 
 ### Rust app
@@ -138,7 +138,7 @@ cargo test --locked -p orbit-preview
 
 ### Compatibility across versions
 
-Quorumly runs on several devices at once, and they update independently.
+Ensembyte runs on several devices at once, and they update independently.
 A UI may talk to an older backend, and a chat may be hosted on a remote
 device running an older engine. So:
 
@@ -214,8 +214,8 @@ device running an older engine. So:
 
 ## License
 
-Quorumly is [MIT licensed](LICENSE). By contributing, you agree that
+Ensembyte is [MIT licensed](LICENSE). By contributing, you agree that
 your contributions are licensed under the same terms — see the
 Developer Certificate of Origin above.
 
-Copyright (c) 2026 Soumya Chakraborty and Quorumly Contributors
+Copyright (c) 2026 Soumya Chakraborty and Ensembyte Contributors

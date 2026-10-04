@@ -44,7 +44,7 @@ ignore/
 .kilo/
 .pheromone/
 .playwright-mcp/
-.quorumly/
+.ensembyte/
 .vscode/
 .idea/
 node_modules/

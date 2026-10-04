@@ -1,18 +1,18 @@
 name: macOS App (Swift)
 
-# Quorumly-swift builds exclusively for macOS (Apple silicon / macOS 26+).
+# Ensembyte-swift builds exclusively for macOS (Apple silicon / macOS 26+).
 # Builds and tests the native Swift 6 / SwiftUI application and packages the disk image.
 
 on:
   push:
     branches: [main]
     paths:
-      - 'Quorumly-swift/**'
+      - 'Ensembyte-swift/**'
       - '.github/workflows/swift-macos.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'Quorumly-swift/**'
+      - 'Ensembyte-swift/**'
       - '.github/workflows/swift-macos.yml'
   workflow_dispatch:
 
@@ -38,12 +38,12 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Build Quorumly macOS (Debug)
+      - name: Build Ensembyte macOS (Debug)
         run: |
-          cd Quorumly-swift
+          cd Ensembyte-swift
           xcodebuild \
-            -project Quorumly.xcodeproj \
-            -scheme Quorumly \
+            -project Ensembyte.xcodeproj \
+            -scheme Ensembyte \
             -configuration Debug \
             -skipPackagePluginValidation \
             -skipMacroValidation \

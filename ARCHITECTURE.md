@@ -1,19 +1,19 @@
-# Quorumly — Architecture
+# Ensembyte — Architecture
 
 ## Overview
 
-Quorumly is an umbrella project for a native coding-agent client. The two apps that live under it do the same job — give you a window onto the CLI-based coding agents (Claude Code, Codex, Cursor, and others) that you already pay for — but they pick different stacks so you can pick the one that matches your platform.
+Ensembyte is an umbrella project for a native coding-agent client. The two apps that live under it do the same job — give you a window onto the CLI-based coding agents (Claude Code, Codex, Cursor, and others) that you already pay for — but they pick different stacks so you can pick the one that matches your platform.
 
-- **Quorumly for macOS** — a native Swift / SwiftUI app exclusively for **macOS 26+** (Apple silicon). Lives in `Quorumly-swift/`. Releases produce `.dmg` installer packages.
-- **Quorumly Desktop** — a native Rust / GPUI app exclusively for **Windows and Linux**. Lives in `Quorumly-rust/`. Releases produce Windows installers (`.exe` / `.zip`) and Linux packages (`.tar.gz` / `.AppImage` / `.deb`).
+- **Ensembyte for macOS** — a native Swift / SwiftUI app exclusively for **macOS 26+** (Apple silicon). Lives in `Ensembyte-swift/`. Releases produce `.dmg` installer packages.
+- **Ensembyte Desktop** — a native Rust / GPUI app exclusively for **Windows and Linux**. Lives in `Ensembyte-rust/`. Releases produce Windows installers (`.exe` / `.zip`) and Linux packages (`.tar.gz` / `.AppImage` / `.deb`).
 
-Quorumly is the umbrella that owns the brand, the website, and the cross-project documentation. Author: Soumya Chakraborty.
+Ensembyte is the umbrella that owns the brand, the website, and the cross-project documentation. Author: Soumya Chakraborty.
 
 Both apps share the same product concepts:
 
 - A persistent **project, thread, and worktree** surface.
 - A **provider adapter** layer that shells out to the CLI tools you already have installed and signed in, on your own subscriptions. Neither app embeds a model.
-- **Hydra** multi-head orchestration in Quorumly for macOS, where a single chat fans out into parallel agent worktrees that are merged back as one result.
+- **Hydra** multi-head orchestration in Ensembyte for macOS, where a single chat fans out into parallel agent worktrees that are merged back as one result.
 - A **Model Context Protocol (MCP)** integration layer with a catalog of preconfigured servers, stdio/HTTP/SSE transports, and an OAuth flow.
 - **Local-first state** with crash-safe writes, versioned migrations, and a theme system.
 - **Provider-aware credit and plan-limit tracking** so you can see quota state inline.
@@ -25,24 +25,24 @@ The two implementations diverge where the platforms demand it: SwiftUI for the p
 ## Repository Layout
 
 ```
-Quorumly/
-├── Quorumly-swift/             macOS-native Swift / SwiftUI client (macOS only)
-│   ├── Quorumly/           App target (App, Core, Services, UI layers)
+Ensembyte/
+├── Ensembyte-swift/             macOS-native Swift / SwiftUI client (macOS only)
+│   ├── Ensembyte/           App target (App, Core, Services, UI layers)
 │   ├── Resources/          Bundled assets
 │   ├── docs/               Architecture, audits, plans
 │   ├── scripts/            Release automation (DMG generation)
 │   └── release/            DMG packaging, signing, notarization
 │
-├── Quorumly-rust/                  Windows & Linux native Rust + GPUI client
+├── Ensembyte-rust/                  Windows & Linux native Rust + GPUI client
 │   ├── Cargo.toml          Workspace definition
 │   ├── crates/             Core library crates
-│   ├── apps/quorumly/      The binary (headed default, `headless` subcommand)
+│   ├── apps/ensembyte/      The binary (headed default, `headless` subcommand)
 │   ├── edge/               TypeScript Cloudflare Worker + Durable Objects
 │   ├── docs/               Architecture, research, plans
 │   ├── dist/               Platform distribution assets (Windows installer, Linux desktop entries)
 │   └── scripts/            Packaging (Windows setup.exe, Linux tarballs)
 │
-└── Quorumly/               Umbrella project
+└── Ensembyte/               Umbrella project
     ├── README.md
     └── docs/ARCHITECTURE.md  This document
 ```
@@ -51,9 +51,9 @@ The umbrella repository owns the brand, the website, and the cross-project docum
 
 ---
 
-## Implementation 1: Quorumly for macOS (Swift / SwiftUI)
+## Implementation 1: Ensembyte for macOS (Swift / SwiftUI)
 
-Quorumly for macOS is a native macOS coding-agent client. The Swift codebase is organized into four layers with a strict one-way dependency rule: each lower layer knows nothing of the layers above it.
+Ensembyte for macOS is a native macOS coding-agent client. The Swift codebase is organized into four layers with a strict one-way dependency rule: each lower layer knows nothing of the layers above it.
 
 ### Four-Layer Architecture
 
@@ -118,9 +118,9 @@ The dependency rule is enforced by convention: Core has no imports from outside 
 
 ---
 
-## Implementation 2: Quorumly Desktop (Rust / GPUI)
+## Implementation 2: Ensembyte Desktop (Rust / GPUI)
 
-Quorumly Desktop is the native client in Rust with a GPUI interface, built exclusively for Windows and Linux. One binary, headed by default or headless via subcommand. Dedicated installers for Windows (.exe installer and portable .zip) and Linux (.tar.gz and .AppImage).
+Ensembyte Desktop is the native client in Rust with a GPUI interface, built exclusively for Windows and Linux. One binary, headed by default or headless via subcommand. Dedicated installers for Windows (.exe installer and portable .zip) and Linux (.tar.gz and .AppImage).
 
 ### Topology
 
@@ -137,10 +137,10 @@ gpui UI ─ in-proc/localhost RPC ─ engine A ══ DeviceRoom DO relay ══
 
 ### Headed and Headless Modes
 
-Single binary `quorumly`:
+Single binary `ensembyte`:
 
-- `quorumly` — headed. If a local engine daemon is already listening on the IPC port, connect to it; otherwise run the engine **in-process** (RPC over an in-memory duplex — same protocol, zero serialization shortcuts) **and serve that same engine on the IPC port**. The embedded engine is not private: any other viewport can attach to the running app without it first being restarted as a daemon. Binding is best-effort — if the port is taken, the window still opens, having lost only the ability to host peers.
-- `quorumly headless` — engine only. A clean installation immediately serves its local profile over localhost IPC; when a saved account selects the synced profile at startup and a bearer is available, it also hosts its DeviceRoom for remote control. A VPS can run this while a laptop's UI drives it.
+- `ensembyte` — headed. If a local engine daemon is already listening on the IPC port, connect to it; otherwise run the engine **in-process** (RPC over an in-memory duplex — same protocol, zero serialization shortcuts) **and serve that same engine on the IPC port**. The embedded engine is not private: any other viewport can attach to the running app without it first being restarted as a daemon. Binding is best-effort — if the port is taken, the window still opens, having lost only the ability to host peers.
+- `ensembyte headless` — engine only. A clean installation immediately serves its local profile over localhost IPC; when a saved account selects the synced profile at startup and a bearer is available, it also hosts its DeviceRoom for remote control. A VPS can run this while a laptop's UI drives it.
 
 ### Local-First Workspace Profiles
 
@@ -158,7 +158,7 @@ The engine never re-resolves an open store because `AuthState` changed. This pre
 | WorkOS disabled without a dev bearer                  | `Development`    | Disabled          |
 | Explicit non-empty dev bearer                         | `Development`    | Enabled           |
 
-`quorumly login` and `quorumly logout` operate on `session.json` while the engine is stopped. Login selects `Synced` for the next start; logout selects `Local` for the next start. The UI may update live authentication status, but the active `WorkspaceScope` still changes only after restart.
+`ensembyte login` and `ensembyte logout` operate on `session.json` while the engine is stopped. Login selects `Synced` for the next start; logout selects `Local` for the next start. The UI may update live authentication status, but the active `WorkspaceScope` still changes only after restart.
 
 The resolved profile selects the session snapshots, registry snapshot, run journals, and attachment cache that may contain workspace data:
 
@@ -173,46 +173,46 @@ The synced and development store roots preserve the historical cloud layout whil
 ### Cargo Workspace
 
 ```
-Quorumly-rust/
+Ensembyte-rust/
   Cargo.toml                Workspace definition
   crates/
-    proto/      quorumly-proto (proto)     Wire types: AgentEvent, ToolCall, RunRequest, Model,
+    proto/      ensembyte-proto (proto)     Wire types: AgentEvent, ToolCall, RunRequest, Model,
                                 entities, RPC envelopes (serde; ndjson framing);
                                 `view` = the pure derivations both frontends share
                                 (sort orders, staleness gating, grouping, boot gate)
-    doc/        quorumly-doc (doc)       Session-doc + workspace-registry schemas, mirror layer,
+    doc/        ensembyte-doc (doc)       Session-doc + workspace-registry schemas, mirror layer,
                                 parts fold, continuations, command ledger, sidecars
-    sync/       quorumly-sync (sync)      Loro room client (join/VV backfill/fragments/backoff),
+    sync/       ensembyte-sync (sync)      Loro room client (join/VV backfill/fragments/backoff),
                                 ephemeral presence, DocsStore (SQLite snapshots +
                                 processed-command ledger)
-    harness/    quorumly-harness (harness)   Harness trait + claude-code (stream-json subprocess),
+    harness/    ensembyte-harness (harness)   Harness trait + claude-code (stream-json subprocess),
                                 codex (app-server JSON-RPC), mock; steering mailbox,
                                 requestInput, models/reasoning/options catalogs
-    engine/     quorumly-engine (engine)    Sessions engine (pub/sub, run journal, recovery,
+    engine/     ensembyte-engine (engine)    Sessions engine (pub/sub, run journal, recovery,
                                 stall watchdog), doc host + command executor,
                                 repos/worktrees, checkout-diff sync, terminals
                                 (portable-pty), uploads, agent accounts (cred swap),
                                 auth (WorkOS via edge), device-room host/peers,
                                 identity
-    rpc/        quorumly-rpc (rpc)       UiRpc/ControlRpc: typed req/resp/stream over WS
+    rpc/        ensembyte-rpc (rpc)       UiRpc/ControlRpc: typed req/resp/stream over WS
                                 (tokio-tungstenite) + in-memory transport;
                                 device-room virtual sockets ({s,k,to,from} frames)
-    theme/      quorumly-theme (theme)     Source-neutral theme schema + built-in/custom registry,
+    theme/      ensembyte-theme (theme)     Source-neutral theme schema + built-in/custom registry,
                                 validation, provenance, and local VS Code compiler
-    voice/      quorumly-voice (voice)     Desktop-local optional Parakeet model, capture and
+    voice/      ensembyte-voice (voice)     Desktop-local optional Parakeet model, capture and
                                 inference; no RPC/sync
-    ui/         quorumly-ui (ui)        gpui app: shell, sidebar, conversation, composer,
+    ui/         ensembyte-ui (ui)        gpui app: shell, sidebar, conversation, composer,
                                 terminal view, diff pane, settings, animation kit
-    markdown/   quorumly-markdown (markdown)  Streaming markdown renderer
-    syntax/     quorumly-syntax (syntax)    Syntax highlighting
-    mcp/        quorumly-mcp (mcp)       Model Context Protocol integration
-    text/       quorumly-text (text)      Text processing utilities
-    mobile/     quorumly-mobile (mobile)    Mobile companion support
-    client/     quorumly-client (client)    Client crate
-    update/     quorumly-update (update)    Auto-update support
-    preview/    quorumly-preview (preview)   Preview components
+    markdown/   ensembyte-markdown (markdown)  Streaming markdown renderer
+    syntax/     ensembyte-syntax (syntax)    Syntax highlighting
+    mcp/        ensembyte-mcp (mcp)       Model Context Protocol integration
+    text/       ensembyte-text (text)      Text processing utilities
+    mobile/     ensembyte-mobile (mobile)    Mobile companion support
+    client/     ensembyte-client (client)    Client crate
+    update/     ensembyte-update (update)    Auto-update support
+    preview/    ensembyte-preview (preview)   Preview components
   apps/
-    quorumly/                  The binary (headed default, `headless` subcommand)
+    ensembyte/                  The binary (headed default, `headless` subcommand)
   edge/                        TypeScript Worker + Durable Objects (session rooms,
                                device rooms, chat rooms, registry rooms, R2,
                                WorkOS auth)
@@ -225,7 +225,7 @@ The engine async runtime is **tokio** throughout; the UI bridges via `gpui_tokio
 
 ### Data Model — Loro CRDTs
 
-Quorumly Desktop uses two persistent document kinds. When sync is enabled, session docs ride the chat2 row protocol (Loro updates as append-only rows plus Range-resumable checkpoints, ChatRoom DO) and the registry rides its own row-frame protocol; local-only profiles persist the same docs without joining rooms.
+Ensembyte Desktop uses two persistent document kinds. When sync is enabled, session docs ride the chat2 row protocol (Loro updates as append-only rows plus Range-resumable checkpoints, ChatRoom DO) and the registry rides its own row-frame protocol; local-only profiles persist the same docs without joining rooms.
 
 1. **Session doc** (per chat) — the transcript and durable command queue. Schema is a Rust port of the session-doc package: `meta` map, `messages` list (parts as list-of-maps with **LoroText bodies** — the measured 1.03× oplog shape; never LWW value rewrites), `commands` list with ledger rules (append-only per-device entries; host-only outcomes; dedupe/TTL/supersede evaluation). Continuation splitting at 256KB, render-only tool parts (full inputs stay in the host's local run journal), tail/diff sidecars. Constants carried over: `STREAM_COMMIT_MS=120`, `DO_FLUSH_MS=5s`, compaction at 8MB, retain 30d, tail 64.
 
@@ -286,13 +286,13 @@ Each provider adapter tracks its own quota state:
 - **DeepSeek** — API key credit balance.
 - **Command Code** — usage also tracked via API key credits.
 
-In Quorumly for macOS, the effort slider fuses the lead's model and the heads' model into a single control when Hydra is active.
+In Ensembyte for macOS, the effort slider fuses the lead's model and the heads' model into a single control when Hydra is active.
 
 ---
 
 ### Hydra: One Chat, Many Heads
 
-Hydra is a Quorumly feature that turns a single conversation into parallel agent work. When enabled, the lead agent writes briefs, dispatches heads in parallel, and lands their results back into the checkout as one merge.
+Hydra is a Ensembyte feature that turns a single conversation into parallel agent work. When enabled, the lead agent writes briefs, dispatches heads in parallel, and lands their results back into the checkout as one merge.
 
 ```
 Lead agent (your chat)
@@ -327,7 +327,7 @@ Both implementations include a full Model Context Protocol integration layer.
 - **Local proxy** — the app runs a local proxy so tools can reach MCP servers without exposing them externally.
 - **OAuth authentication** — MCP servers that require OAuth are handled through the app's auth flow.
 
-In Quorumly for macOS, the MCP service layer manages the catalog, connections, transports, and credentials. In Quorumly Desktop, the `mcp` crate provides the same surface.
+In Ensembyte for macOS, the MCP service layer manages the catalog, connections, transports, and credentials. In Ensembyte Desktop, the `mcp` crate provides the same surface.
 
 ---
 
@@ -335,7 +335,7 @@ In Quorumly for macOS, the MCP service layer manages the catalog, connections, t
 
 All persistent state lives in a single application store, serialized to disk.
 
-**Quorumly for macOS (AppStore):**
+**Ensembyte for macOS (AppStore):**
 
 ```
 AppStore
@@ -351,9 +351,9 @@ AppStore
   └── mcp: MCPStore (connections)
 ```
 
-**Quorumly Desktop:**
+**Ensembyte Desktop:**
 
-Quorumly Desktop uses two persistent document kinds, persisted via Loro CRDTs with SQLite snapshots for local-only profiles. When sync is enabled, the same docs ride Durable Object rooms in the edge.
+Ensembyte Desktop uses two persistent document kinds, persisted via Loro CRDTs with SQLite snapshots for local-only profiles. When sync is enabled, the same docs ride Durable Object rooms in the edge.
 
 ```
 Session doc (per chat) ─── transcript, commands, sidecars
@@ -364,13 +364,13 @@ Workspace registry doc (per profile) ─── spaces, chats, devices, status
 
 - **Crash-safe writes** — every save goes to a temporary file first, then renames. A crash mid-write cannot leave a partial file.
 - **Versioned migrations** — the store file carries a version envelope. The migration layer detects old shapes and upgrades them on load.
-- **Convenience fields** (Quorumly for macOS) — top-level `projects`, `threads`, and `hydra_pairs` are convenience accessors kept in sync with `library` via `sync_convenience_fields()`.
+- **Convenience fields** (Ensembyte for macOS) — top-level `projects`, `threads`, and `hydra_pairs` are convenience accessors kept in sync with `library` via `sync_convenience_fields()`.
 
 ---
 
 ### Data Flow
 
-**Send a message (Quorumly for macOS):**
+**Send a message (Ensembyte for macOS):**
 
 ```
 User types in Composer
@@ -403,7 +403,7 @@ User types in Composer
         notify (if notify_when_finished)
 ```
 
-**Quorumly Desktop data flow:**
+**Ensembyte Desktop data flow:**
 
 ```
 gpui UI ── in-memory or WebSocket RPC ── Engine
@@ -416,7 +416,7 @@ gpui UI ── in-memory or WebSocket RPC ── Engine
                                           └── Syncs via edge Durable Objects (when enabled)
 ```
 
-Quorumly Desktop's command plane uses durable command entries in the session doc. Send / steer / interrupt / respondInput are entries executed by the chat's host device, with offline sends queued in the doc. Executor is gated on chat ownership; entries are marked processed before execute; steer with no live run dispatches as the next turn.
+Ensembyte Desktop's command plane uses durable command entries in the session doc. Send / steer / interrupt / respondInput are entries executed by the chat's host device, with offline sends queued in the doc. Executor is gated on chat ownership; entries are marked processed before execute; steer with no live run dispatches as the next turn.
 
 ---
 
@@ -424,55 +424,55 @@ Quorumly Desktop's command plane uses durable command entries in the session doc
 
 Both implementations share the same design philosophy for themes: numbers drive layout, colors are paint.
 
-**Quorumly for macOS:** 26 tinted-glass themes including System, Catppuccin, Dracula, Claude, and Codex. Theme definitions include semantic colors, syntax palettes, terminal colors, and optional interaction-accent overlays.
+**Ensembyte for macOS:** 26 tinted-glass themes including System, Catppuccin, Dracula, Claude, and Codex. Theme definitions include semantic colors, syntax palettes, terminal colors, and optional interaction-accent overlays.
 
-**Quorumly Desktop:** Independent light/dark resolved variants. Each variant is a completely resolved palette owned by the `theme` crate. Theme families group related variants; a `ThemeSelection` stores independent light and dark variant ids. `AccentSelection::ThemeDefault` preserves the variant's authored accent; `AccentSelection::Preset` derives a contrast-checked interaction overlay. Every variant records a recommended `SurfaceTreatment` (frost or opaque). `SurfacePreference` is a separate device-local choice that does not change appearance, theme, or accent selection.
+**Ensembyte Desktop:** Independent light/dark resolved variants. Each variant is a completely resolved palette owned by the `theme` crate. Theme families group related variants; a `ThemeSelection` stores independent light and dark variant ids. `AccentSelection::ThemeDefault` preserves the variant's authored accent; `AccentSelection::Preset` derives a contrast-checked interaction overlay. Every variant records a recommended `SurfaceTreatment` (frost or opaque). `SurfacePreference` is a separate device-local choice that does not change appearance, theme, or accent selection.
 
-The Quorumly Desktop built-in registry contains 30 variants across 19 families (Quorumly, VS Code, Catppuccin, Tokyo Night, Dracula, GitHub, Ayu, Gruvbox, Rosé Pine, Nord, One Dark Pro, Atom One Dark, Night Owl, Winter is Coming, Palenight, SynthWave '84, Shades of Purple, Cobalt2, Andromeda). The importer supports VS Code JSONC themes, TextMate plist files, workbench colors, semantic token colors, and terminal ANSI colors. Linked and editable sources reload explicitly; a failed reload stores a quiet warning and continues using the last successfully compiled family. Local VS Code file/package compilation and imported/linked custom families retain last-known-good persistence.
+The Ensembyte Desktop built-in registry contains 30 variants across 19 families (Ensembyte, VS Code, Catppuccin, Tokyo Night, Dracula, GitHub, Ayu, Gruvbox, Rosé Pine, Nord, One Dark Pro, Atom One Dark, Night Owl, Winter is Coming, Palenight, SynthWave '84, Shades of Purple, Cobalt2, Andromeda). The importer supports VS Code JSONC themes, TextMate plist files, workbench colors, semantic token colors, and terminal ANSI colors. Linked and editable sources reload explicitly; a failed reload stores a quiet warning and continues using the last successfully compiled family. Local VS Code file/package compilation and imported/linked custom families retain last-known-good persistence.
 
-Both implementations honor `prefers-reduced-motion`. Hairline borders and bundled Geist/Geist Mono are shared presentation foundations in Quorumly Desktop.
+Both implementations honor `prefers-reduced-motion`. Hairline borders and bundled Geist/Geist Mono are shared presentation foundations in Ensembyte Desktop.
 
 ---
 
 ### Security Model
 
-**Checkpoint security (Quorumly for macOS):** Every diff generated by a thread is stored as a hidden git checkpoint. Checkpoints are secured with HMAC-SHA256 so they cannot be tampered with externally.
+**Checkpoint security (Ensembyte for macOS):** Every diff generated by a thread is stored as a hidden git checkpoint. Checkpoints are secured with HMAC-SHA256 so they cannot be tampered with externally.
 
 **Approval timeouts (both implementations):** Agent requests that require user approval have a configurable timeout. After the timeout expires, the request is auto-rejected (configurable behavior).
 
-**Credential isolation (both implementations):** Provider credentials (API keys, OAuth tokens) are stored in the application settings and never logged or transmitted to any backend except the provider's own API endpoint. In Quorumly for macOS the MCP keychain layer (`MCPKeychain.swift`) keeps MCP credentials isolated from the main store.
+**Credential isolation (both implementations):** Provider credentials (API keys, OAuth tokens) are stored in the application settings and never logged or transmitted to any backend except the provider's own API endpoint. In Ensembyte for macOS the MCP keychain layer (`MCPKeychain.swift`) keeps MCP credentials isolated from the main store.
 
 **Crash reporting (both implementations):** Crash reports are captured locally and can be submitted. Reports include the store state scrubbed of credentials and the crash traceback.
 
 **Auto-update (both implementations):** Updates are signed and verified before installation. The public key for signature verification is shipped with the app.
 
-**Quorumly Desktop privacy boundary:** Local attachments remain jailed under the local upload root and are not readable through the synced attachment cache. Returning to local-only mode reopens the same local identity and data. Remote workspace file requests from trusted peers are resolved by the owning engine, which enforces workspace-relative path, containment, symlink, and write-conflict checks before touching its filesystem. `.git` remains unavailable regardless of ignored-file visibility options. Ignored-file visibility is not an authorization boundary; a remote peer may request ignored entries and then read or write them, including potentially sensitive files such as `.env`, when `includeIgnored` is enabled. Devices authenticated to the same synced account are trusted peers for remote workspace control; if those devices must no longer trust one another with the full workspace, that policy must be enforced by the owning engine for remote requests — hiding entries only in the UI is not a security control.
+**Ensembyte Desktop privacy boundary:** Local attachments remain jailed under the local upload root and are not readable through the synced attachment cache. Returning to local-only mode reopens the same local identity and data. Remote workspace file requests from trusted peers are resolved by the owning engine, which enforces workspace-relative path, containment, symlink, and write-conflict checks before touching its filesystem. `.git` remains unavailable regardless of ignored-file visibility options. Ignored-file visibility is not an authorization boundary; a remote peer may request ignored entries and then read or write them, including potentially sensitive files such as `.env`, when `includeIgnored` is enabled. Devices authenticated to the same synced account are trusted peers for remote workspace control; if those devices must no longer trust one another with the full workspace, that policy must be enforced by the owning engine for remote requests — hiding entries only in the UI is not a security control.
 
 ---
 
 ## Build and Release
 
-### Quorumly for macOS
+### Ensembyte for macOS
 
 ```bash
-cd Quorumly-swift
+cd Ensembyte-swift
 xcodegen generate
-open Quorumly.xcodeproj
+open Ensembyte.xcodeproj
 ```
 
 SwiftTerm, the only dependency, is fetched by Swift Package Manager. Xcode asks once to trust its build plugin. Build is the check; there is no test target.
 
-`scripts/package_dmg.sh` stages HiDPI window backdrop, window geometry, and the app icon into every release DMG. Load-bearing invariants: the volume name must be `Quorumly`, the background must be `/.background.tiff`, the app must be `Quorumly.app`, and the symlink must be `Applications`. Any mismatch silently breaks Finder window styling.
+`scripts/package_dmg.sh` stages HiDPI window backdrop, window geometry, and the app icon into every release DMG. Load-bearing invariants: the volume name must be `Ensembyte`, the background must be `/.background.tiff`, the app must be `Ensembyte.app`, and the symlink must be `Applications`. Any mismatch silently breaks Finder window styling.
 
 `scripts/release.sh` archives an Apple silicon build, signs it with Developer ID, notarizes and staples both the app and a disk image, and checks Gatekeeper. The disk image lands in `build.noindex/` (Spotlight-skipped). `scripts/publish_release.sh` publishes the release.
 
-### Quorumly Desktop
+### Ensembyte Desktop
 
 ```bash
-cd Quorumly-rust
+cd Ensembyte-rust
 cargo build --workspace
-cargo run --bin quorumly          # headed
-cargo run --bin quorumly headless # headless
+cargo run --bin ensembyte          # headed
+cargo run --bin ensembyte headless # headless
 ```
 
 Linux packaging: `scripts/package-linux.sh` with release profile. macOS bundling: `dist/macos/` (requires a Mac to execute). Windows packaging is driven from the same `dist/` tree.

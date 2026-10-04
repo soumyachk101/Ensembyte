@@ -311,7 +311,7 @@
       img.width = 2080;
       img.height = 1300;
       img.decoding = "async";
-      img.alt = "Quorumly in the " + id + " theme";
+      img.alt = "Ensembyte in the " + id + " theme";
       stage.appendChild(img);
       images[id] = img;
       return img;

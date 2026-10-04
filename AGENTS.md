@@ -1,4 +1,4 @@
-# AGENTS.md — Quorumly agent workflow
+# AGENTS.md — Ensembyte agent workflow
 
 ## Worktrees (mandatory for coding)
 
@@ -8,24 +8,24 @@ experimental tasks. Use a per-task worktree.
 **Swift app:**
 
 ```sh
-cd Quorumly-swift
+cd Ensembyte-swift
 git fetch origin --prune
-git worktree add -b <branch> ~/.quorumly-swift/worktrees/agent-<slug> origin/main
+git worktree add -b <branch> ~/.ensembyte-swift/worktrees/agent-<slug> origin/main
 # Do all edits, builds, and scripts/quick_run.sh runs inside that worktree
 # Cleanup when done:
-git worktree remove --force ~/.quorumly-swift/worktrees/agent-<slug>
+git worktree remove --force ~/.ensembyte-swift/worktrees/agent-<slug>
 git worktree prune
 ```
 
 **Rust app:**
 
 ```sh
-cd Quorumly-rust
+cd Ensembyte-rust
 git fetch origin --prune
-git worktree add -b <branch> ~/.quorumly-rust/worktrees/agent-<slug> origin/main
+git worktree add -b <branch> ~/.ensembyte-rust/worktrees/agent-<slug> origin/main
 # Do all edits, builds, and cargo runs inside that worktree
 # Cleanup when done:
-git worktree remove --force ~/.quorumly-rust/worktrees/agent-<slug>
+git worktree remove --force ~/.ensembyte-rust/worktrees/agent-<slug>
 git worktree prune
 ```
 
@@ -41,15 +41,15 @@ above.
 
 ### Swift app
 
-- `Quorumly/Core` (models, pure support) reaches into nothing else in
+- `Ensembyte/Core` (models, pure support) reaches into nothing else in
   the app.
-- `Quorumly/Services` (Git, Store, Providers) and `Quorumly/UI`
+- `Ensembyte/Services` (Git, Store, Providers) and `Ensembyte/UI`
   (Chrome, Common, Markdown, Theme, Sound) reach only into Core.
-- `Quorumly/App` (entry, model, runtime, windows, captures, and every
+- `Ensembyte/App` (entry, model, runtime, windows, captures, and every
   feature view) reaches into everything.
 
 There is no test target and no test scripts; the build is the check
-(`xcodebuild -project Quorumly.xcodeproj -scheme Quorumly -configuration Debug build`).
+(`xcodebuild -project Ensembyte.xcodeproj -scheme Ensembyte -configuration Debug build`).
 
 ### Rust app
 
@@ -83,23 +83,23 @@ Build each app on its native OS. Do not rely on GitHub Actions to produce
 binaries — the CI runners are unreliable; build locally and push the
 artifacts to GitHub Releases yourself.
 
-**Quorumly-swift** — macOS only. Xcode and SwiftUI require macOS. Build on
+**Ensembyte-swift** — macOS only. Xcode and SwiftUI require macOS. Build on
 a Mac:
 
 ```sh
-cd Quorumly-swift
-xcodebuild -project Quorumly.xcodeproj \
-  -scheme Quorumly \
+cd Ensembyte-swift
+xcodebuild -project Ensembyte.xcodeproj \
+  -scheme Ensembyte \
   -configuration Release \
   build
-./scripts/package_dmg.sh   # produces Quorumly.dmg
+./scripts/package_dmg.sh   # produces Ensembyte.dmg
 ```
 
-**Quorumly-rust** — Linux and Windows only. Build on each target OS (or
+**Ensembyte-rust** — Linux and Windows only. Build on each target OS (or
 cross-compile from Linux):
 
 ```sh
-cd Quorumly-rust
+cd Ensembyte-rust
 
 # Linux (x86_64)
 cargo build --release --target x86_64-unknown-linux-gnu
@@ -122,15 +122,15 @@ Build locally per the section above, then publish the artifacts:
 
 ```sh
 # macOS
-gh release create v1.0.0 build.noindex/Quorumly-1.0.0.dmg \
-  --repo soumyachk101/Quorumly \
+gh release create v1.0.0 build.noindex/Ensembyte-1.0.0.dmg \
+  --repo soumyachk101/Ensembyte \
   --title "v1.0.0"
 
 # Linux / Windows
 gh release create v1.0.0 \
-  dist/quorumly-linux-x86_64.tar.gz \
-  dist/Quorumly-Setup.exe \
-  --repo soumyachk101/Quorumly \
+  dist/ensembyte-linux-x86_64.tar.gz \
+  dist/Ensembyte-Setup.exe \
+  --repo soumyachk101/Ensembyte \
   --title "v1.0.0"
 ```
 

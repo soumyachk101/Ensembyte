@@ -113,14 +113,14 @@
     }
   }
 
-  // The name a human would use for a build: "1.0.0" -> "Quorumly 1.0.0".
+  // The name a human would use for a build: "1.0.0" -> "Ensembyte 1.0.0".
   function displayTitle(version, platform) {
     var raw = String(version || "").trim();
     if (!raw) return "New release";
     if (platform === "windows, linux" || platform === "windows" || platform === "linux" || platform === "desktop") {
-      return "Quorumly " + raw + " (Windows & Linux)";
+      return "Ensembyte " + raw + " (Windows & Linux)";
     }
-    return "Quorumly " + raw;
+    return "Ensembyte " + raw;
   }
 
   // The channel glyph, built as a real <svg> node because everything on
@@ -470,7 +470,7 @@
     cv.setAttribute("aria-hidden", "true");
     var face = document.createElement("img");
     face.className = "clog-float-icon__face is-front";
-    face.src = "assets/brand/quorumly-icon-256.webp";
+    face.src = "assets/brand/ensembyte-icon-256.webp";
     face.alt = "";
     face.decoding = "async";
     cv.appendChild(face);

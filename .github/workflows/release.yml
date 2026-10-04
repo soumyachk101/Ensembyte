@@ -1,9 +1,9 @@
 name: Release Pipeline (Windows & Linux)
 
-# Quorumly multi-platform release pipeline for Windows & Linux (Quorumly-rust):
-#   - Windows: Quorumly-rust produces Quorumly-windows-x86_64 installer & portable zip
-#   - Linux: Quorumly-rust produces Quorumly-linux-x86_64.tar.gz
-# Note: macOS (Quorumly-swift) is built locally via `scripts/release-mac.sh` per AGENTS.md.
+# Ensembyte multi-platform release pipeline for Windows & Linux (Ensembyte-rust):
+#   - Windows: Ensembyte-rust produces Ensembyte-windows-x86_64 installer & portable zip
+#   - Linux: Ensembyte-rust produces Ensembyte-linux-x86_64.tar.gz
+# Note: macOS (Ensembyte-swift) is built locally via `scripts/release-mac.sh` per AGENTS.md.
 
 on:
   push:
@@ -20,16 +20,16 @@ permissions:
 
 jobs:
   # =========================================================================
-  # Windows Build (Exclusively Quorumly-rust)
+  # Windows Build (Exclusively Ensembyte-rust)
   # =========================================================================
   build-windows:
-    name: Build Windows (Quorumly-rust)
+    name: Build Windows (Ensembyte-rust)
     runs-on: windows-2022
     timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
-        working-directory: Quorumly-rust
+        working-directory: Ensembyte-rust
 
     steps:
       - name: Checkout code
@@ -48,28 +48,28 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: Quorumly-rust
+          workspaces: Ensembyte-rust
 
       - name: Package Windows Installer and Portable Zip
-        run: ./scripts/package-windows.ps1 -ReleasesUrl "https://github.com/soumyachk101/Quorumly/releases/latest/download"
+        run: ./scripts/package-windows.ps1 -ReleasesUrl "https://github.com/soumyachk101/Ensembyte/releases/latest/download"
 
       - name: Upload Windows Assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { "${{ github.event.inputs.tag }}" } else { "${{ github.ref_name }}" }
-          gh release upload "$tag" target/package/*.exe target/package/*.zip --repo soumyachk101/Quorumly --clobber
+          gh release upload "$tag" target/package/*.exe target/package/*.zip --repo soumyachk101/Ensembyte --clobber
 
   # =========================================================================
-  # Linux Build (Exclusively Quorumly-rust)
+  # Linux Build (Exclusively Ensembyte-rust)
   # =========================================================================
   build-linux:
-    name: Build Linux (Quorumly-rust)
+    name: Build Linux (Ensembyte-rust)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: Quorumly-rust
+        working-directory: Ensembyte-rust
 
     steps:
       - name: Checkout code
@@ -90,7 +90,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: Quorumly-rust
+          workspaces: Ensembyte-rust
 
       - name: Package Linux Tarball & Binaries
         run: scripts/package-linux.sh
@@ -103,4 +103,4 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag }}"
           fi
-          gh release upload "$TAG" target/package/*.tar.gz --repo soumyachk101/Quorumly --clobber
+          gh release upload "$TAG" target/package/*.tar.gz --repo soumyachk101/Ensembyte --clobber

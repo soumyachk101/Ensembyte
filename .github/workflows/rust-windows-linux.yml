@@ -1,18 +1,18 @@
 name: Windows & Linux Desktop (Rust)
 
-# Quorumly-rust builds exclusively for Windows and Linux.
+# Ensembyte-rust builds exclusively for Windows and Linux.
 # No macOS jobs are built or tested in this workflow.
 
 on:
   push:
     branches: [main]
     paths:
-      - 'Quorumly-rust/**'
+      - 'Ensembyte-rust/**'
       - '.github/workflows/rust-windows-linux.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'Quorumly-rust/**'
+      - 'Ensembyte-rust/**'
       - '.github/workflows/rust-windows-linux.yml'
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: Quorumly-rust
+        working-directory: Ensembyte-rust
 
     steps:
       - name: Checkout code
@@ -47,10 +47,10 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: Quorumly-rust
+          workspaces: Ensembyte-rust
 
       - name: Cargo Check Windows
-        run: cargo check -p quorumly
+        run: cargo check -p ensembyte
 
   linux-build:
     name: Linux (x86_64)
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: Quorumly-rust
+        working-directory: Ensembyte-rust
 
     steps:
       - name: Checkout code
@@ -79,7 +79,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: Quorumly-rust
+          workspaces: Ensembyte-rust
 
       - name: Cargo Check Linux
-        run: cargo check -p quorumly
+        run: cargo check -p ensembyte

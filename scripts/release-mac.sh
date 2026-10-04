@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# release-mac.sh: Local native macOS release builder and publisher for Quorumly
-# Builds Quorumly-swift, packages styled Quorumly.dmg, and publishes to GitHub Releases.
+# release-mac.sh: Local native macOS release builder and publisher for Ensembyte
+# Builds Ensembyte-swift, packages styled Ensembyte.dmg, and publishes to GitHub Releases.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SWIFT_DIR="$ROOT_DIR/Quorumly-swift"
-REPO="soumyachk101/Quorumly"
+SWIFT_DIR="$ROOT_DIR/Ensembyte-swift"
+REPO="soumyachk101/Ensembyte"
 
 TAG="${1:-}"
 if [ -z "$TAG" ]; then
@@ -18,7 +18,7 @@ fi
 VERSION="${TAG#v}"
 
 echo "=================================================="
-echo " Building Quorumly for macOS (Native Local Build)"
+echo " Building Ensembyte for macOS (Native Local Build)"
 echo " Version: $VERSION (Tag: $TAG)"
 echo " Repo:    $REPO"
 echo "=================================================="
@@ -29,11 +29,11 @@ command -v gh >/dev/null 2>&1 || { echo "Error: GitHub CLI (gh) is required but 
 
 cd "$SWIFT_DIR"
 
-echo "==> Step 1: Compiling Quorumly (Release)..."
+echo "==> Step 1: Compiling Ensembyte (Release)..."
 mkdir -p build.noindex
 xcodebuild \
-  -project Quorumly.xcodeproj \
-  -scheme Quorumly \
+  -project Ensembyte.xcodeproj \
+  -scheme Ensembyte \
   -configuration Release \
   -derivedDataPath build.noindex/DerivedData \
   -skipPackagePluginValidation \
@@ -42,20 +42,20 @@ xcodebuild \
   CODE_SIGN_IDENTITY="" \
   build -quiet
 
-APP_PATH="build.noindex/DerivedData/Build/Products/Release/Quorumly.app"
+APP_PATH="build.noindex/DerivedData/Build/Products/Release/Ensembyte.app"
 if [ ! -d "$APP_PATH" ]; then
-    APP_PATH=$(find build.noindex/DerivedData -name "Quorumly.app" -type d | head -1)
+    APP_PATH=$(find build.noindex/DerivedData -name "Ensembyte.app" -type d | head -1)
 fi
 
 if [ ! -d "$APP_PATH" ]; then
-    echo "Error: Quorumly.app was not produced by the build." >&2
+    echo "Error: Ensembyte.app was not produced by the build." >&2
     exit 1
 fi
 echo "✓ App bundle built at: $APP_PATH"
 
 echo "==> Step 2: Packaging styled DMG..."
-DMG_PATH="build.noindex/Quorumly.dmg"
-VERSIONED_DMG_PATH="build.noindex/Quorumly-$VERSION.dmg"
+DMG_PATH="build.noindex/Ensembyte.dmg"
+VERSIONED_DMG_PATH="build.noindex/Ensembyte-$VERSION.dmg"
 
 ./scripts/package_dmg.sh --app "$APP_PATH" --output "$DMG_PATH"
 cp -f "$DMG_PATH" "$VERSIONED_DMG_PATH"
@@ -68,7 +68,7 @@ if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     gh release create "$TAG" "$DMG_PATH" "$VERSIONED_DMG_PATH" \
       --repo "$REPO" \
       --title "$TAG" \
-      --notes "Quorumly $TAG release"
+      --notes "Ensembyte $TAG release"
 else
     echo "Uploading DMG assets to existing release $TAG..."
     gh release upload "$TAG" "$DMG_PATH" "$VERSIONED_DMG_PATH" \

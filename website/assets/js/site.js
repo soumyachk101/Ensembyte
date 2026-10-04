@@ -259,17 +259,17 @@
 
   var DOWNLOADS = {
     mac: {
-      url: "https://github.com/soumyachk101/Quorumly/releases/latest/download/Quorumly.dmg",
+      url: "https://github.com/soumyachk101/Ensembyte/releases/latest/download/Ensembyte.dmg",
       text: "Download for macOS",
       icon: "#apple-mark"
     },
     windows: {
-      url: "https://github.com/soumyachk101/Quorumly/releases/download/v1.0.0/Quorumly-1.0.0-windows-x86_64-setup.exe",
+      url: "https://github.com/soumyachk101/Ensembyte/releases/download/v1.0.0/Ensembyte-1.0.0-windows-x86_64-setup.exe",
       text: "Download for Windows",
       icon: "#windows-mark"
     },
     linux: {
-      url: "https://github.com/soumyachk101/Quorumly/releases/download/v1.0.0/Quorumly-1.0.0-linux-x86_64.AppImage",
+      url: "https://github.com/soumyachk101/Ensembyte/releases/download/v1.0.0/Ensembyte-1.0.0-linux-x86_64.AppImage",
       text: "Download for Linux",
       icon: "#linux-mark"
     }
