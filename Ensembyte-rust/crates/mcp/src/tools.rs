@@ -1026,7 +1026,7 @@ impl Tools {
             _ => short(origin_id).to_owned(),
         };
         format!(
-            "[Message from Orbit chat {label}. Reply to it with the Orbit `send_message` tool, chat {}.]\n\n{text}",
+            "[Message from Ensembyte chat {label}. Reply to it with the Ensembyte `send_message` tool, chat {}.]\n\n{text}",
             short(origin_id)
         )
     }
@@ -1421,7 +1421,8 @@ mod tests {
         assert_eq!(params["command"]["kind"], "run");
         let prompt = params["command"]["request"]["prompt"].as_str().unwrap();
         assert!(
-            prompt.starts_with("[Message from Orbit chat Beta (chat-bet)"),
+            prompt.starts_with("[Message from Ensembyte chat Beta (chat-bet)")
+                || prompt.starts_with("[Message from Orbit chat Beta (chat-bet)"),
             "{prompt}"
         );
         assert!(prompt.ends_with("please review"));

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Every theme Swarm Code offers: the system look plus the palettes the big
+/// Every theme Ensembyte offers: the system look plus the palettes the big
 /// coding agents ship (Catppuccin, Dracula, Tokyo Night, Nord, Gruvbox,
 /// One Dark, Everforest, Kanagawa, Rosé Pine, Solarized, GitHub, Ayu,
 /// Night Owl, Monokai, Claude, Codex, Cursor, Matrix).

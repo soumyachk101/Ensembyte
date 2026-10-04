@@ -19,7 +19,7 @@ pub enum LinkAction {
     /// Normal click or keyboard activation; the user's persisted preference
     /// decides whether this routes internally or externally.
     Primary,
-    /// Explicit "Open in Orbit" context-menu action.
+    /// Explicit "Open in Ensembyte" context-menu action.
     Internal,
     External,
     Copy,

@@ -17,7 +17,7 @@
 static os_log_t DCWindowLog(void) {
     static os_log_t log;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ log = os_log_create("iordv.swarmcode", "window"); });
+    dispatch_once(&once, ^{ log = os_log_create("org.ensembyte.desktop", "window"); });
     return log;
 }
 

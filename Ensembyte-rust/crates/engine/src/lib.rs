@@ -623,13 +623,16 @@ impl Engine {
     pub async fn build_auth(config: &EngineConfig) -> Auth {
         let mut auth_config = AuthConfig::new(config.edge_url.clone(), config.data_dir.clone());
         auth_config.workos_client_id = config.workos_client_id.clone();
-        if let Ok(base) = std::env::var("ORBIT_WORKOS_API_BASE")
+        let workos_api_base = std::env::var("ENSEMBYTE_WORKOS_API_BASE")
+            .or_else(|_| std::env::var("ORBIT_WORKOS_API_BASE"));
+        if let Ok(base) = workos_api_base
             && !base.trim().is_empty()
         {
             auth_config.workos_api_base = base;
         }
         auth_config.callback_port = Some(
-            std::env::var("ORBIT_CALLBACK_PORT")
+            std::env::var("ENSEMBYTE_CALLBACK_PORT")
+                .or_else(|_| std::env::var("ORBIT_CALLBACK_PORT"))
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(27641),
@@ -1008,13 +1011,12 @@ pub async fn terminal_sign_in(auth: &Auth) -> Result<(), EngineError> {
                     // No reader tasks have been spawned on this path (both spawns
                     // are TTY-gated), so an early return leaks nothing.
                     return Err(EngineError::Other(format!(
-                        "signed in as {} but no workspace is selected — run `orbit login` on this machine to pick one",
+                        "signed in as {} but no workspace is selected — run `ensembyte login` on this machine to pick one",
                         user.email
                     )));
                 }
                 if org_reader.is_none() {
-                    // Workspace onboarding on the TTY (old orbit's
-                    // `backend login` flow): create if none, auto-join a
+                    // Workspace onboarding on the TTY: create if none, auto-join a
                     // single membership, numbered picker otherwise.
                     println!("Signed in as {}.", user.email);
                     org_reader = Some(tokio::spawn(run_org_onboarding(auth.clone())));
@@ -1023,12 +1025,12 @@ pub async fn terminal_sign_in(auth: &Auth) -> Result<(), EngineError> {
             AuthState::SignedOut => {
                 if !interactive {
                     return Err(EngineError::Other(
-                        "not signed in — run `orbit login` on this machine first".into(),
+                        "not signed in — run `ensembyte login` on this machine first".into(),
                     ));
                 }
                 if stdin_reader.is_none() {
                     let url = auth.start_headless_sign_in();
-                    println!("Sign in to Orbit:\n\n  {url}\n");
+                    println!("Sign in to Ensembyte:\n\n  {url}\n");
                     println!("Then paste the code shown in the browser here and press enter.");
                     let auth = auth.clone();
                     stdin_reader = Some(tokio::spawn(async move {
@@ -1076,16 +1078,16 @@ async fn read_stdin_line() -> Option<String> {
     .flatten()
 }
 
-/// TTY workspace onboarding for an org-less session (ports old orbit's
-/// `backend login` flow): no memberships → prompt a name and create; exactly
-/// one → auto-join; several → numbered picker. Success flips the auth state to
-/// `SignedIn`, which ends [`wait_for_sign_in`]'s wait (and aborts this task).
+/// TTY workspace onboarding for an org-less session: no memberships → prompt
+/// a name and create; exactly one → auto-join; several → numbered picker. Success
+/// flips the auth state to `SignedIn`, which ends [`wait_for_sign_in`]'s wait
+/// (and aborts this task).
 async fn run_org_onboarding(auth: Auth) {
     let orgs = match auth.list_orgs().await {
         Ok(orgs) => orgs,
         Err(err) => {
             println!(
-                "Could not list workspaces ({err}) — create or select one from the Orbit UI to continue."
+                "Could not list workspaces ({err}) — create or select one from the Ensembyte UI to continue."
             );
             return;
         }
@@ -1317,8 +1319,17 @@ mod device_name_tests {
     }
 }
 
-/// Trimmed env var or the given default.
+/// Trimmed env var or the given default. Checks ENSEMBYTE_* before ORBIT_*.
 fn env_or(key: &str, default: &str) -> String {
+    let ensembyte_key = key.strip_prefix("ORBIT_").map(|rest| format!("ENSEMBYTE_{rest}"));
+    if let Some(ref ek) = ensembyte_key {
+        if let Ok(s) = std::env::var(ek) {
+            let trimmed = s.trim().to_string();
+            if !trimmed.is_empty() {
+                return trimmed;
+            }
+        }
+    }
     std::env::var(key)
         .ok()
         .map(|s| s.trim().to_string())

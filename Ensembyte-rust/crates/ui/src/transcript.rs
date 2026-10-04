@@ -7689,14 +7689,19 @@ impl Transcript {
 /// Keep routing instructions in the stored prompt for agents, but show a
 /// concise attribution in the human transcript (including existing messages).
 fn agent_message_display(text: &str) -> String {
-    let Some(rest) = text.strip_prefix("[Message from Orbit chat ") else {
+    let rest = if let Some(rest) = text.strip_prefix("[Message from Ensembyte chat ") {
+        rest
+    } else if let Some(rest) = text.strip_prefix("[Message from Orbit chat ") {
+        rest
+    } else {
         return text.to_owned();
     };
     let Some((header, body)) = rest.split_once("]\n\n") else {
         return text.to_owned();
     };
-    let Some((label, id)) =
-        header.rsplit_once(". Reply to it with the Orbit `send_message` tool, chat ")
+    let Some((label, id)) = header
+        .rsplit_once(". Reply to it with the Ensembyte `send_message` tool, chat ")
+        .or_else(|| header.rsplit_once(". Reply to it with the Orbit `send_message` tool, chat "))
     else {
         return text.to_owned();
     };

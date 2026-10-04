@@ -53,6 +53,6 @@ GEN="$OUT/gen"
 cp "$GEN/orbit_coreFFI.h" "$OUT/include/orbit_coreFFI.h"
 cp "$GEN/orbit_coreFFI.modulemap" "$OUT/include/module.modulemap"
 # Only touch the Swift file when it changed so Xcode doesn't recompile it.
-SWIFT_OUT="$ROOT/apps/ios/Orbit/Core/Generated/orbit_core.swift"
+SWIFT_OUT="$ROOT/apps/ios/Ensembyte/Core/Generated/orbit_core.swift"
 mkdir -p "$(dirname "$SWIFT_OUT")"
 cmp -s "$GEN/orbit_core.swift" "$SWIFT_OUT" || cp "$GEN/orbit_core.swift" "$SWIFT_OUT"

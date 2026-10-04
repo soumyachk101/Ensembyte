@@ -39,7 +39,7 @@ enum CommandCodeAPI {
     }
 
     /// `~/.commandcode/config.json`: the model and efforts the user picked in the CLI, so
-    /// a fresh Swarm Code thread starts on the same model the terminal would.
+    /// a fresh Ensembyte thread starts on the same model the terminal would.
     static func userConfig(environment: [String: String]) -> JSONValue? {
         let home = environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? LoginEnvironment.homeDirectory
         let file = URL(fileURLWithPath: home).appendingPathComponent(".commandcode/config.json")
@@ -362,9 +362,9 @@ enum CommandCodeAPI {
 
     // MARK: - The approval mod
 
-    /// The session mod Swarm Code loads into every headless run with `--mod`. Headless
+    /// The session mod Ensembyte loads into every headless run with `--mod`. Headless
     /// runs cannot prompt, so the CLI gets `--yolo` and this mod gates the tools instead:
-    /// every call that could change something goes to Swarm Code as a request file in
+    /// every call that could change something goes to Ensembyte as a request file in
     /// the run's approval directory, and the mod waits for the reply file the app writes
     /// back. Read-only tools pass straight through. With no directory in the environment
     /// (Full access) the mod registers nothing.
@@ -387,7 +387,7 @@ enum CommandCodeAPI {
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
     export default function (cmd: any) {
-      const bridgePath = process.env.SWARM_CODE_MCP_BRIDGE
+      const bridgePath = process.env.ENSEMBYTE_MCP_BRIDGE || process.env.SWARM_CODE_MCP_BRIDGE
       if (bridgePath) {
         import(bridgePath).then(async (bridge: any) => {
           for (const tool of await bridge.loadMCPTools()) {
@@ -399,9 +399,9 @@ enum CommandCodeAPI {
               },
             })
           }
-        }).catch((error: any) => console.error('swarm mcp', error))
+        }).catch((error: any) => console.error('ensembyte mcp', error))
       }
-      const dir = process.env.SWARM_CODE_APPROVALS
+      const dir = process.env.ENSEMBYTE_APPROVALS || process.env.SWARM_CODE_APPROVALS
       if (!dir) return
       cmd.hooks({
         beforeToolCall: async ({toolCallId, toolName, input}: any, ctx: any) => {

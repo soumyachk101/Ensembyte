@@ -2402,7 +2402,7 @@ impl AppearancePage {
                             .mt(px(1.0))
                             .flex_none(),
                     )
-                    .child("Orbit finds light and dark variants automatically."),
+                    .child("Ensembyte finds light and dark variants automatically."),
             );
         }
 
@@ -3844,7 +3844,7 @@ impl Render for AppearancePage {
                             vec![
                                 div()
                                     .child(
-                                        "Hold animations still while Orbit isn't the focused window.",
+                                        "Hold animations still while Ensembyte isn't the focused window.",
                                     )
                                     .into_any_element(),
                             ],

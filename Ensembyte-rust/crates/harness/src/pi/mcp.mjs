@@ -1,23 +1,23 @@
-// Per-run Orbit delegation bridge. No global settings or packages are modified.
+// Per-run Ensembyte delegation bridge. No global settings or packages are modified.
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 export default function (pi) {
-  const config = JSON.parse(process.env.ORBIT_PI_MCP);
+  const config = JSON.parse(process.env.ENSEMBYTE_PI_MCP || process.env.ORBIT_PI_MCP);
   let child, lines, nextId = 0;
   const pending = new Map();
   function fail(error) {
     for (const request of [...pending.values()]) request.reject(error);
   }
   function close() {
-    fail(new Error("Orbit MCP connection closed"));
+    fail(new Error("Ensembyte MCP connection closed"));
     lines?.close();
     child?.kill();
     child = undefined;
   }
   function rpc(method, params, signal) {
-    if (!child?.stdin.writable) return Promise.reject(new Error("Orbit MCP is not connected"));
-    if (signal?.aborted) return Promise.reject(new Error("Orbit MCP request cancelled"));
+    if (!child?.stdin.writable) return Promise.reject(new Error("Ensembyte MCP is not connected"));
+    if (signal?.aborted) return Promise.reject(new Error("Ensembyte MCP request cancelled"));
     return new Promise((resolve, reject) => {
       const id = ++nextId;
       const cleanup = () => {
@@ -28,12 +28,12 @@ export default function (pi) {
       const abort = () => {
         child?.stdin.write(JSON.stringify({jsonrpc: "2.0", method: "notifications/cancelled", params: {requestId: id}}) + "\n");
         cleanup();
-        reject(new Error("Orbit MCP request cancelled"));
+        reject(new Error("Ensembyte MCP request cancelled"));
       };
       // wait_for_turn can legitimately wait several minutes.
       const timer = setTimeout(() => {
         cleanup();
-        reject(new Error(`Orbit MCP ${method} timed out`));
+        reject(new Error(`Ensembyte MCP ${method} timed out`));
       }, method === "tools/call" ? 660_000 : 15_000);
       pending.set(id, {
         resolve: value => { cleanup(); resolve(value); },
@@ -53,7 +53,7 @@ export default function (pi) {
     const owned = child;
     const failed = error => { if (child === owned) fail(error); };
     child.on("error", failed);
-    child.on("exit", () => failed(new Error("Orbit MCP server exited")));
+    child.on("exit", () => failed(new Error("Ensembyte MCP server exited")));
     child.stdin.on("error", failed);
     lines = createInterface({input: child.stdout});
     lines.on("line", line => {
@@ -65,16 +65,16 @@ export default function (pi) {
       else request.resolve(message.result);
     });
     try {
-      await rpc("initialize", {protocolVersion: "2024-11-05", capabilities: {}, clientInfo: {name: "orbit-pi", version: "1"}});
+      await rpc("initialize", {protocolVersion: "2024-11-05", capabilities: {}, clientInfo: {name: "ensembyte-pi", version: "1"}});
       child.stdin.write(JSON.stringify({jsonrpc: "2.0", method: "notifications/initialized"}) + "\n");
       const {tools} = await rpc("tools/list", {});
       for (const tool of tools) {
         pi.registerTool({
-          name: `${config.name}_${tool.name}`, label: `Orbit: ${tool.name}`,
+          name: `${config.name}_${tool.name}`, label: `Ensembyte: ${tool.name}`,
           description: tool.description, parameters: tool.inputSchema,
           async execute(_id, args, signal) {
             const result = await rpc("tools/call", {name: tool.name, arguments: args}, signal);
-            if (result.isError) throw new Error(result.content?.filter(c => c.type === "text").map(c => c.text).join("\n") || "Orbit tool failed");
+            if (result.isError) throw new Error(result.content?.filter(c => c.type === "text").map(c => c.text).join("\n") || "Ensembyte tool failed");
             return {content: result.content, details: result.structuredContent ?? {}};
           },
         });

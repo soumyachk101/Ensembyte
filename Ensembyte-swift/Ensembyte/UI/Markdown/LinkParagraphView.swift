@@ -266,7 +266,7 @@ enum MarkdownLinkOpener {
 }
 
 extension NSAttributedString.Key {
-    static let hydraHead = NSAttributedString.Key("swarmcode.hydraHead")
+    static let hydraHead = NSAttributedString.Key("ensembyte.hydraHead")
 }
 
 /// What a merge or pull request link in a chat hands its request to, set by a chat that can

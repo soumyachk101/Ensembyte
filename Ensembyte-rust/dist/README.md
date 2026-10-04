@@ -38,7 +38,7 @@ installed builds can update into Ensembyte.
 ## Windows
 
 ```powershell
-./scripts/package-windows.ps1 -ReleasesUrl https://github.com/soumyachk101/Ensembyte-rust/releases/latest/download
+./scripts/package-windows.ps1 -ReleasesUrl https://github.com/soumyachk101/Ensembyte/releases/latest/download
 ```
 
 Produces, under `target/package/`:

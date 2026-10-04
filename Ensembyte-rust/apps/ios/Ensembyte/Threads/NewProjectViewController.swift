@@ -101,7 +101,7 @@ final class NewProjectViewController: UIViewController, UICollectionViewDelegate
 
     private func load(_ path: String?) {
         guard let device else {
-            status.text = "No desktop devices yet — open Orbit on a computer to add one."
+            status.text = "No desktop devices yet — open Ensembyte on a computer to add one."
             useButton.isEnabled = false
             return
         }

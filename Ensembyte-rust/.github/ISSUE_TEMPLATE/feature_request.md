@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Orbit
+about: Suggest an idea for Ensembyte
 title: "[Feature]: "
 labels: enhancement
 assignees: ''

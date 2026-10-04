@@ -11,7 +11,7 @@ import Foundation
 /// - `POST /v1/chat/completions` — OpenAI-compatible messages-array endpoint (see MetaSession)
 /// The Responses API (`POST /v1/responses`) carries reasoning across turns via
 /// encrypted replay, but Chat Completions keeps the agent loop OpenAI-compatible
-/// and matches the rest of Swarm Code's native providers.
+/// and matches the rest of Ensembyte's native providers.
 enum MetaAPI {
     static let baseURL = URL(string: "https://api.meta.ai/v1")!
     static let chatURL = URL(string: "https://api.meta.ai/v1/chat/completions")!

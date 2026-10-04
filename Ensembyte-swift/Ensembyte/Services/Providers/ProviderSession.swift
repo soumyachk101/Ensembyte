@@ -40,7 +40,7 @@ struct SessionConfiguration: Sendable {
     /// API providers hold their history in memory only): the exchanges go back in as
     /// context, so a session that starts over still knows what was said.
     var transcript: [TranscriptMessage] = []
-    /// The thread is a Hydra head that Swarm Code runs: the session paces it, so a head
+    /// The thread is a Hydra head that Ensembyte runs: the session paces it, so a head
     /// that keeps reading without ever changing anything is told to act.
     var isHydraHead = false
     var antiSlopEnabled = true

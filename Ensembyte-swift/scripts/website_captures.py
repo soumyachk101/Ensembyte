@@ -5,7 +5,7 @@
     scripts/website_captures.py --encode   # encode again from the last tour run
     scripts/website_captures.py --upload   # push the encoded stills to R2 (with either of the above)
 
-The app runs once in its tour capture mode (see SwarmCode/App/Captures/TourCaptures.swift):
+The app runs once in its tour capture mode (see Ensembyte/App/Captures/TourCaptures.swift):
 it opens the real window over gradient backdrops with mock data, photographs the tour
 scenes (tour-*.png) and the site's composer scenes (web-*.png), and quits. This script
 then encodes every still as WebP at the site's sizes into build.noindex/website-tour
@@ -13,7 +13,7 @@ then encodes every still as WebP at the site's sizes into build.noindex/website-
 headers, verifying each key afterwards. The site loads these stills straight from R2,
 so nothing under website/ is touched.
 
-The older desktop-wallpaper run (see SwarmCode/App/Captures/WebsiteCaptures.swift) is still
+The older desktop-wallpaper run (see Ensembyte/App/Captures/WebsiteCaptures.swift) is still
 available behind --website: it captures films and stills over this Mac's wallpaper into
 build.noindex/website-captures and encodes them into website/assets/app. Needs ffmpeg
 (brew), Pillow (pip) and, for --upload, wrangler signed in to the Swarm Cloudflare
@@ -245,7 +245,7 @@ def encode_tour():
 def verify_key(key, local):
     """The uploaded key serves from the site's origin, byte-identical to the still."""
     url = f"{SITE_ORIGIN}/{key}"
-    request = urllib.request.Request(url, headers={"User-Agent": "SwarmCode-website-captures"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Ensembyte-website-captures"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             remote = response.read()

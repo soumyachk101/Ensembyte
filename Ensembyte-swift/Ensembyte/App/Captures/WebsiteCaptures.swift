@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Renders the real app with mock data into stills and films for the marketing site:
 ///
-///     open -n -W "Swarm Code.app" --args --website-captures <folder>
+///     open -n -W "Ensembyte.app" --args --website-captures <folder>
 ///
 /// Nothing in here runs otherwise. The run keeps to its own storage folder and its own
 /// defaults suite, never reads the Keychain, posts no notifications, and quits when the
@@ -63,7 +63,7 @@ enum WebsiteCaptures {
     // MARK: - Mock data
 
     enum ID {
-        static let swarmCode = UUID(uuidString: "A0000000-0000-4000-8000-000000000001")!
+        static let ensembyte = UUID(uuidString: "A0000000-0000-4000-8000-000000000001")!
         static let site = UUID(uuidString: "A0000000-0000-4000-8000-000000000002")!
         static let ios = UUID(uuidString: "A0000000-0000-4000-8000-000000000003")!
         static let composer = UUID(uuidString: "B0000000-0000-4000-8000-000000000001")!
@@ -96,7 +96,7 @@ enum WebsiteCaptures {
         defaults.set(true, forKey: "sidebarActivityView")
         defaults.set("supervised", forKey: "defaultRuntimeMode")
         defaults.set("claude", forKey: "defaultProvider")
-        defaults.set(ID.swarmCode.uuidString, forKey: "lastProjectID")
+        defaults.set(ID.ensembyte.uuidString, forKey: "lastProjectID")
         // The switcher shows a curated list, as a set-up Mac would.
         let pins = [
             ModelPin(provider: .claude, modelID: "opus"),
@@ -118,7 +118,7 @@ enum WebsiteCaptures {
         let repos = output.appendingPathComponent("repos", isDirectory: true)
         var library = Library()
         library.projects = [
-            project(ID.swarmCode, "Ensembyte", repos, ["Ensembyte/App/Views/Composer/ComposerView.swift": composerSource]),
+            project(ID.ensembyte, "Ensembyte", repos, ["Ensembyte/App/Views/Composer/ComposerView.swift": composerSource]),
             project(ID.site, "ensembyte.org", repos, ["docs/index.html": "<!doctype html>\n<html lang=\"en\">\n</html>\n"]),
             project(ID.ios, "ensembyte-ios", repos, ["Ensembyte/LiveActivity.swift": "import ActivityKit\n"]),
         ]
@@ -129,13 +129,13 @@ enum WebsiteCaptures {
         let now = Date.now
         let day: TimeInterval = 86_400
         library.threads = [
-            thread(ID.composer, ID.swarmCode, "Composer: draft photo spacing", .claude, "opus", "high", age: 120, status: .completed, now),
-            thread(ID.fresh, ID.swarmCode, "Attachment strip insets", .claude, "opus", "high", age: 300, status: nil, now),
-            thread(ID.finalAnswer, ID.swarmCode, "Timeline final answer", .claude, "opus", "high", age: 600, status: .completed, now, plan: true),
+            thread(ID.composer, ID.ensembyte, "Composer: draft photo spacing", .claude, "opus", "high", age: 120, status: .completed, now),
+            thread(ID.fresh, ID.ensembyte, "Attachment strip insets", .claude, "opus", "high", age: 300, status: nil, now),
+            thread(ID.finalAnswer, ID.ensembyte, "Timeline final answer", .claude, "opus", "high", age: 600, status: .completed, now, plan: true),
             thread(ID.pricing, ID.site, "Regional pricing claim expiry", .codex, "gpt-5.5", nil, age: 900, status: .running, now),
-            thread(ID.freshPlan, ID.swarmCode, "Final answer card", .claude, "opus", "high", age: 1_500, status: nil, now, plan: true),
-            thread(ID.archive, ID.swarmCode, "Archive: delete all", .codex, "gpt-5.5", nil, age: 7_200, status: .completed, now),
-            thread(ID.diffPopover, ID.swarmCode, "Diff popover row patch", .claude, "opus", "high", age: day + 3_600, status: .completed, now),
+            thread(ID.freshPlan, ID.ensembyte, "Final answer card", .claude, "opus", "high", age: 1_500, status: nil, now, plan: true),
+            thread(ID.archive, ID.ensembyte, "Archive: delete all", .codex, "gpt-5.5", nil, age: 7_200, status: .completed, now),
+            thread(ID.diffPopover, ID.ensembyte, "Diff popover row patch", .claude, "opus", "high", age: day + 3_600, status: .completed, now),
             thread(ID.footer, ID.site, "Footer dragon scrub", .cursor, nil, nil, age: day + 5_400, status: .completed, now, unread: true),
             thread(ID.rail, ID.site, "Highlight rail poster blend", .claude, "sonnet", "medium", age: day + 9_000, status: .completed, now),
             thread(ID.liveActivity, ID.ios, "Live Activity for Pomodoro", .claude, "opus", "high", age: 3 * day, status: .completed, now),
@@ -207,7 +207,7 @@ enum WebsiteCaptures {
         turn.userItemID = user.id
         let reasoning = TimelineItem(turnID: turn.id, date: turn.startedAt.addingTimeInterval(2), content: .reasoning(ReasoningBlock(
             text: "The attachment strip lives in ComposerView.swift. Its insets come from a single constant, so I should read that first.")))
-        var read = ToolCall(kind: .read, title: "Read", detail: "SwarmCode/App/Views/Composer/ComposerView.swift")
+        var read = ToolCall(kind: .read, title: "Read", detail: "Ensembyte/App/Views/Composer/ComposerView.swift")
         read.status = .completed
         read.output = composerSource
         read.startedAt = turn.startedAt.addingTimeInterval(4)
@@ -281,9 +281,9 @@ enum WebsiteCaptures {
     """
 
     private static let composerPatch = """
-    diff --git a/SwarmCode/App/Views/Composer/ComposerView.swift b/SwarmCode/App/Views/Composer/ComposerView.swift
-    --- a/SwarmCode/App/Views/Composer/ComposerView.swift
-    +++ b/SwarmCode/App/Views/Composer/ComposerView.swift
+    diff --git a/Ensembyte/App/Views/Composer/ComposerView.swift b/Ensembyte/App/Views/Composer/ComposerView.swift
+    --- a/Ensembyte/App/Views/Composer/ComposerView.swift
+    +++ b/Ensembyte/App/Views/Composer/ComposerView.swift
     @@ -12,8 +12,10 @@ struct DraftAttachments: View {
                      }
                  }
@@ -364,7 +364,7 @@ enum WebsiteCaptures {
         try? await Task.sleep(for: .milliseconds(600))
         runtime.rehearseTurn(
             "The draft photo in the composer should sit as far from the top as it does from the left.",
-            touchedPaths: ["SwarmCode/App/Views/Composer/ComposerView.swift"],
+            touchedPaths: ["Ensembyte/App/Views/Composer/ComposerView.swift"],
             providerDiff: composerPatch
         )
         try? await Task.sleep(for: .milliseconds(500))
@@ -372,7 +372,7 @@ enum WebsiteCaptures {
         runtime.rehearse(.reasoningCompleted(id: "r1", text: ""))
         try? await Task.sleep(for: .milliseconds(250))
 
-        runtime.rehearse(.toolStarted(id: "t-read", call: ToolCall(kind: .read, title: "Read", detail: "SwarmCode/App/Views/Composer/ComposerView.swift")))
+        runtime.rehearse(.toolStarted(id: "t-read", call: ToolCall(kind: .read, title: "Read", detail: "Ensembyte/App/Views/Composer/ComposerView.swift")))
         try? await Task.sleep(for: .milliseconds(650))
         runtime.rehearse(.toolUpdated(id: "t-read", update: ToolUpdate(output: composerSource, status: .completed)))
         try? await Task.sleep(for: .milliseconds(300))
@@ -381,7 +381,7 @@ enum WebsiteCaptures {
         try? await Task.sleep(for: .milliseconds(800))
         runtime.rehearse(.toolUpdated(id: "t-edit", update: ToolUpdate(
             status: .completed,
-            edits: [FileEdit(path: "SwarmCode/App/Views/Composer/ComposerView.swift", diff: composerPatch, additions: 3, deletions: 1)]
+            edits: [FileEdit(path: "Ensembyte/App/Views/Composer/ComposerView.swift", diff: composerPatch, additions: 3, deletions: 1)]
         )))
         runtime.rehearse(.diff(composerPatch))
         try? await Task.sleep(for: .milliseconds(250))
@@ -391,7 +391,7 @@ enum WebsiteCaptures {
             TodoStep(text: "Build and confirm nothing else moved", status: .active),
         ]))
         try? await Task.sleep(for: .milliseconds(350))
-        runtime.rehearse(.toolStarted(id: "t-build", call: ToolCall(kind: .command, title: "xcodebuild -scheme SwarmCode build", detail: nil)))
+        runtime.rehearse(.toolStarted(id: "t-build", call: ToolCall(kind: .command, title: "xcodebuild -scheme Ensembyte build", detail: nil)))
         try? await Task.sleep(for: .milliseconds(400))
         await stream(runtime, id: "m1", reasoning: false, "Done. The attachment strip now uses the same 14pt inset on both axes, so the draft photo sits as far from the top as from the left. The build is running to confirm nothing else moved.", step: 38)
         runtime.rehearse(.messageCompleted(id: "m1", text: ""))
@@ -492,7 +492,7 @@ enum WebsiteCaptures {
         await stream(runtime, id: "r2", reasoning: true, "Comparing the last text block against tool results in TimelineView. The answer needs its own marker before it can get its own card.", step: 40)
         runtime.rehearse(.reasoningCompleted(id: "r2", text: ""))
         try? await Task.sleep(for: .milliseconds(200))
-        runtime.rehearse(.toolStarted(id: "t-tl", call: ToolCall(kind: .read, title: "Read", detail: "SwarmCode/App/Views/Chat/TimelineRows.swift")))
+        runtime.rehearse(.toolStarted(id: "t-tl", call: ToolCall(kind: .read, title: "Read", detail: "Ensembyte/App/Views/Chat/TimelineRows.swift")))
         try? await Task.sleep(for: .milliseconds(500))
         runtime.rehearse(.toolUpdated(id: "t-tl", update: ToolUpdate(output: "struct TimelineRows: View {\n", status: .completed)))
         try? await Task.sleep(for: .milliseconds(300))
@@ -524,7 +524,7 @@ enum WebsiteCaptures {
         try? await Task.sleep(for: .milliseconds(800))
         runtime.rehearse(.toolStarted(id: "t-edit2", call: ToolCall(kind: .edit, title: "Edit", detail: "TimelineRows.swift · final answer card")))
         try? await Task.sleep(for: .milliseconds(700))
-        runtime.rehearse(.toolUpdated(id: "t-edit2", update: ToolUpdate(status: .completed, edits: [FileEdit(path: "SwarmCode/App/Views/Chat/TimelineRows.swift", additions: 18, deletions: 3)])))
+        runtime.rehearse(.toolUpdated(id: "t-edit2", update: ToolUpdate(status: .completed, edits: [FileEdit(path: "Ensembyte/App/Views/Chat/TimelineRows.swift", additions: 18, deletions: 3)])))
         try? await Task.sleep(for: .milliseconds(500))
         runtime.rehearse(.approval(ApprovalRequest(
             id: "a1",
@@ -1061,7 +1061,7 @@ final class Recorder {
 /// Encodes screenshots into an HEVC master as they arrive, on its own queue, stamped with
 /// the moment each was taken.
 private final class FilmRecorder: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "swarmcode.website-captures.film", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "ensembyte.website-captures.film", qos: .userInteractive)
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
     private let adaptor: AVAssetWriterInputPixelBufferAdaptor

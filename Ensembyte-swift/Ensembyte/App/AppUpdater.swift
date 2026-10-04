@@ -221,7 +221,7 @@ final class UpdateInstallProgress {
     }
 }
 
-/// Downloads a release, checks it is Swarm Code's, and hands it to a small installer that swaps
+/// Downloads a release, checks it is Ensembyte's, and hands it to a small installer that swaps
 /// it in once the app has quit and relaunches it.
 ///
 /// The image is mounted and its app copied out; the copy is what gets checked (its Developer
@@ -282,7 +282,7 @@ final class AppUpdater {
 
     private func download(_ url: URL, assetURL: URL? = nil) async throws -> URL {
         let destination = FileManager.default.temporaryDirectory
-            .appending(path: "SwarmCodeUpdate-\(UUID().uuidString).dmg")
+            .appending(path: "EnsembyteUpdate-\(UUID().uuidString).dmg")
         let downloader = Downloader { fraction in
             Task { @MainActor in UpdateInstallProgress.shared.noteDownloadProgress(fraction) }
         }
@@ -294,7 +294,7 @@ final class AppUpdater {
 
     private func stage(image: URL, expectedVersion: String) async throws -> URL {
         let staging = FileManager.default.temporaryDirectory
-            .appending(path: "SwarmCodeUpdate-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "EnsembyteUpdate-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let mount = staging.appending(path: "image", directoryHint: .isDirectory)
         let attach = try await Shell.run(
@@ -356,7 +356,7 @@ final class AppUpdater {
     /// The app must carry this app's identifier and a valid signature. If signed with
     /// Developer ID, the team ID is verified; for ad-hoc / local builds, basic bundle validity is verified.
     nonisolated static func verifySignature(of appURL: URL) throws {
-        let bundleID = Bundle.main.bundleIdentifier ?? "iordv.swarmcode"
+        let bundleID = Bundle.main.bundleIdentifier ?? "org.ensembyte.desktop"
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode) == errSecSuccess, let code = staticCode else {
             throw UpdateInstallError("The downloaded app is not signed.")
@@ -367,7 +367,7 @@ final class AppUpdater {
             anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] \
             and certificate leaf[field.1.2.840.113635.100.6.1.13] \
             and certificate leaf[subject.OU] = "\(teamID)" \
-            and (identifier "\(bundleID)" or identifier "iordv.swarmai" or identifier "iordv.swarmcode")
+            and (identifier "\(bundleID)" or identifier "org.ensembyte.desktop" or identifier "iordv.swarmai" or identifier "iordv.swarmcode")
             """
             var requirement: SecRequirement?
             guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement else {
@@ -515,7 +515,7 @@ private final class Downloader: NSObject, URLSessionDownloadDelegate, @unchecked
         }
 
         var request = URLRequest(url: effectiveURL)
-        request.setValue("SwarmCode/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         if let token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             if effectiveURL == assetURL {

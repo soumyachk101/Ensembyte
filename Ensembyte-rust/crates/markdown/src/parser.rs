@@ -1357,10 +1357,10 @@ mod tests {
     #[test]
     fn bare_urls_autolink() {
         assert_eq!(
-            only_link("PR is updated: https://github.com/soumyachk101/Ensembyte-rust/pull/31\n"),
+            only_link("PR is updated: https://github.com/soumyachk101/Ensembyte/pull/31\n"),
             Some((
-                "https://github.com/soumyachk101/Ensembyte-rust/pull/31".into(),
-                "https://github.com/soumyachk101/Ensembyte-rust/pull/31".into()
+                "https://github.com/soumyachk101/Ensembyte/pull/31".into(),
+                "https://github.com/soumyachk101/Ensembyte/pull/31".into()
             ))
         );
         assert_eq!(

@@ -7,7 +7,7 @@ assignees: ''
 ---
 
 > **Do not open a public issue for security vulnerabilities.**
-> Instead, use [GitHub Security Advisories](https://github.com/soumyachk101/Ensembyte-rust/security/advisories/new) or email soumya.chk101@gmail.com directly.
+> Instead, use [GitHub Security Advisories](https://github.com/soumyachk101/Ensembyte/security/advisories/new) or email soumya.chk101@gmail.com directly.
 
 ## Vulnerability Description
 

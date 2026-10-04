@@ -3,7 +3,7 @@ import XCTest
 /// Hitch benchmarks (Apple's scrolling metric: hitch time ratio in ms/s).
 /// Run on a device for real numbers; the simulator gives relative signal.
 ///
-///   xcodebuild test -scheme Orbit -only-testing:OrbitUITests/ScrollPerformanceTests
+///   xcodebuild test -scheme Ensembyte -only-testing:EnsembyteUITests/ScrollPerformanceTests
 final class ScrollPerformanceTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false

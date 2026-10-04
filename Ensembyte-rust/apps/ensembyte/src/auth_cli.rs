@@ -1,8 +1,8 @@
-//! `orbit login` / `orbit logout` / `orbit status` — the standalone auth surface.
+//! `ensembyte login` / `ensembyte logout` / `ensembyte status` — the standalone auth surface.
 //!
-//! Sign-in used to live only inside `orbit headless`, coupling authentication to
+//! Sign-in used to live only inside `ensembyte headless`, coupling authentication to
 //! the long-running daemon. These commands work on the persisted session
-//! (`{data_dir}/session.json`) and exit, so a service-managed `orbit headless`
+//! (`{data_dir}/session.json`) and exit, so a service-managed `ensembyte headless`
 //! only ever *loads* credentials. While an engine is running it owns the session
 //! (WorkOS refresh tokens are single-use and rotate on every refresh), so login
 //! and logout take the same data-dir lock the engine holds and refuse politely
@@ -62,21 +62,21 @@ fn account_status(scope: WorkspaceScope, auth: &AuthState) -> AccountStatus {
             AuthState::NeedsOrganization { user } => AccountStatus {
                 mode: "synced",
                 auth: format!(
-                    "signed in as {} but no workspace selected — run `orbit login`",
+                    "signed in as {} but no workspace selected — run `ensembyte login`",
                     user.email
                 ),
                 healthy: false,
             },
             AuthState::SignedOut => AccountStatus {
                 mode: "synced",
-                auth: "saved session is no longer valid — run `orbit login`".into(),
+                auth: "saved session is no longer valid — run `ensembyte login`".into(),
                 healthy: false,
             },
         },
     }
 }
 
-/// `orbit login`: authenticate via the paste-code flow (and workspace
+/// `ensembyte login`: authenticate via the paste-code flow (and workspace
 /// onboarding), persist `session.json`, and exit.
 pub async fn login(config: EngineConfig) -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
@@ -94,12 +94,12 @@ pub async fn login(config: EngineConfig) -> anyhow::Result<()> {
                 .map(|org| format!(" (workspace {org})"))
                 .unwrap_or_default()
         );
-        println!("Run `orbit logout` first to switch accounts.");
+        println!("Run `ensembyte logout` first to switch accounts.");
         println!("The next engine start will use the synced workspace.");
         return Ok(());
     }
     if !std::io::stdin().is_terminal() {
-        anyhow::bail!("orbit login needs an interactive terminal");
+        anyhow::bail!("ensembyte login needs an interactive terminal");
     }
     orbit_engine::terminal_sign_in(&auth).await?;
     match auth.state() {
@@ -112,7 +112,7 @@ pub async fn login(config: EngineConfig) -> anyhow::Result<()> {
                     .unwrap_or_default()
             );
             println!(
-                "Sync is ready. Start or restart Orbit to open the synced workspace; existing local sessions will stay local."
+                "Sync is ready. Start or restart Ensembyte to open the synced workspace; existing local sessions will stay local."
             );
         }
         // terminal_sign_in only returns Ok once signed in; keep an honest fallback.
@@ -121,7 +121,7 @@ pub async fn login(config: EngineConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `orbit logout`: remove the persisted session.
+/// `ensembyte logout`: remove the persisted session.
 pub async fn logout(config: EngineConfig) -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
     let _lock = engine_lock(&config, "sign out")?;
@@ -156,7 +156,7 @@ pub async fn logout(config: EngineConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `orbit status`: report the fixed scope a new engine would select, optional
+/// `ensembyte status`: report the fixed scope a new engine would select, optional
 /// auth, and engine liveness. Local-only is a healthy signed-out state.
 pub async fn status(config: EngineConfig) -> anyhow::Result<()> {
     let auth = Engine::build_auth(&config).await;
@@ -214,7 +214,7 @@ fn engine_lock(config: &EngineConfig, verb: &str) -> anyhow::Result<InstanceLock
     InstanceLock::acquire(&config.data_dir).map_err(|err| {
         anyhow::anyhow!(
             "{err}\nCannot {verb} while an engine is running — stop it first \
-             (`orbit daemon stop`, or quit the Orbit app), or use the running UI instead."
+             (`ensembyte daemon stop`, or quit the Ensembyte app), or use the running UI instead."
         )
     })
 }

@@ -12,7 +12,7 @@ pub fn builtin_registry() -> &'static ThemeRegistry {
     static REGISTRY: OnceLock<ThemeRegistry> = OnceLock::new();
     REGISTRY.get_or_init(|| ThemeRegistry {
         families: vec![
-            family("orbit", "Orbit", vec![orbit_light(), orbit_dark()]),
+            family("orbit", "Ensembyte", vec![orbit_light(), orbit_dark()]),
             family(
                 "vscode-default",
                 "VS Code Default",
@@ -240,7 +240,7 @@ fn orbit_dark() -> ThemeVariant {
     variant(Seeds {
         id: "orbit-dark",
         family_id: "orbit",
-        name: "Orbit Dark",
+        name: "Ensembyte Dark",
         appearance: Appearance::Dark,
         treatment: SurfaceTreatment::Frosted,
         background: "#060606",
@@ -263,7 +263,7 @@ fn orbit_dark() -> ThemeVariant {
         source: source(
             "orbit-dark",
             "native",
-            "https://github.com/soumyachk101/Ensembyte-rust",
+            "https://github.com/soumyachk101/Ensembyte",
             "d138049",
             "MIT",
         ),
@@ -274,7 +274,7 @@ fn orbit_light() -> ThemeVariant {
     variant(Seeds {
         id: "orbit-light",
         family_id: "orbit",
-        name: "Orbit Light",
+        name: "Ensembyte Light",
         appearance: Appearance::Light,
         treatment: SurfaceTreatment::Frosted,
         background: "#ffffff",
@@ -297,7 +297,7 @@ fn orbit_light() -> ThemeVariant {
         source: source(
             "orbit-light",
             "native",
-            "https://github.com/soumyachk101/Ensembyte-rust",
+            "https://github.com/soumyachk101/Ensembyte",
             "d138049",
             "MIT",
         ),

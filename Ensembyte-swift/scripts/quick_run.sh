@@ -4,12 +4,12 @@
 #
 #   scripts/quick_run.sh
 #
-# A Debug build is "Ensembyte Dev" (bundle id iordv.swarmcode.dev): it runs
+# A Debug build is "Ensembyte Dev" (bundle id org.ensembyte.desktop.dev): it runs
 # beside the released Ensembyte with its own library, settings, keychain items
 # and worktrees (~/.ensembyte-dev), and never touches the release app's. Dev
 # keeps its own data across relaunches: pair names, MCP sign-ins and the threads
 # made in Dev live only there, and a mirror of the release app would wipe them.
-# Set SWARM_DEV_SYNC=1 to have scripts/sync_dev_data.sh replace Dev's library,
+# Set ENSEMBYTE_DEV_SYNC=1 to have scripts/sync_dev_data.sh replace Dev's library,
 # settings and API keys with the release app's before the relaunch.
 #
 # Builds under build.noindex (never ~/Library/Developer/Xcode/DerivedData),
@@ -64,7 +64,7 @@ for _ in $(seq 1 300); do
   ps aux | grep -F "$APP_NAME.app/Contents/MacOS" | grep -v grep >/dev/null || break
   sleep 1
 done
-if [ "${SWARM_DEV_SYNC:-0}" = "1" ]; then
+if [ "${ENSEMBYTE_DEV_SYNC:-${SWARM_DEV_SYNC:-0}}" = "1" ]; then
   step "Mirroring the release app's data into $APP_NAME"
   scripts/sync_dev_data.sh
 fi

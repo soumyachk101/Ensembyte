@@ -144,7 +144,7 @@ impl Orbit {
         }
         let client = connect_ws(&self.url).await.map_err(|e| {
             anyhow!(
-                "no Orbit engine listening at {} ({e}) — is Orbit running?",
+                "no Ensembyte engine listening at {} ({e}) — is Ensembyte running?",
                 self.url
             )
         })?;

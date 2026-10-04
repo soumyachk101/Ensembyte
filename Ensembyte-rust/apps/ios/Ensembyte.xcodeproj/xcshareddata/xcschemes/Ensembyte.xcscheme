@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A1000000000000000000T001"
-               BuildableName = "Orbit.app"
-               BlueprintName = "Orbit"
-               ReferencedContainer = "container:Orbit.xcodeproj">
+               BuildableName = "Ensembyte.app"
+               BlueprintName = "Ensembyte"
+               ReferencedContainer = "container:Ensembyte.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A2000000000000000000T001"
-               BuildableName = "OrbitTests.xctest"
-               BlueprintName = "OrbitTests"
-               ReferencedContainer = "container:Orbit.xcodeproj">
+               BuildableName = "EnsembyteTests.xctest"
+               BlueprintName = "EnsembyteTests"
+               ReferencedContainer = "container:Ensembyte.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
@@ -43,9 +43,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A3000000000000000000T001"
-               BuildableName = "OrbitUITests.xctest"
-               BlueprintName = "OrbitUITests"
-               ReferencedContainer = "container:Orbit.xcodeproj">
+               BuildableName = "EnsembyteUITests.xctest"
+               BlueprintName = "EnsembyteUITests"
+               ReferencedContainer = "container:Ensembyte.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -65,9 +65,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A1000000000000000000T001"
-            BuildableName = "Orbit.app"
-            BlueprintName = "Orbit"
-            ReferencedContainer = "container:Orbit.xcodeproj">
+            BuildableName = "Ensembyte.app"
+            BlueprintName = "Ensembyte"
+            ReferencedContainer = "container:Ensembyte.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>

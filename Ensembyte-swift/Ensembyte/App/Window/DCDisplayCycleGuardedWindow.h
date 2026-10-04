@@ -27,7 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// makes the same request again on the next run loop turn, where the count starts over.
 /// The view keeps its own dirty flag throughout, so nothing is lost but a frame. It is a
 /// net, not the cure: the sequence that runs the count up is still there, and a window
-/// that needs the net logs it (subsystem `iordv.swarmcode`, category `window`), so a
+/// that needs the net logs it (subsystem `org.ensembyte.desktop`, category `window`), so a
 /// storm can be seen. Guarding one view's flags (the earlier fix, on the hosting view) only
 /// moved the raise to the next view down the chain, the scroll view's clip view.
 @interface DCDisplayCycleGuardedWindow : NSWindow

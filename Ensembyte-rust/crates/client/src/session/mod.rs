@@ -992,7 +992,7 @@ impl SessionHandle {
             && !client.is_demo()
         {
             return Err(ClientError::Unsupported(
-                "the host is too old for image attachments — update Orbit on it".into(),
+                "the host is too old for image attachments — update Ensembyte on it".into(),
             ));
         }
         let refs =

@@ -342,7 +342,7 @@ final class DocumentPrefetch: Sendable {
 
 final class DiskWriter: Sendable {
     static let shared = DiskWriter()
-    private let queue = DispatchQueue(label: "swarmcode.storage.write", qos: .utility)
+    private let queue = DispatchQueue(label: "ensembyte.storage.write", qos: .utility)
     /// The newest snapshot waiting per file. A save queued behind a slow write is replaced
     /// by the next one for the same file, so a backlog never encodes and writes documents
     /// that are already stale when their turn comes.

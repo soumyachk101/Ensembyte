@@ -146,7 +146,7 @@ struct HydraLaunch: Hashable, Sendable {
     var headProfiles: [HydraHeadProfile] = []
     /// Whether Swarm-run heads get copies of the checkout of their own.
     var isolatesHeads = true
-    /// Whether Swarm Code lands the team's finished work itself (see
+    /// Whether Ensembyte lands the team's finished work itself (see
     /// `AppModel.autoMergeHydraWork`); the lead is told so it never merges by hand.
     var autoMerges = false
     /// Whether the lead audits each head's landed work before it finishes (the
@@ -296,7 +296,7 @@ enum HydraRoster {
 /// runs and how far it has got.
 struct HydraHeadInfo: Codable, Hashable, Sendable {
     /// Native heads run inside the lead's own provider session; Swarm-run heads are
-    /// sessions of their own that Swarm Code starts and reports back for.
+    /// sessions of their own that Ensembyte starts and reports back for.
     enum Kind: String, Codable, Sendable {
         case native
         case swarm
@@ -364,7 +364,7 @@ struct HydraHeadInfo: Codable, Hashable, Sendable {
     /// The head profile the delegation routed this head to, when the pair has profiles:
     /// shown with the head and consulted again if the head is steered on.
     var profile: String?
-    /// Whether Swarm Code can stop this head where it runs.
+    /// Whether Ensembyte can stop this head where it runs.
     var canStop = true
     /// A native head whose spawning tool call returned at once: only the provider's own
     /// word ends it, never the tool result.
@@ -385,7 +385,7 @@ struct HydraHeadInfo: Codable, Hashable, Sendable {
     /// The name the panel shows.
     var displayName: String { persona.name }
     var isFinished: Bool { status.isFinished }
-    /// Whether the head works in a copy of the checkout that Swarm Code made for it.
+    /// Whether the head works in a copy of the checkout that Ensembyte made for it.
     var hasOwnCopy: Bool { baseTree != nil }
 
     init(index: Int, task: String, kind: Kind, origin: Origin) {
@@ -423,7 +423,7 @@ struct HydraHeadInfo: Codable, Hashable, Sendable {
         toolUseID = container.value(.toolUseID, default: nil)
         batchID = container.value(.batchID, default: nil)
         profile = container.value(.profile, default: nil)
-        // Swarm Code owns a Swarm-run head's turn, so it can always stop one; only a
+        // Ensembyte owns a Swarm-run head's turn, so it can always stop one; only a
         // native head depends on the provider having said so.
         canStop = container.value(.canStop, default: kind == .swarm)
         isBackground = container.value(.isBackground, default: true)
@@ -441,11 +441,12 @@ struct HydraMentionTarget: Hashable, Sendable {
     var task: String
     var status: HydraHeadInfo.Status
     /// The link a mention carries; the timeline opens it as the head's chat.
-    static let scheme = "swarmcode-head"
+    static let scheme = "ensembyte-head"
+    private static let legacyScheme = "swarmcode-head"
     var url: URL { URL(string: "\(Self.scheme)://\(threadID.uuidString)") ?? URL(fileURLWithPath: "/") }
     /// The head a mention link points at, or nil for any other URL.
     static func threadID(in url: URL) -> UUID? {
-        guard url.scheme == scheme, let host = url.host() else { return nil }
+        guard (url.scheme == scheme || url.scheme == legacyScheme), let host = url.host() else { return nil }
         return UUID(uuidString: host)
     }
 }
@@ -1079,7 +1080,7 @@ enum HydraPrompts {
     /// A dropped block's message, riding on the front of the lead's next turn: past the
     /// refusal cap no turn of its own is spent on it, but the lead still hears that its
     /// heads never went out. Opens with [Hydra], which the policy tells the lead is
-    /// Swarm Code speaking, not the user.
+    /// Ensembyte speaking, not the user.
     static func droppedBlockNotice(_ message: String) -> String {
         "[Hydra] " + message + "\n\n---\n\n"
     }

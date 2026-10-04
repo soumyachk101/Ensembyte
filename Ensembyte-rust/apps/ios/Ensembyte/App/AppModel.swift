@@ -77,7 +77,7 @@ final class AppModel {
         path.pathUpdateHandler = { [weak self] p in
             DispatchQueue.main.async { self?.client?.setNetworkOnline(online: p.status == .satisfied) }
         }
-        path.start(queue: DispatchQueue(label: "sh.orbit.path"))
+        path.start(queue: DispatchQueue(label: "org.ensembyte.path"))
         let args = ProcessInfo.processInfo.arguments
         #if DEBUG
         // Test hooks (never in release builds): wipe the Keychain, or run
@@ -456,7 +456,7 @@ final class AppModel {
     var accountDetail: String {
         if isDemo { return "Offline demo workspace" }
         let p = AccountProfile.load()
-        return [p.name != nil ? p.email : nil, p.orgName].compactMap { $0 }.joined(separator: " · ").nonEmpty ?? "Orbit account"
+        return [p.name != nil ? p.email : nil, p.orgName].compactMap { $0 }.joined(separator: " · ").nonEmpty ?? "Ensembyte account"
     }
 
     /// Logins from before profiles were saved: recover the org name (the
@@ -577,11 +577,12 @@ extension Credentials {
         return false
     }
 
-    private static let service = "sh.orbit.ios"
+    private static let service = "org.ensembyte.ios"
+    private static let legacyService = "sh.orbit.ios"
     private static let account = "credentials"
 
     static func stored() -> Credentials? {
-        guard let data = Keychain.load(service: service, account: account),
+        guard let data = Keychain.load(service: service, account: account) ?? Keychain.load(service: legacyService, account: account),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String]
         else { return nil }
         switch dict["kind"] {
@@ -618,6 +619,7 @@ extension Credentials {
 
     static func clearStored() {
         Keychain.delete(service: service, account: account)
+        Keychain.delete(service: legacyService, account: account)
     }
 }
 
@@ -663,11 +665,13 @@ struct AccountProfile: Codable {
     var email: String?
     var orgName: String?
 
-    private static let service = "sh.orbit.ios"
+    private static let service = "org.ensembyte.ios"
+    private static let legacyService = "sh.orbit.ios"
     private static let account = "profile"
 
     static func load() -> AccountProfile {
-        Keychain.load(service: service, account: account).flatMap { try? JSONDecoder().decode(AccountProfile.self, from: $0) } ?? AccountProfile()
+        (Keychain.load(service: service, account: account) ?? Keychain.load(service: legacyService, account: account))
+            .flatMap { try? JSONDecoder().decode(AccountProfile.self, from: $0) } ?? AccountProfile()
     }
 
     func save() {
@@ -676,6 +680,7 @@ struct AccountProfile: Codable {
 
     static func clear() {
         Keychain.delete(service: service, account: account)
+        Keychain.delete(service: legacyService, account: account)
     }
 }
 

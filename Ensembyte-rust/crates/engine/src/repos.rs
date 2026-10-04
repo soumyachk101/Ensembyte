@@ -120,13 +120,23 @@ fn session_home_dir_with(
 }
 
 /// Where new worktrees live. Deliberately NOT under the backend data dir —
-/// worktrees are user-facing working checkouts. `ORBIT_WORKTREES_DIR` overrides
-/// (test isolation); empty reads as unset.
+/// worktrees are user-facing working checkouts. `ENSEMBYTE_WORKTREES_DIR` or `ORBIT_WORKTREES_DIR`
+/// overrides (test isolation); empty reads as unset.
 fn default_worktrees_root() -> PathBuf {
-    std::env::var_os("ORBIT_WORKTREES_DIR")
+    std::env::var_os("ENSEMBYTE_WORKTREES_DIR")
+        .or_else(|| std::env::var_os("ORBIT_WORKTREES_DIR"))
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| home_dir().join(".orbit").join("worktrees"))
+        .unwrap_or_else(|| {
+            let home = home_dir();
+            let ensembyte_wt = home.join(".ensembyte").join("worktrees");
+            let orbit_wt = home.join(".orbit").join("worktrees");
+            if !ensembyte_wt.exists() && orbit_wt.exists() {
+                orbit_wt
+            } else {
+                ensembyte_wt
+            }
+        })
 }
 
 struct ReposInner {
@@ -1403,7 +1413,7 @@ async fn disposable_worker<T: Send + 'static>(
 fn list_folders_blocking(target: &Path) -> Result<FolderListing, EngineError> {
     let read = std::fs::read_dir(target).map_err(|e| match e.kind() {
         std::io::ErrorKind::PermissionDenied => {
-            EngineError::Other("Orbit doesn't have access to this folder on the device.".into())
+            EngineError::Other("Ensembyte doesn't have access to this folder on the device.".into())
         }
         _ => EngineError::Other(format!("could not read that folder: {e}")),
     })?;

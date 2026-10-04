@@ -210,8 +210,8 @@ impl CodexHarness {
                     "initialize",
                     json!({
                         "clientInfo": {
-                            "name": "orbit-native",
-                            "title": "Orbit",
+                            "name": "ensembyte",
+                            "title": "Ensembyte",
                             "version": env!("CARGO_PKG_VERSION"),
                         },
                         "capabilities": { "experimentalApi": true },
@@ -264,8 +264,8 @@ impl CodexHarness {
                     "initialize",
                     json!({
                         "clientInfo": {
-                            "name": "orbit-native",
-                            "title": "Orbit",
+                            "name": "ensembyte",
+                            "title": "Ensembyte",
                             "version": env!("CARGO_PKG_VERSION"),
                         },
                         "capabilities": { "experimentalApi": true },
@@ -914,7 +914,7 @@ fn command_request(
         | "diff" | "mention" | "mcp" | "skills" | "plan" | "fast" | "logout" | "quit" | "exit"
         | "init" | "rename" | "feedback" | "ps" | "stop" | "clean" | "archive" | "delete" => {
             Err(HarnessError::Protocol(format!(
-                "/{name} is not mapped in Orbit's Codex integration. Available commands: /compact and /review."
+                "/{name} is not mapped in Ensembyte's Codex integration. Available commands: /compact and /review."
             )))
         }
         _ => Ok(None),
@@ -1042,8 +1042,8 @@ async fn run_session(session: Session) {
                 "initialize",
                 json!({
                     "clientInfo": {
-                        "name": "orbit-native",
-                        "title": "Orbit",
+                        "name": "ensembyte",
+                        "title": "Ensembyte",
                         "version": env!("CARGO_PKG_VERSION"),
                     },
                     "capabilities": { "experimentalApi": true },

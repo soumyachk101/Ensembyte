@@ -1272,7 +1272,7 @@ pub async fn capture_diff_against(
     if tracked.truncated {
         let boundary = patch.rfind('\n').unwrap_or(0);
         patch.truncate(boundary);
-        patch.push_str("\n# Orbit diff truncated\n");
+        patch.push_str("\n# Ensembyte diff truncated\n");
     }
 
     // `?? path` records; rename records (`R  new\0old`) consume their extra field.
@@ -1841,7 +1841,7 @@ pub async fn capture_turn_diff(
     if tracked.truncated {
         let boundary = patch.rfind('\n').unwrap_or(0);
         patch.truncate(boundary);
-        patch.push_str("\n# Orbit diff truncated\n");
+        patch.push_str("\n# Ensembyte diff truncated\n");
     }
 
     let additions: u32 = files.iter().map(|f| f.additions).sum();

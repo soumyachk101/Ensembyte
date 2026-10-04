@@ -8,7 +8,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 fn resolve_data_dir(mut env: impl FnMut(&str) -> Option<OsString>) -> PathBuf {
-    if let Some(dir) = env("ORBIT_DATA_DIR") {
+    if let Some(dir) = env("ENSEMBYTE_DATA_DIR").or_else(|| env("ORBIT_DATA_DIR")) {
         return PathBuf::from(dir);
     }
     #[cfg(windows)]
@@ -24,18 +24,29 @@ fn resolve_data_dir(mut env: impl FnMut(&str) -> Option<OsString>) -> PathBuf {
                     .filter(|value| !value.is_empty())
                     .map(|home| PathBuf::from(home).join("AppData").join("Local"))
             })
-            .expect("LOCALAPPDATA and USERPROFILE not set; set ORBIT_DATA_DIR");
-        local.join("Orbit")
+            .expect("LOCALAPPDATA and USERPROFILE not set; set ENSEMBYTE_DATA_DIR");
+        let dir = local.join("Ensembyte");
+        if !dir.exists() {
+            let old = local.join("Orbit");
+            if old.exists() && std::fs::rename(&old, &dir).is_ok() {
+                eprintln!("migrated data dir {} -> {}", old.display(), dir.display());
+            }
+        }
+        dir
     }
     #[cfg(not(windows))]
     {
         let home = PathBuf::from(env("HOME").expect("HOME not set"));
-        let dir = home.join(".orbit");
-        // One-shot 0.2.0 migration: adopt the pre-rename data dir.
+        let dir = home.join(".ensembyte");
         if !dir.exists() {
-            let old = home.join(".comet-native");
+            let old = home.join(".orbit");
             if old.exists() && std::fs::rename(&old, &dir).is_ok() {
                 eprintln!("migrated data dir {} -> {}", old.display(), dir.display());
+            } else {
+                let older = home.join(".comet-native");
+                if older.exists() && std::fs::rename(&older, &dir).is_ok() {
+                    eprintln!("migrated data dir {} -> {}", older.display(), dir.display());
+                }
             }
         }
         dir
@@ -57,8 +68,12 @@ mod tests {
     #[test]
     fn explicit_data_dir_needs_no_home() {
         assert_eq!(
-            resolve(&[("ORBIT_DATA_DIR", "custom data")]),
+            resolve(&[("ENSEMBYTE_DATA_DIR", "custom data")]),
             PathBuf::from("custom data")
+        );
+        assert_eq!(
+            resolve(&[("ORBIT_DATA_DIR", "custom data legacy")]),
+            PathBuf::from("custom data legacy")
         );
     }
 
@@ -67,7 +82,7 @@ mod tests {
     fn explorer_launch_without_home_uses_local_app_data() {
         assert_eq!(
             resolve(&[("LOCALAPPDATA", r"C:\Users\Test User\AppData\Local")]),
-            PathBuf::from(r"C:\Users\Test User\AppData\Local\Orbit"),
+            PathBuf::from(r"C:\Users\Test User\AppData\Local\Ensembyte"),
         );
     }
 
@@ -76,7 +91,7 @@ mod tests {
     fn windows_profile_fallback_handles_unicode_and_apostrophes() {
         assert_eq!(
             resolve(&[("USERPROFILE", r"C:\Users\O'Brien 日本語")]),
-            PathBuf::from(r"C:\Users\O'Brien 日本語\AppData\Local\Orbit"),
+            PathBuf::from(r"C:\Users\O'Brien 日本語\AppData\Local\Ensembyte"),
         );
     }
 
@@ -85,7 +100,7 @@ mod tests {
     fn windows_default_does_not_depend_on_shell_home() {
         assert_eq!(
             resolve(&[("HOME", r"D:\msys-home"), ("LOCALAPPDATA", r"C:\Local")]),
-            PathBuf::from(r"C:\Local\Orbit"),
+            PathBuf::from(r"C:\Local\Ensembyte"),
         );
     }
 }

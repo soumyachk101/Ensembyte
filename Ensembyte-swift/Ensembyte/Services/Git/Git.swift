@@ -384,7 +384,7 @@ struct Git: Sendable {
         try Self.check(await run(["update-ref", ref, commit, old ?? ""]))
     }
 
-    /// Pushes a branch. `force` is for a branch Swarm Code owns outright (a Hydra job's),
+    /// Pushes a branch. `force` is for a branch Ensembyte owns outright (a Hydra job's),
     /// which a retry rebuilds on a newer base, so its open merge request follows along
     /// instead of a second one being opened.
     func pushBranch(_ name: String, force: Bool = false) async throws {

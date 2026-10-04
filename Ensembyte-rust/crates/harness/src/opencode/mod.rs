@@ -632,7 +632,7 @@ impl Server {
                 }
                 None => tracing::warn!(
                     binary_path = %exe.display(),
-                    "opencode version unknown; starting without the Orbit MCP server"
+                    "opencode version unknown; starting without the Ensembyte MCP server"
                 ),
             }
         }

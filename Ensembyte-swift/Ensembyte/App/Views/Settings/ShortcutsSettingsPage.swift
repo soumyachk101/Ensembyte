@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Every key combination Swarm Code answers to, laid out like Swarm's Shortcuts page:
+/// Every key combination Ensembyte answers to, laid out like the Shortcuts page:
 /// a section header with its tile, one card of rows, and one recorder per row.
 struct ShortcutsSettingsPage: View {
     var body: some View {

@@ -4,12 +4,12 @@ import os
 /// Logs how long the main thread stays busy after a thread is selected, in the dev app:
 /// the span from the selection to the run loop's next sleep (what the click waits on), then
 /// the busy total over the following second. Read with
-/// `log stream --predicate 'subsystem == "iordv.swarmcode" && category == "switch"'`.
+/// `log stream --predicate 'subsystem == "org.ensembyte.desktop" && category == "switch"'`.
 /// Each switch is also a point of interest, so an Instruments trace can be cut at it.
 @MainActor
 enum SwitchLatency {
-    private static let log = Logger(subsystem: "iordv.swarmcode", category: "switch")
-    private static let pointsOfInterest = OSLog(subsystem: "iordv.swarmcode", category: .pointsOfInterest)
+    private static let log = Logger(subsystem: "org.ensembyte.desktop", category: "switch")
+    private static let pointsOfInterest = OSLog(subsystem: "org.ensembyte.desktop", category: .pointsOfInterest)
     private static var switchStart: CFAbsoluteTime = 0
     private static var busySince: CFAbsoluteTime = 0
     private static var firstSpan: Double?

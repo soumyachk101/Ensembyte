@@ -1,27 +1,37 @@
-//! `orbit daemon …` — install/manage `orbit headless` as a background service:
+//! `ensembyte daemon …` — install/manage `ensembyte headless` as a background service:
 //! a systemd **user** unit on Linux (the VPS deployment target), a launchd
 //! LaunchAgent on macOS. The unit runs the current executable with the
-//! `ORBIT_*` environment captured at install time, so
-//! `ORBIT_EDGE_URL=… orbit daemon install` bakes that override in.
+//! `ENSEMBYTE_*` environment captured at install time, so
+//! `ENSEMBYTE_EDGE_URL=… ensembyte daemon install` bakes that override in.
 //!
 //! Auth is decoupled: without a saved session the service remains up on the
-//! local-only profile. `orbit login` and a service restart opt into sync.
+//! local-only profile. `ensembyte login` and a service restart opt into sync.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, bail};
 
-const LAUNCHD_LABEL: &str = "sh.orbit.app";
+const LAUNCHD_LABEL: &str = "org.ensembyte.app";
 /// Same unit name the curl|sh installer (`edge/src/install.sh`) writes, so
-/// `orbit daemon …` manages that installation rather than a competing copy.
-const SYSTEMD_UNIT: &str = "orbit.service";
+/// `ensembyte daemon …` manages that installation rather than a competing copy.
+const SYSTEMD_UNIT: &str = "ensembyte.service";
 
 /// Environment captured into the unit file. `PATH` is always included (the
 /// engine spawns harness CLIs like `claude`, which service managers' minimal
-/// default PATH won't find); the `ORBIT_*`/logging vars only when set.
+/// default PATH won't find); the `ENSEMBYTE_*`/logging vars only when set.
 const CAPTURED_ENV: &[&str] = &[
     "PATH",
+    "ENSEMBYTE_DATA_DIR",
+    "ENSEMBYTE_EDGE_URL",
+    "ENSEMBYTE_EDGE_TOKEN",
+    "ENSEMBYTE_ORG_ID",
+    "ENSEMBYTE_WORKOS_CLIENT_ID",
+    "ENSEMBYTE_WORKOS_API_BASE",
+    "ENSEMBYTE_IPC_PORT",
+    "ENSEMBYTE_CALLBACK_PORT",
+    "ENSEMBYTE_HARNESS",
+    "ENSEMBYTE_DEVICE_NAME",
     "ORBIT_DATA_DIR",
     "ORBIT_EDGE_URL",
     "ORBIT_EDGE_TOKEN",
@@ -36,7 +46,7 @@ const CAPTURED_ENV: &[&str] = &[
 ];
 
 pub fn install(data_dir: &Path) -> anyhow::Result<()> {
-    let exe = std::env::current_exe().context("resolving the orbit executable path")?;
+    let exe = std::env::current_exe().context("resolving the ensembyte executable path")?;
     let env = captured_env();
     if cfg!(target_os = "macos") {
         let plist = launchd_plist_path()?;
@@ -67,7 +77,7 @@ pub fn install(data_dir: &Path) -> anyhow::Result<()> {
             "For start-at-boot without an active login session (VPS): loginctl enable-linger $USER"
         );
     } else {
-        bail!("orbit daemon is only supported on macOS (launchd) and Linux (systemd)");
+        bail!("ensembyte daemon is only supported on macOS (launchd) and Linux (systemd)");
     }
     println!(
         "Without a saved account the engine stays local-only; sign-in and restart are optional for sync."
@@ -108,7 +118,7 @@ pub fn uninstall() -> anyhow::Result<()> {
             Err(err) => return Err(err.into()),
         }
     } else {
-        bail!("orbit daemon is only supported on macOS (launchd) and Linux (systemd)");
+        bail!("ensembyte daemon is only supported on macOS (launchd) and Linux (systemd)");
     }
     Ok(())
 }
@@ -117,7 +127,7 @@ pub fn start() -> anyhow::Result<()> {
     if cfg!(target_os = "macos") {
         let plist = launchd_plist_path()?;
         if !plist.exists() {
-            bail!("not installed — run `orbit daemon install` first");
+            bail!("not installed — run `ensembyte daemon install` first");
         }
         // `stop` boots the job out of the domain, so start = bootstrap; already
         // loaded is fine, then kickstart guarantees a running process either way.
@@ -129,7 +139,7 @@ pub fn start() -> anyhow::Result<()> {
     } else if cfg!(target_os = "linux") {
         run("systemctl", &["--user", "start", SYSTEMD_UNIT])?;
     } else {
-        bail!("orbit daemon is only supported on macOS (launchd) and Linux (systemd)");
+        bail!("ensembyte daemon is only supported on macOS (launchd) and Linux (systemd)");
     }
     println!("Started.");
     Ok(())
@@ -142,7 +152,7 @@ pub fn stop() -> anyhow::Result<()> {
     } else if cfg!(target_os = "linux") {
         run("systemctl", &["--user", "stop", SYSTEMD_UNIT])?;
     } else {
-        bail!("orbit daemon is only supported on macOS (launchd) and Linux (systemd)");
+        bail!("ensembyte daemon is only supported on macOS (launchd) and Linux (systemd)");
     }
     println!("Stopped.");
     Ok(())
@@ -166,7 +176,7 @@ pub fn restart() -> anyhow::Result<()> {
         println!("Restarted.");
         Ok(())
     } else {
-        bail!("orbit daemon is only supported on macOS (launchd) and Linux (systemd)");
+        bail!("ensembyte daemon is only supported on macOS (launchd) and Linux (systemd)");
     }
 }
 
@@ -180,9 +190,9 @@ pub fn status() -> anyhow::Result<()> {
             println!(
                 "{LAUNCHD_LABEL}: not loaded{}",
                 if launchd_plist_path()?.exists() {
-                    " (installed — `orbit daemon start`)"
+                    " (installed — `ensembyte daemon start`)"
                 } else {
-                    " (not installed — `orbit daemon install`)"
+                    " (not installed — `ensembyte daemon install`)"
                 }
             );
             return Ok(());
@@ -209,7 +219,7 @@ pub fn status() -> anyhow::Result<()> {
             .context("running systemctl")?;
         Ok(())
     } else {
-        bail!("orbit daemon is only supported on macOS (launchd) and Linux (systemd)");
+        bail!("ensembyte daemon is only supported on macOS (launchd) and Linux (systemd)");
     }
 }
 
@@ -226,7 +236,7 @@ fn captured_env() -> Vec<(String, String)> {
 
 fn render_systemd_unit(exe: &Path, env: &[(String, String)]) -> String {
     let mut unit = String::from(
-        "[Unit]\nDescription=Orbit headless engine\nAfter=network-online.target\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\n",
+        "[Unit]\nDescription=Ensembyte headless engine\nAfter=network-online.target\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\n",
     );
     for (key, value) in env {
         // systemd unquotes the value; escape the characters it treats specially.
@@ -234,13 +244,13 @@ fn render_systemd_unit(exe: &Path, env: &[(String, String)]) -> String {
         unit.push_str(&format!("Environment=\"{key}={value}\"\n"));
     }
     unit.push_str(&format!(
-        "ExecStart={} headless\nRestart=on-failure\nRestartSec=5\nEnvironmentFile=-%h/.orbit/env\n\n[Install]\nWantedBy=default.target\n",
+        "ExecStart={} headless\nRestart=on-failure\nRestartSec=5\nEnvironmentFile=-%h/.ensembyte/env\n\n[Install]\nWantedBy=default.target\n",
         systemd_exec_path(exe)
     ));
     unit
 }
 
-/// The ExecStart binary path. An exe under `~/.orbit/app/` came from the
+/// The ExecStart binary path. An exe under `~/.ensembyte/app/` came from the
 /// curl|sh installer, whose upgrades relink `app/current` — point the unit at
 /// the symlink (as the installer's own unit does) so it never pins one version.
 /// (`current_exe` resolves symlinks, so the versioned dir is what we see here.)
@@ -250,12 +260,19 @@ fn systemd_exec_path(exe: &Path) -> String {
 
 fn exec_path_for(exe: &Path, home: Option<&Path>) -> String {
     let installed = home
-        .map(|home| home.join(".orbit/app"))
+        .map(|home| home.join(".ensembyte/app"))
         .is_some_and(|app_root| exe.starts_with(app_root));
     if installed {
-        "%h/.orbit/app/current/orbit".to_string()
+        "%h/.ensembyte/app/current/ensembyte".to_string()
     } else {
-        format!("{}", exe.display())
+        let legacy_installed = home
+            .map(|home| home.join(".orbit/app"))
+            .is_some_and(|app_root| exe.starts_with(app_root));
+        if legacy_installed {
+            "%h/.orbit/app/current/orbit".to_string()
+        } else {
+            format!("{}", exe.display())
+        }
     }
 }
 
@@ -380,24 +397,24 @@ mod tests {
     #[test]
     fn systemd_unit_shape() {
         let unit = render_systemd_unit(
-            Path::new("/usr/local/bin/orbit"),
+            Path::new("/usr/local/bin/ensembyte"),
             &[
                 ("PATH".into(), "/usr/bin:/bin".into()),
-                ("ORBIT_EDGE_URL".into(), "https://edge.example".into()),
-                ("RUST_LOG".into(), "info,orbit=\"debug\"".into()),
+                ("ENSEMBYTE_EDGE_URL".into(), "https://edge.example".into()),
+                ("RUST_LOG".into(), "info,ensembyte=\"debug\"".into()),
             ],
         );
-        assert!(unit.contains("ExecStart=/usr/local/bin/orbit headless\n"));
+        assert!(unit.contains("ExecStart=/usr/local/bin/ensembyte headless\n"));
         assert!(unit.contains("Environment=\"PATH=/usr/bin:/bin\"\n"));
-        assert!(unit.contains("Environment=\"ORBIT_EDGE_URL=https://edge.example\"\n"));
+        assert!(unit.contains("Environment=\"ENSEMBYTE_EDGE_URL=https://edge.example\"\n"));
         // Inner quotes escaped so systemd re-parses the value verbatim.
-        assert!(unit.contains("Environment=\"RUST_LOG=info,orbit=\\\"debug\\\"\"\n"));
+        assert!(unit.contains("Environment=\"RUST_LOG=info,ensembyte=\\\"debug\\\"\"\n"));
         assert!(unit.contains("StartLimitIntervalSec=60\n"));
         assert!(unit.contains("StartLimitBurst=5\n"));
         assert!(unit.contains("Restart=on-failure"));
         assert!(!unit.contains("session.json"));
         assert!(!unit.contains("ConditionPathExists"));
-        assert!(unit.contains("EnvironmentFile=-%h/.orbit/env"));
+        assert!(unit.contains("EnvironmentFile=-%h/.ensembyte/env"));
         assert!(unit.contains("WantedBy=default.target"));
     }
 
@@ -409,8 +426,8 @@ mod tests {
         assert!(!installer.contains("session.json"));
         assert!(installer.contains("StartLimitIntervalSec=60\n"));
         assert!(installer.contains("StartLimitBurst=5\n"));
-        assert!(installer.contains("systemctl --user enable orbit"));
-        assert!(installer.contains("systemctl --user restart orbit"));
+        assert!(installer.contains("systemctl --user enable ensembyte"));
+        assert!(installer.contains("systemctl --user restart ensembyte"));
     }
 
     #[test]
@@ -419,36 +436,36 @@ mod tests {
         // the versioned dir): the unit must point back at the symlink.
         assert_eq!(
             exec_path_for(
-                Path::new("/home/u/.orbit/app/0.3.0/orbit"),
+                Path::new("/home/u/.ensembyte/app/0.3.0/ensembyte"),
                 Some(Path::new("/home/u")),
             ),
-            "%h/.orbit/app/current/orbit"
+            "%h/.ensembyte/app/current/ensembyte"
         );
         // Source build: literal path.
         assert_eq!(
             exec_path_for(
-                Path::new("/src/target/debug/orbit"),
+                Path::new("/src/target/debug/ensembyte"),
                 Some(Path::new("/home/u"))
             ),
-            "/src/target/debug/orbit"
+            "/src/target/debug/ensembyte"
         );
     }
 
     #[test]
     fn launchd_plist_shape() {
         let plist = render_launchd_plist(
-            Path::new("/Users/x/orbit & co/orbit"),
-            &[("ORBIT_EDGE_URL".into(), "https://e?a=1&b=2".into())],
-            Path::new("/Users/x/.orbit/daemon.log"),
+            Path::new("/Users/x/ensembyte & co/ensembyte"),
+            &[("ENSEMBYTE_EDGE_URL".into(), "https://e?a=1&b=2".into())],
+            Path::new("/Users/x/.ensembyte/daemon.log"),
         );
-        assert!(plist.contains("<key>Label</key><string>sh.orbit.app</string>"));
+        assert!(plist.contains("<key>Label</key><string>org.ensembyte.app</string>"));
         // XML-escaped exe path and env value.
-        assert!(plist.contains("<string>/Users/x/orbit &amp; co/orbit</string>"));
+        assert!(plist.contains("<string>/Users/x/ensembyte &amp; co/ensembyte</string>"));
         assert!(plist.contains("<string>https://e?a=1&amp;b=2</string>"));
         assert!(plist.contains("<string>headless</string>"));
         assert!(plist.contains("<key>SuccessfulExit</key><false/>"));
         assert!(
-            plist.contains("<key>StandardOutPath</key><string>/Users/x/.orbit/daemon.log</string>")
+            plist.contains("<key>StandardOutPath</key><string>/Users/x/.ensembyte/daemon.log</string>")
         );
     }
 }

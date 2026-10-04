@@ -645,7 +645,7 @@ pub async fn install_antigravity_release(
     }
     if !crate::code_signature::SUPPORTED {
         return Err(HarnessError::Install(format!(
-            "Antigravity {} is not pinned by this build of Orbit; update Orbit to install it",
+            "Antigravity {} is not pinned by this build of Ensembyte; update Ensembyte to install it",
             release.version
         )));
     }
@@ -2463,8 +2463,8 @@ fn initialize_params(harness: HarnessId) -> Value {
     json!({
         "protocolVersion": 1,
         "clientInfo": {
-            "name": "orbit",
-            "title": "Orbit",
+            "name": "ensembyte",
+            "title": "Ensembyte",
             "version": env!("CARGO_PKG_VERSION"),
         },
         // Declined: agents fall back to their own fs/terminal access, which

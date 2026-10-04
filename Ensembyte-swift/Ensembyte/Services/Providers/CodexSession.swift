@@ -10,7 +10,7 @@ import OSLog
 /// its thread id and go out wrapped in `agentEvent`, and its `turn/completed` ends it.
 @MainActor
 final class CodexSession: ProviderSession {
-    private static let log = Logger(subsystem: "iordv.swarmcode", category: "codex")
+    private static let log = Logger(subsystem: "org.ensembyte.desktop", category: "codex")
     var onEvent: ((ProviderEvent) -> Void)?
 
     /// Whose transcript a notification belongs to.

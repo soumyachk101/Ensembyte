@@ -43,7 +43,7 @@ pub fn workspace_locator(
 
 pub fn orbit_conversation_link(chat_id: &str, workspace: &str) -> String {
     format!(
-        "orbit://open/chat/{}?workspace={}",
+        "ensembyte://open/chat/{}?workspace={}",
         encode_component(chat_id),
         encode_component(workspace)
     )
@@ -51,8 +51,9 @@ pub fn orbit_conversation_link(chat_id: &str, workspace: &str) -> String {
 
 pub fn parse_orbit_conversation_link(url: &str) -> Result<ConversationDeepLink, &'static str> {
     let rest = url
-        .strip_prefix("orbit://open/chat/")
-        .ok_or("not a Orbit conversation link")?;
+        .strip_prefix("ensembyte://open/chat/")
+        .or_else(|| url.strip_prefix("orbit://open/chat/"))
+        .ok_or("not an Ensembyte conversation link")?;
     let (chat_id, query) = rest.split_once('?').ok_or("missing workspace locator")?;
     if chat_id.is_empty() || chat_id.contains('/') {
         return Err("invalid conversation id");

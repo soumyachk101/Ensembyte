@@ -111,7 +111,7 @@ final class ClaudeSession: ProviderSession {
                 // Uncapped, the CLI keeps its own limit on heads at once.
                 if let cap = hydra.maxHeads { environment["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = String(cap) }
             } else {
-                // The heads run on another provider, as threads Swarm Code starts: the
+                // The heads run on another provider, as threads Ensembyte starts: the
                 // lead asks for them with the delegation block, and its own agent tool goes,
                 // since a head it spawned itself would run on its own model.
                 hydraPolicy = HydraPrompts.fallbackPolicy(hydra)

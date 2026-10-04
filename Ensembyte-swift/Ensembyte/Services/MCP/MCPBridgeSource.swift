@@ -1,11 +1,11 @@
 import Foundation
 
 /// The JavaScript bridge that exposes the connected MCP servers' tools to the
-/// providers that load a file Swarm Code installs: Pi (an extension) and
+/// providers that load a file Ensembyte installs: Pi (an extension) and
 /// Command Code (a mod). Both dynamic-import it and call `loadMCPTools()`.
 ///
 /// Plain ESM JavaScript (Node 18+, no npm dependencies). The server list comes
-/// from the file at `SWARM_CODE_MCP_CONFIG`
+/// from the file at `ENSEMBYTE_MCP_CONFIG`
 /// (`{"mcpServers": { id: {command, args, env} | {type: "http", url, headers} }}`);
 /// when the variable is unset or the file is missing, nothing is registered.
 enum MCPBridge {
@@ -18,12 +18,12 @@ enum MCPBridge {
 
     function configServers() {
       try {
-        const file = process.env.SWARM_CODE_MCP_CONFIG || "";
+        const file = process.env.ENSEMBYTE_MCP_CONFIG || process.env.SWARM_CODE_MCP_CONFIG || "";
         if (!file) return {};
         const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
         if (parsed && typeof parsed === "object" && parsed.mcpServers && typeof parsed.mcpServers === "object") return parsed.mcpServers;
       } catch (error) {
-        console.error("swarm mcp: could not read config: " + errorText(error));
+        console.error("ensembyte mcp: could not read config: " + errorText(error));
       }
       return {};
     }

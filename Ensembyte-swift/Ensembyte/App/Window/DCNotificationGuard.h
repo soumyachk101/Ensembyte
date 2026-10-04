@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// release-notes cards on Settings > About read exactly so.
 ///
 /// `DCInstallNotificationGuard()` wraps the center's two public post methods, so such a raise is
-/// logged (subsystem `iordv.swarmcode`, category `notification`) and the post returns: the
+/// logged (subsystem `org.ensembyte.desktop`, category `notification`) and the post returns: the
 /// window ordering and the popover finish their work. It is a net, not the cure: whatever raised
 /// has still not seen its notification.
 void DCInstallNotificationGuard(void);

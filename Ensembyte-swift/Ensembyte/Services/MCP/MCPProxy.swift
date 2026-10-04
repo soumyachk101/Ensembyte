@@ -4,7 +4,7 @@ import OSLog
 import Synchronization
 
 final class MCPProxy: @unchecked Sendable {
-    private static let log = Logger(subsystem: "iordv.swarmcode", category: "mcp-proxy")
+    private static let log = Logger(subsystem: "org.ensembyte.desktop", category: "mcp-proxy")
     static let shared = MCPProxy()
 
     /// The proxy's port, kept in the library so the provider configs written on one launch

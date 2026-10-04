@@ -1,6 +1,6 @@
 /*
-  Swarm Code marketing site — hero laser animation
-  ==================================================
+  Ensembyte marketing site — hero laser animation
+  ================================================
 
   WebGL2 vertical blue light beam / glow effect.
   Renders a glowing vertical beam in the center of the hero section.
@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  var LASER_COLOR = [0.29, 0.55, 1.0]; // #4a8cff — Swarm Code blue
+  var LASER_COLOR = [0.29, 0.55, 1.0]; // #4a8cff — Ensembyte blue
 
   var VERT_SRC = [
     "precision highp float;",

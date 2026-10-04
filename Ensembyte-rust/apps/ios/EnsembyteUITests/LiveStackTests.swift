@@ -8,7 +8,7 @@ import XCTest
 ///   ORBIT_DATA_DIR=/tmp/e ORBIT_IPC_PORT=27811 ORBIT_EDGE_URL=http://localhost:27650 \
 ///     ORBIT_EDGE_TOKEN=alice@org1 ORBIT_ORG_ID=org1 ORBIT_HARNESS=mock orbit headless &
 ///   TEST_RUNNER_ORBIT_LIVE_EDGE=http://localhost:27650 xcodebuild test \
-///     -only-testing:OrbitUITests/LiveStackTests …
+///     -only-testing:EnsembyteUITests/LiveStackTests …
 final class LiveStackTests: XCTestCase {
     func testSendRoundTripsThroughRealEngine() throws {
         let edge = try XCTUnwrap(ProcessInfo.processInfo.environment["ORBIT_LIVE_EDGE"], "set TEST_RUNNER_ORBIT_LIVE_EDGE")

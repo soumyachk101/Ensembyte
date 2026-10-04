@@ -10,8 +10,8 @@ import Foundation
 /// resume id, so a thread's conversation survives relaunches in `~/.pi/agent`.
 ///
 /// Pi itself keeps approving everything (`--approve`) or nothing (`--no-approve`),
-/// so Swarm Code gates the tools itself through a pi extension (`PiCLI`) loaded
-/// with `-e`: every tool that could change something lands as a `swarm-gate`
+/// so Ensembyte gates the tools itself through a pi extension (`PiCLI`) loaded
+/// with `-e`: every tool that could change something lands as an `ensembyte-gate`
 /// select request, which the app answers or asks the user. Supervised asks for all
 /// of them, Auto-accept edits waves file changes through, Auto also passes shell
 /// commands that only read, and Full access returns before asking. Plan mode is
@@ -100,12 +100,15 @@ final class PiSession: ProviderSession {
         if let sessionID { arguments += ["--session", sessionID] }
 
         var environment = configuration.environment
+        environment["ENSEMBYTE_PI_GATE"] = gateURL.path
         environment["SWARM_CODE_PI_GATE"] = gateURL.path
         environment["PI_SKIP_VERSION_CHECK"] = "1"
         if let bridge = try? MCPBridge.installBridge() {
+            environment["ENSEMBYTE_MCP_BRIDGE"] = bridge.path
             environment["SWARM_CODE_MCP_BRIDGE"] = bridge.path
         }
         if FileManager.default.fileExists(atPath: MCPPaths.claudeConfigURL.path) {
+            environment["ENSEMBYTE_MCP_CONFIG"] = MCPPaths.claudeConfigURL.path
             environment["SWARM_CODE_MCP_CONFIG"] = MCPPaths.claudeConfigURL.path
         }
 

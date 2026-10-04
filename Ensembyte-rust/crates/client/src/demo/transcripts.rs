@@ -101,9 +101,9 @@ fn assistant(id: &str, host: &str, at: i64, parts: Vec<MessagePart>) -> SessionM
 
 /// Paths the demo serves generated images for.
 pub(crate) const DEMO_IMAGES: &[(&str, u32, u32, u32)] = &[
-    ("/Users/dev/.orbit/uploads/veil-before.png", 960, 540, 1),
-    ("/Users/dev/.orbit/uploads/scroll-tall.png", 400, 800, 2),
-    ("/Users/dev/.orbit/uploads/square.png", 600, 600, 3),
+    ("/Users/dev/.ensembyte/uploads/veil-before.png", 960, 540, 1),
+    ("/Users/dev/.ensembyte/uploads/scroll-tall.png", 400, 800, 2),
+    ("/Users/dev/.ensembyte/uploads/square.png", 600, 600, 3),
 ];
 
 const VEIL_PLAN: &str = r#"## Veil port plan
@@ -163,7 +163,7 @@ Chunk boundaries now snap to **extended grapheme clusters**, so these all fade a
 | Emoji ZWJ | 👨‍👩‍👧‍👦 | 1 |
 | Flags | 🇨🇦🇯🇵 | 2 |
 
-The splitter lives in `/Users/dev/orbit/crates/ui/src/markdown/veil/grapheme_boundaries_for_streamed_chunks.rs` and is covered by a table test:
+The splitter lives in `/Users/dev/ensembyte/crates/ui/src/markdown/veil/grapheme_boundaries_for_streamed_chunks.rs` and is covered by a table test:
 
 ```python
 CASES = [
@@ -190,7 +190,7 @@ const VEIL_LIVE_PREFIX: &str = "All 14 veil tests pass. Pushing `veil-fade` and"
 pub(crate) const VEIL_LIVE_REST: &str = r#" opening the pull request against `main`:
 
 - [x] `cargo test -p orbit-ui veil` — 14 passed
-- [x] `xcodebuild -scheme Orbit build`
+- [x] `xcodebuild -scheme Ensembyte build`
 - [ ] Screenshots for the PR description
 
 ```bash
@@ -244,11 +244,11 @@ fn veil(host: &str, now: i64) -> Vec<SessionMessageEntry> {
                     false,
                     Some("crates/ui/src/markdown/veil.rs:12: pub const VEIL_MIN_FADE_MS"),
                 ),
-                edit("k3", "apps/ios/Orbit/Transcript/Veil.swift", 84, 12),
+                edit("k3", "apps/ios/Ensembyte/Transcript/Veil.swift", 84, 12),
                 tool(
                     "k4",
                     exec(
-                        "xcodebuild -scheme Orbit -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build",
+                        "xcodebuild -scheme Ensembyte -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build",
                     ),
                     false,
                     Some("** BUILD SUCCEEDED **"),
@@ -493,7 +493,7 @@ override func layoutSubviews() {
                 ),
                 tool(
                     "k1",
-                    exec("xcodebuild test -only-testing:OrbitTests/TranscriptScrollMatrixTests"),
+                    exec("xcodebuild test -only-testing:EnsembyteTests/TranscriptScrollMatrixTests"),
                     false,
                     Some("Executed 36 tests, with 0 failures"),
                 ),

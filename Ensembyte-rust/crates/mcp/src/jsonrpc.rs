@@ -21,8 +21,8 @@ const PROTOCOL_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const LATEST_PROTOCOL: &str = "2025-06-18";
 
 const INSTRUCTIONS: &str = "\
-Orbit runs coding agents in chats, each hosted on a device, optionally in a project \
-(a folder on that specific device). These tools operate the local Orbit engine: \
+Ensembyte runs coding agents in chats, each hosted on a device, optionally in a project \
+(a folder on that specific device). These tools operate the local Ensembyte engine: \
 discover devices/projects/chats, create chats with a chosen harness and \
 model, read transcripts, and send messages between chats.\n\
 \n\

@@ -37,5 +37,5 @@ enum CaptureRun {
     }
 
     /// The defaults suite the run owns; a run starts by wiping it.
-    nonisolated static let suiteName = "iordv.swarmcode.website-captures"
+    nonisolated static let suiteName = "org.ensembyte.desktop.website-captures"
 }

@@ -301,7 +301,7 @@ struct TimelineMinimapRail: View, Equatable {
     }
 
     /// The card that follows the pointer: the same Liquid Glass surface, corner radius and type
-    /// scale as the app's other floating cards, so the rail reads as part of Swarm Code.
+    /// scale as the app's other floating cards, so the rail reads as part of Ensembyte.
     @ViewBuilder
     private func previewCard(
         for entry: TimelineMinimapEntry,

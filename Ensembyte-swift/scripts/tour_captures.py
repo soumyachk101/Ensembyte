@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Renders the onboarding tour's captures from the real app, then imports them as assets.
 
-The app runs once in its tour capture mode (see SwarmCode/App/Captures/TourCaptures.swift):
+The app runs once in its tour capture mode (see Ensembyte/App/Captures/TourCaptures.swift):
 it opens the real window with mock data over a curated gradient backdrop, photographs
 each tour scene as a 16:10 still into build.noindex/tour-captures, and quits. This
 script then resizes every still to exactly 1320x824 and writes it into the tour

@@ -9,19 +9,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DAEMON_DIR=/tmp/orbit-demo-daemon
-UI_DIR=/tmp/orbit-demo-ui
+DAEMON_DIR=/tmp/ensembyte-demo-daemon
+UI_DIR=/tmp/ensembyte-demo-ui
 IPC=27921
 DELAY=""
 [[ "${1:-}" == "--slow" ]] && DELAY=350
 
 echo "▸ building (first run takes a few minutes)…"
-cargo build -p orbit -q
+cargo build -p ensembyte -q
 
 echo "▸ starting engine daemon on :$IPC"
-env ORBIT_DATA_DIR="$DAEMON_DIR" ORBIT_IPC_PORT=$IPC ORBIT_HARNESS=mock \
-  ${DELAY:+ORBIT_MOCK_DELAY_MS=$DELAY} RUST_LOG=warn \
-  ./target/debug/orbit headless &
+env ENSEMBYTE_DATA_DIR="$DAEMON_DIR" ENSEMBYTE_IPC_PORT=$IPC ENSEMBYTE_HARNESS=mock \
+  ${DELAY:+ENSEMBYTE_MOCK_DELAY_MS=$DELAY} RUST_LOG=warn \
+  ./target/debug/ensembyte headless &
 DAEMON_PID=$!
 trap 'kill $DAEMON_PID 2>/dev/null || true' EXIT
 for _ in $(seq 1 40); do
@@ -36,7 +36,7 @@ if [[ ! -f "$DAEMON_DIR/.demo-seeded" ]]; then
   DEV=$(probe LocalDevice '{}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["deviceId"])')
   # One space per demo folder, created up-front (chats join by space id).
   declare -A SPACES=()
-  for project in orbit soccertcg orbit aether; do
+  for project in ensembyte soccertcg ensembyte aether; do
     sid=$(uuidgen | tr 'A-Z' 'a-z')
     probe Mutate "{\"op\":\"createSpace\",\"spaceId\":\"$sid\",\"deviceId\":\"$DEV\",\"path\":\"$HOME/github/$project\"}" >/dev/null
     SPACES[$project]="$sid"
@@ -53,13 +53,13 @@ if [[ ! -f "$DAEMON_DIR/.demo-seeded" ]]; then
     fi
     probe Mutate "{\"op\":\"setChatActivity\",\"chatId\":\"$id\",\"lastMessageAt\":$(( ($(date +%s) - $4*3600) * 1000 ))}" >/dev/null
   }
-  seed "Native Orbit Rust Rewrite"    orbit orbit/main                 0  run
-  seed "Rebalance Player Stats Caps"  soccertcg    orbit/rebalance-player-stat-caps  2  run
-  seed "Craft Premium TCG Experience" soccertcg    orbit/craft-premium-tcg-exp       26 skip
-  seed "Initial Context Exploration"  orbit        orbit/initial-context-exploration 14 skip
-  seed "Soccer TCG Repo Creation"     aether       aether/main                       48 skip
+  seed "Native Ensembyte Rust Rewrite" ensembyte ensembyte/main            0  run
+  seed "Rebalance Player Stats Caps"   soccertcg ensembyte/rebalance-caps  2  run
+  seed "Craft Premium TCG Experience"  soccertcg ensembyte/craft-premium   26 skip
+  seed "Initial Context Exploration"   ensembyte ensembyte/initial-context 14 skip
+  seed "Soccer TCG Repo Creation"      aether    aether/main               48 skip
   touch "$DAEMON_DIR/.demo-seeded"
 fi
 
-echo "▸ opening orbit (composer is live — type into it; --slow shows streaming)"
-ORBIT_DATA_DIR="$UI_DIR" ORBIT_IPC_PORT=$IPC RUST_LOG=warn ./target/debug/orbit
+echo "▸ opening ensembyte (composer is live — type into it; --slow shows streaming)"
+ENSEMBYTE_DATA_DIR="$UI_DIR" ENSEMBYTE_IPC_PORT=$IPC RUST_LOG=warn ./target/debug/ensembyte

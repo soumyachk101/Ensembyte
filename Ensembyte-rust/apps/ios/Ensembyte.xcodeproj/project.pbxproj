@@ -7,32 +7,32 @@
 	objects = {
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A100000000000000000000E1 /* Exceptions for "Orbit" folder in "Orbit" target */ = {
+		A100000000000000000000E1 /* Exceptions for "Ensembyte" folder in "Ensembyte" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = A1000000000000000000T001 /* Orbit */;
+			target = A1000000000000000000T001 /* Ensembyte */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A1000000000000000000G001 /* Orbit */ = {
+		A1000000000000000000G001 /* Ensembyte */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A100000000000000000000E1 /* Exceptions for "Orbit" folder in "Orbit" target */,
+				A100000000000000000000E1 /* Exceptions for "Ensembyte" folder in "Ensembyte" target */,
 			);
-			path = Orbit;
+			path = Ensembyte;
 			sourceTree = "<group>";
 		};
-		A2000000000000000000G001 /* OrbitTests */ = {
+		A2000000000000000000G001 /* EnsembyteTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = OrbitTests;
+			path = EnsembyteTests;
 			sourceTree = "<group>";
 		};
-		A3000000000000000000G001 /* OrbitUITests */ = {
+		A3000000000000000000G001 /* EnsembyteUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = OrbitUITests;
+			path = EnsembyteUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -43,34 +43,34 @@
 			containerPortal = A1000000000000000000PJ01 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A1000000000000000000T001;
-			remoteInfo = Orbit;
+			remoteInfo = Ensembyte;
 		};
 		A3000000000000000000X001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A1000000000000000000PJ01 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A1000000000000000000T001;
-			remoteInfo = Orbit;
+			remoteInfo = Ensembyte;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
 		A2000000000000000000D001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A1000000000000000000T001 /* Orbit */;
+			target = A1000000000000000000T001 /* Ensembyte */;
 			targetProxy = A2000000000000000000X001 /* PBXContainerItemProxy */;
 		};
 		A3000000000000000000D001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A1000000000000000000T001 /* Orbit */;
+			target = A1000000000000000000T001 /* Ensembyte */;
 			targetProxy = A3000000000000000000X001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXFileReference section */
-		A1000000000000000000PR01 /* Orbit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Orbit.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A2000000000000000000PR01 /* OrbitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OrbitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		A3000000000000000000PR01 /* OrbitUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OrbitUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000PR01 /* Ensembyte.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ensembyte.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000000000000000000PR01 /* EnsembyteTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EnsembyteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A3000000000000000000PR01 /* EnsembyteUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EnsembyteUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,9 +87,9 @@
 		A1000000000000000000G000 = {
 			isa = PBXGroup;
 			children = (
-				A1000000000000000000G001 /* Orbit */,
-				A2000000000000000000G001 /* OrbitTests */,
-				A3000000000000000000G001 /* OrbitUITests */,
+				A1000000000000000000G001 /* Ensembyte */,
+				A2000000000000000000G001 /* EnsembyteTests */,
+				A3000000000000000000G001 /* EnsembyteUITests */,
 				A1000000000000000000G002 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -97,9 +97,9 @@
 		A1000000000000000000G002 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A1000000000000000000PR01 /* Orbit.app */,
-				A2000000000000000000PR01 /* OrbitTests.xctest */,
-				A3000000000000000000PR01 /* OrbitUITests.xctest */,
+				A1000000000000000000PR01 /* Ensembyte.app */,
+				A2000000000000000000PR01 /* EnsembyteTests.xctest */,
+				A3000000000000000000PR01 /* EnsembyteUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,9 +107,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A1000000000000000000T001 /* Orbit */ = {
+		A1000000000000000000T001 /* Ensembyte */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1000000000000000000C001 /* Build configuration list for PBXNativeTarget "Orbit" */;
+			buildConfigurationList = A1000000000000000000C001 /* Build configuration list for PBXNativeTarget "Ensembyte" */;
 			buildPhases = (
 				A1000000000000000000SH01 /* Rust core */,
 				A1000000000000000000S001 /* Sources */,
@@ -121,18 +121,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A1000000000000000000G001 /* Orbit */,
+				A1000000000000000000G001 /* Ensembyte */,
 			);
-			name = Orbit;
+			name = Ensembyte;
 			packageProductDependencies = (
 			);
-			productName = Orbit;
-			productReference = A1000000000000000000PR01 /* Orbit.app */;
+			productName = Ensembyte;
+			productReference = A1000000000000000000PR01 /* Ensembyte.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A2000000000000000000T001 /* OrbitTests */ = {
+		A2000000000000000000T001 /* EnsembyteTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A2000000000000000000C001 /* Build configuration list for PBXNativeTarget "OrbitTests" */;
+			buildConfigurationList = A2000000000000000000C001 /* Build configuration list for PBXNativeTarget "EnsembyteTests" */;
 			buildPhases = (
 				A2000000000000000000S001 /* Sources */,
 			);
@@ -142,18 +142,18 @@
 				A2000000000000000000D001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				A2000000000000000000G001 /* OrbitTests */,
+				A2000000000000000000G001 /* EnsembyteTests */,
 			);
-			name = OrbitTests;
+			name = EnsembyteTests;
 			packageProductDependencies = (
 			);
-			productName = OrbitTests;
-			productReference = A2000000000000000000PR01 /* OrbitTests.xctest */;
+			productName = EnsembyteTests;
+			productReference = A2000000000000000000PR01 /* EnsembyteTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		A3000000000000000000T001 /* OrbitUITests */ = {
+		A3000000000000000000T001 /* EnsembyteUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A3000000000000000000C001 /* Build configuration list for PBXNativeTarget "OrbitUITests" */;
+			buildConfigurationList = A3000000000000000000C001 /* Build configuration list for PBXNativeTarget "EnsembyteUITests" */;
 			buildPhases = (
 				A3000000000000000000S001 /* Sources */,
 			);
@@ -163,13 +163,13 @@
 				A3000000000000000000D001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				A3000000000000000000G001 /* OrbitUITests */,
+				A3000000000000000000G001 /* EnsembyteUITests */,
 			);
-			name = OrbitUITests;
+			name = EnsembyteUITests;
 			packageProductDependencies = (
 			);
-			productName = OrbitUITests;
-			productReference = A3000000000000000000PR01 /* OrbitUITests.xctest */;
+			productName = EnsembyteUITests;
+			productReference = A3000000000000000000PR01 /* EnsembyteUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -187,7 +187,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A1000000000000000000C000 /* Build configuration list for PBXProject "Orbit" */;
+			buildConfigurationList = A1000000000000000000C000 /* Build configuration list for PBXProject "Ensembyte" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -201,9 +201,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A1000000000000000000T001 /* Orbit */,
-				A2000000000000000000T001 /* OrbitTests */,
-				A3000000000000000000T001 /* OrbitUITests */,
+				A1000000000000000000T001 /* Ensembyte */,
+				A2000000000000000000T001 /* EnsembyteTests */,
+				A3000000000000000000T001 /* EnsembyteUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -336,18 +336,18 @@
 				"SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]" = "$(SRCROOT)/../../target/ios-core/iphonesimulator/include";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Orbit.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Ensembyte.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5XY3M483YQ;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Orbit/Info.plist;
+				INFOPLIST_FILE = Ensembyte/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.orbit.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = org.ensembyte.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = YES;
@@ -375,18 +375,18 @@
 				"SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]" = "$(SRCROOT)/../../target/ios-core/iphonesimulator/include";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Orbit.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Ensembyte.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5XY3M483YQ;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Orbit/Info.plist;
+				INFOPLIST_FILE = Ensembyte/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.orbit.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = org.ensembyte.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = YES;
@@ -406,13 +406,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.orbit.ios.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = org.ensembyte.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Orbit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Orbit";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ensembyte.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ensembyte";
 			};
 			name = Debug;
 		};
@@ -424,13 +424,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.orbit.ios.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = org.ensembyte.ios.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Orbit;
+				TEST_TARGET_NAME = Ensembyte;
 			};
 			name = Debug;
 		};
@@ -444,13 +444,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.orbit.ios.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = org.ensembyte.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Orbit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Orbit";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ensembyte.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ensembyte";
 			};
 			name = Release;
 		};
@@ -462,20 +462,20 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sh.orbit.ios.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = org.ensembyte.ios.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Orbit;
+				TEST_TARGET_NAME = Ensembyte;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A1000000000000000000C000 /* Build configuration list for PBXProject "Orbit" */ = {
+		A1000000000000000000C000 /* Build configuration list for PBXProject "Ensembyte" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000000000000000000BC01 /* Debug */,
@@ -484,7 +484,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1000000000000000000C001 /* Build configuration list for PBXNativeTarget "Orbit" */ = {
+		A1000000000000000000C001 /* Build configuration list for PBXNativeTarget "Ensembyte" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000000000000000000BC03 /* Debug */,
@@ -493,7 +493,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A2000000000000000000C001 /* Build configuration list for PBXNativeTarget "OrbitTests" */ = {
+		A2000000000000000000C001 /* Build configuration list for PBXNativeTarget "EnsembyteTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A2000000000000000000BC03 /* Debug */,
@@ -502,7 +502,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A3000000000000000000C001 /* Build configuration list for PBXNativeTarget "OrbitUITests" */ = {
+		A3000000000000000000C001 /* Build configuration list for PBXNativeTarget "EnsembyteUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A3000000000000000000BC03 /* Debug */,

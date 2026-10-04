@@ -297,7 +297,7 @@ impl Element for LinkRanges {
                 let pending = state.menu_focus_pending.clone();
                 let initial_focus = state.menu_focus[0].clone();
                 // A resolved file link swaps the web actions for rows about
-                // the file itself: "Open in Orbit" opens it in the file
+                // the file itself: "Open in Ensembyte" opens it in the file
                 // viewer, and the system-level rows mount only when the
                 // owning root lives on this device. The tab cycle visits
                 // only mounted rows.
@@ -424,7 +424,7 @@ impl Element for LinkRanges {
                 };
                 card = card.child(action_row(
                     LinkAction::Internal,
-                    "Open in Orbit",
+                    "Open in Ensembyte",
                     if file_resolved {
                         icons::DOCUMENT
                     } else {
@@ -495,7 +495,7 @@ impl Element for LinkRanges {
                             false,
                             format!("{}-link-{index}-default-destination", self.id),
                         )
-                        .id("Open links in Orbit")
+                        .id("Open links in Ensembyte")
                         .debug_selector(|| "link-menu-default-destination".into())
                         .child(div().w(px(16.)).flex_none().when(open_in_orbit, |el| {
                             el.child(
@@ -504,13 +504,13 @@ impl Element for LinkRanges {
                                     .text_color(theme.text_muted),
                             )
                         }))
-                        .child("Open links in Orbit")
+                        .child("Open links in Ensembyte")
                         .track_focus(&state.menu_focus[6])
                         .role(Role::Button)
                         .aria_label(if open_in_orbit {
-                            "Open links in Orbit, checked"
+                            "Open links in Ensembyte, checked"
                         } else {
-                            "Open links in Orbit, unchecked"
+                            "Open links in Ensembyte, unchecked"
                         })
                         .focus_visible(|s| s.bg(crate::theme::card_selected_bg()))
                         .on_click(move |_, window, cx| {
@@ -1266,7 +1266,7 @@ mod rendered_tests {
             Some("/repo dir/src/lib.rs")
         );
 
-        // "Open in Orbit" is live for a file link and hands it to the
+        // "Open in Ensembyte" is live for a file link and hands it to the
         // owning surface as an internal open.
         cx.simulate_mouse_down(position, MouseButton::Right, gpui::Modifiers::default());
         cx.simulate_mouse_up(position, MouseButton::Right, gpui::Modifiers::default());
@@ -1279,7 +1279,7 @@ mod rendered_tests {
     }
 
     /// An absolute destination no root owns is still a file: its menu keeps
-    /// "Open in Orbit" and, when the linking chat is on this device, the
+    /// "Open in Ensembyte" and, when the linking chat is on this device, the
     /// system-level rows that act on the absolute path.
     #[cfg(unix)]
     #[gpui::test]

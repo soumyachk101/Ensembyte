@@ -1,6 +1,6 @@
 # Install, inspect, and uninstall the packaged per-user installer
-# (dist/windows/orbit.iss) silently. Registers and removes the real per-user
-# uninstall entry and orbit:// handler, so it refuses to run outside CI unless
+# (dist/windows/ensembyte.iss) silently. Registers and removes the real per-user
+# uninstall entry and ensembyte:// handler, so it refuses to run outside CI unless
 # -Force is given.
 param(
     [string]$Setup,
@@ -8,22 +8,22 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $env:CI -and -not $Force) {
-    throw 'This test installs and uninstalls Orbit for the current user; pass -Force to run it outside CI'
+    throw 'This test installs and uninstalls Ensembyte for the current user; pass -Force to run it outside CI'
 }
 if (-not $Setup) {
-    $Setup = Get-ChildItem (Join-Path $PSScriptRoot '../target/package') -Filter 'orbit-*-windows-*-setup.exe' |
+    $Setup = Get-ChildItem (Join-Path $PSScriptRoot '../target/package') -Filter 'ensembyte-*-windows-*-setup.exe' |
         Select-Object -First 1 -ExpandProperty FullName
 }
-if (-not $Setup) { throw 'No orbit-*-setup.exe under target/package' }
+if (-not $Setup) { throw 'No ensembyte-*-setup.exe under target/package' }
 $Setup = (Resolve-Path -LiteralPath $Setup).Path
-$match = [regex]::Match((Split-Path $Setup -Leaf), '\Aorbit-(\d+\.\d+\.\d+)-windows-[a-z0-9_]+-setup\.exe\z')
+$match = [regex]::Match((Split-Path $Setup -Leaf), '\Aensembyte-(\d+\.\d+\.\d+)-windows-[a-z0-9_]+-setup\.exe\z')
 if (-not $match.Success) { throw "Unexpected installer name: $Setup" }
 $version = $match.Groups[1].Value
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AD5DEC34-E254-467B-8F24-8127EBAF4DA6}_is1'
-$protocolKey = 'HKCU:\Software\Classes\orbit'
-$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Orbit.lnk'
+$protocolKey = 'HKCU:\Software\Classes\ensembyte'
+$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Ensembyte.lnk'
 $root = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-$dir = Join-Path $root "orbit installer test $([guid]::NewGuid().ToString('N'))"
+$dir = Join-Path $root "ensembyte installer test $([guid]::NewGuid().ToString('N'))"
 
 function Invoke-Checked([string]$File, [string[]]$Arguments, [string]$What) {
     $process = Start-Process -FilePath $File -ArgumentList $Arguments -Wait -PassThru
@@ -38,16 +38,16 @@ function Wait-Until([scriptblock]$Condition, [string]$What) {
     }
 }
 
-$log = Join-Path $root 'orbit-setup.log'
+$log = Join-Path $root 'ensembyte-setup.log'
 Invoke-Checked $Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$dir`"", "/LOG=`"$log`"") 'Setup'
-$exe = Join-Path $dir 'orbit.exe'
-foreach ($file in @('orbit.exe', 'orbit-update.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/fonts', 'unins000.exe')) {
+$exe = Join-Path $dir 'ensembyte.exe'
+foreach ($file in @('ensembyte.exe', 'ensembyte-update.json', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/fonts', 'unins000.exe')) {
     if (-not (Test-Path -LiteralPath (Join-Path $dir $file))) { throw "Installed file missing: $file" }
 }
 Write-Output 'PASS: installed files'
 
 # The update marker makes the in-app updater manage this install.
-$config = Get-Content -Raw -LiteralPath (Join-Path $dir 'orbit-update.json') | ConvertFrom-Json
+$config = Get-Content -Raw -LiteralPath (Join-Path $dir 'ensembyte-update.json') | ConvertFrom-Json
 if (-not $config.releases_url.StartsWith('https://')) { throw "Unexpected update feed: $($config.releases_url)" }
 Write-Output 'PASS: update-managed install'
 
@@ -63,35 +63,35 @@ try {
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $null = $process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit(10000)) { $process.Kill(); throw 'Installed version probe timed out' }
-    if ($process.ExitCode -ne 0 -or $stdout.Result.Trim() -ne "orbit $version") {
-        throw "Installed executable reports '$($stdout.Result.Trim())', expected 'orbit $version'"
+    if ($process.ExitCode -ne 0 -or $stdout.Result.Trim() -ne "ensembyte $version") {
+        throw "Installed executable reports '$($stdout.Result.Trim())', expected 'ensembyte $version'"
     }
 } finally { $process.Dispose() }
 Write-Output "PASS: installed executable is $version"
 
 $entry = Get-ItemProperty -LiteralPath $uninstallKey
 if ($entry.DisplayVersion -ne $version) { throw "DisplayVersion is '$($entry.DisplayVersion)', expected '$version'" }
-if ($entry.DisplayName -ne 'Orbit') { throw "DisplayName is '$($entry.DisplayName)'" }
+if ($entry.DisplayName -ne 'Ensembyte') { throw "DisplayName is '$($entry.DisplayName)'" }
 $installed = [IO.Path]::GetFullPath($entry.InstallLocation).TrimEnd('\')
 if ($installed -ne [IO.Path]::GetFullPath($dir).TrimEnd('\')) { throw "InstallLocation is '$installed'" }
 $command = (Get-ItemProperty -LiteralPath "$protocolKey\shell\open\command").'(default)'
-if ($command -ne "`"$exe`" `"%1`"") { throw "orbit:// handler is '$command'" }
+if ($command -ne "`"$exe`" `"%1`"") { throw "ensembyte:// handler is '$command'" }
 if (-not (Test-Path -LiteralPath $shortcut)) { throw "Start menu shortcut missing: $shortcut" }
-Write-Output 'PASS: uninstall entry, orbit:// handler, Start menu shortcut'
+Write-Output 'PASS: uninstall entry, ensembyte:// handler, Start menu shortcut'
 
 # Leftovers an in-app update can leave behind must go with the uninstall.
-Set-Content -LiteralPath (Join-Path $dir 'orbit.exe.old') -Value 'previous image'
-New-Item -ItemType Directory -Path (Join-Path $dir '.orbit-update-test') | Out-Null
-Set-Content -LiteralPath (Join-Path $dir '.orbit-update-test/orbit.exe') -Value 'staged'
+Set-Content -LiteralPath (Join-Path $dir 'ensembyte.exe.old') -Value 'previous image'
+New-Item -ItemType Directory -Path (Join-Path $dir '.ensembyte-update-test') | Out-Null
+Set-Content -LiteralPath (Join-Path $dir '.ensembyte-update-test/ensembyte.exe') -Value 'staged'
 
 # The uninstaller re-launches itself from a temporary copy and returns early;
 # wait for its effects rather than for the process.
 Invoke-Checked (Join-Path $dir 'unins000.exe') @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'Uninstall'
 Wait-Until { -not (Test-Path -LiteralPath $uninstallKey) } 'the uninstall entry to disappear'
-Wait-Until { -not (Test-Path -LiteralPath $exe) } 'orbit.exe to be removed'
-foreach ($leftover in @('orbit.exe.old', '.orbit-update-test', 'orbit-update.json', 'licenses')) {
+Wait-Until { -not (Test-Path -LiteralPath $exe) } 'ensembyte.exe to be removed'
+foreach ($leftover in @('ensembyte.exe.old', '.ensembyte-update-test', 'ensembyte-update.json', 'licenses')) {
     Wait-Until { -not (Test-Path -LiteralPath (Join-Path $dir $leftover)) } "$leftover to be removed"
 }
-if (Test-Path -LiteralPath $protocolKey) { throw 'orbit:// handler survived uninstall' }
+if (Test-Path -LiteralPath $protocolKey) { throw 'ensembyte:// handler survived uninstall' }
 if (Test-Path -LiteralPath $shortcut) { throw 'Start menu shortcut survived uninstall' }
 Write-Output 'PASS: uninstall removes the install, update leftovers, and registrations'

@@ -211,7 +211,7 @@ final class UpdateChecker {
 
     private func fetchReleases() async throws -> [GitHubRelease] {
         var request = URLRequest(url: Self.apiURL)
-        request.setValue("SwarmCode/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         if let token = GitHubAuth.resolveToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -243,7 +243,7 @@ final class UpdateChecker {
 
     private func fetchLatestRelease() async throws -> GitHubRelease {
         var request = URLRequest(url: Self.latestAPIURL)
-        request.setValue("SwarmCode/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         if let token = GitHubAuth.resolveToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -287,7 +287,7 @@ final class UpdateChecker {
     private func downloadSize(of url: URL) async -> Int64? {
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
-        request.setValue("SwarmCode/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         if let token = GitHubAuth.resolveToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

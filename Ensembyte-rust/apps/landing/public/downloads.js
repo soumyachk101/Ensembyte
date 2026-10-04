@@ -103,7 +103,7 @@
 
   // Set direct downloads immediately so clicking always triggers file download
   applyLinks({
-    version: "1.1.2",
+    version: "1.0.0",
     macUrl: MAC_DIRECT,
     winUrl: WIN_DIRECT,
     linuxUrl: LINUX_DIRECT,
@@ -115,11 +115,11 @@
     .then((r) => r.ok ? r.json() : Promise.reject())
     .then((release) => {
       if (!release || !Array.isArray(release.assets)) return;
-      const tag = release.tag_name || "1.1.2";
+      const tag = release.tag_name || "1.0.0";
       const cleanVer = tag.replace(/^v/, "");
       const assets = release.assets;
 
-      const macAsset = assets.find((a) => a.name === "Orbit.dmg")
+      const macAsset = assets.find((a) => a.name === "Ensembyte.dmg")
         || assets.find((a) => a.name.toLowerCase().endsWith(".dmg"));
       const winAsset = assets.find((a) => a.name.toLowerCase().endsWith(".exe"))
         || assets.find((a) => a.name.toLowerCase().includes("windows") && a.name.toLowerCase().endsWith(".zip"));
@@ -129,9 +129,9 @@
       applyLinks({
         version: tag,
         macUrl: macAsset ? macAsset.browser_download_url : MAC_DIRECT,
-        winUrl: winAsset ? winAsset.browser_download_url : `${LATEST_DOWNLOAD}orbit-${cleanVer}-windows-x86_64.exe`,
-        linuxUrl: linuxAsset ? linuxAsset.browser_download_url : `${LATEST_DOWNLOAD}orbit-${cleanVer}-linux-x86_64.tar.gz`,
-        linuxArmUrl: linuxArmAsset ? linuxArmAsset.browser_download_url : `${LATEST_DOWNLOAD}orbit-${cleanVer}-linux-aarch64.tar.gz`,
+        winUrl: winAsset ? winAsset.browser_download_url : `${LATEST_DOWNLOAD}ensembyte-${cleanVer}-windows-x86_64-setup.exe`,
+        linuxUrl: linuxAsset ? linuxAsset.browser_download_url : `${LATEST_DOWNLOAD}ensembyte-${cleanVer}-linux-x86_64.tar.gz`,
+        linuxArmUrl: linuxArmAsset ? linuxArmAsset.browser_download_url : `${LATEST_DOWNLOAD}ensembyte-${cleanVer}-linux-aarch64.tar.gz`,
       });
     })
     .catch(() => {});

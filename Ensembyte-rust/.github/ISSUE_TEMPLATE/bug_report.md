@@ -27,7 +27,7 @@ assignees: ''
 ## Environment
 
 - **OS:** (e.g., macOS 14.5, Windows 11, Ubuntu 24.04)
-- **Orbit version:** (e.g., v1.2.0)
+- **Ensembyte version:** (e.g., v1.2.0)
 - **Architecture:** (e.g., arm64, x86_64)
 - **Installation method:** (e.g., installer, Homebrew, source build)
 

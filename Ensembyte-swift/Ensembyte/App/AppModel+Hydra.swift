@@ -1037,7 +1037,7 @@ extension AppModel {
 
     /// Removes the folders in the worktrees root that were made for heads of `projects`
     /// and that no thread names. Only a head's copy goes: its folder is named for its
-    /// project, its persona and its thread ("swarmcode-gus-daa2ebed", see
+    /// project, its persona and its thread ("ensembyte-gus-daa2ebed", see
     /// `makeHydraCopy`), and nothing else in that root matches. A chat's own worktree
     /// (kept on purpose when the chat was deleted) and folders other tools made there are
     /// never touched, nor is a folder a thread names, nor one young enough to be a copy

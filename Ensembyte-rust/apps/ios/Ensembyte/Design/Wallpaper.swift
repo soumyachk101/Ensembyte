@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// effect, stored locally. Effects and the contrast guard run in the Rust core
 /// (`wallpaper.rs`) off the main thread; renders are cached per appearance.
 enum WallpaperStore {
-    static let didChange = Notification.Name("OrbitWallpaperChanged")
+    static let didChange = Notification.Name("EnsembyteWallpaperChanged")
 
     private static var directory: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("wallpaper", isDirectory: true)

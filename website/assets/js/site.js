@@ -1,8 +1,8 @@
 /*
-  Swarm Code marketing site, shared site script
-  =============================================
+  Ensembyte marketing site, shared site script
+  ============================================
 
-  Plain vanilla JS, no build step, for Swarm Code
+  Plain vanilla JS, no build step, for Ensembyte
   and trimmed to what this page uses:
 
     1. Staggered reveal-on-load and reveal-on-scroll for `.reveal`.

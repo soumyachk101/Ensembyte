@@ -349,7 +349,7 @@ impl Render for NotificationsPage {
                     .child(
                         toggle(
                             "notifications-background-toggle",
-                            "Only notify when Orbit is in the background",
+                            "Only notify when Ensembyte is in the background",
                             background_only,
                             desktop,
                         )

@@ -8,7 +8,7 @@ enum MCPTransport: Sendable, Hashable {
     case stdio(command: String, args: [String])
     /// A remote streamable-HTTP server. Header values may contain `{field}` placeholders.
     case http(url: String, headers: [String: String])
-    /// A remote server behind OAuth. Swarm Code signs the user in itself (`MCPOAuth`) and
+    /// A remote server behind OAuth. Ensembyte signs the user in itself (`MCPOAuth`) and
     /// every provider reaches the server through the app's local proxy (`MCPProxy`), which
     /// adds a fresh token to each request, so no token ever sits in a config file.
     case oauth(url: String)
@@ -60,7 +60,7 @@ enum MCPCategory: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-/// One of the servers Swarm Code knows how to connect: everything needed to show it, ask
+/// One of the servers Ensembyte knows how to connect: everything needed to show it, ask
 /// for its credentials, launch it and recognise its tool calls in a conversation.
 struct MCPCatalogEntry: Sendable, Hashable, Identifiable {
     /// The server's key in every provider's config, and so the server part of a tool call's

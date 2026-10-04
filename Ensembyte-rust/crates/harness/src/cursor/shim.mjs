@@ -110,7 +110,13 @@ const { Agent, Cursor, FileCredentialStore, JsonlLocalAgentStore } = sdk;
 // it. Agents created before this scheme have no marker and fall back to the
 // SDK default store, which is where they live.
 const STATE_BASE =
-  process.env.ORBIT_CURSOR_STATE_DIR || path.join(os.homedir(), ".orbit", "cursor-state");
+  process.env.ENSEMBYTE_CURSOR_STATE_DIR ||
+  process.env.ORBIT_CURSOR_STATE_DIR ||
+  (fs.existsSync(path.join(os.homedir(), ".ensembyte"))
+    ? path.join(os.homedir(), ".ensembyte", "cursor-state")
+    : (fs.existsSync(path.join(os.homedir(), ".orbit", "cursor-state"))
+        ? path.join(os.homedir(), ".orbit", "cursor-state")
+        : path.join(os.homedir(), ".ensembyte", "cursor-state")));
 
 function agentDirMarker(agentId) {
   return path.join(STATE_BASE, "by-agent", String(agentId));
@@ -184,7 +190,7 @@ async function recoverInterruptedRun(agentId) {
   if (interruptedRun && ["queued", "running"].includes(interruptedRun.status)) {
     await ownedStore.runs.update({run: {
       ...interruptedRun, status: "cancelled", endedAt: Date.now(), updatedAt: Date.now(),
-      error: "The previous Orbit process stopped before completing this turn.",
+      error: "The previous Ensembyte process stopped before completing this turn.",
     }});
   }
   // Preserve the newest available conversation checkpoint; never start a new
@@ -314,7 +320,7 @@ if (process.argv[2] === "login") {
       openBrowser: false,
       onLoginUrl: (url) => out({ ev: "auth-url", url }),
       store: new FileCredentialStore(storePath),
-      apiKeyName: `orbit — ${os.hostname()}`,
+      apiKeyName: `ensembyte — ${os.hostname()}`,
     });
     out({
       ev: "logged-in",

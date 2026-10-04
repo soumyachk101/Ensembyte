@@ -1055,7 +1055,7 @@ pub(crate) fn chat_title_editor(
 const SIDEBAR_GLASS_FADE_BAND: f32 = 24.0;
 
 /// Target of the sidebar's "Star on GitHub" banner (same as the landing page).
-const GITHUB_REPO_URL: &str = "https://github.com/soumyachk101/Ensembyte-rust";
+const GITHUB_REPO_URL: &str = "https://github.com/soumyachk101/Ensembyte";
 
 /// New-thread controls float over the tail of a top-anchored image hero. The
 /// hero reaches below the composer, giving its lower mask room to dissolve
@@ -2746,7 +2746,7 @@ impl Shell {
                 {
                     let body = match connectivity {
                         orbit_proto::ConnectivityState::Offline => "Your device is offline",
-                        _ => "Orbit is trying to reconnect",
+                        _ => "Ensembyte is trying to reconnect",
                     };
                     crate::notify::post("Connection unavailable", body, None);
                 }
@@ -4593,7 +4593,7 @@ impl Shell {
         };
         if let Some(link) = link {
             cx.write_to_clipboard(ClipboardItem::new_string(link));
-            self.sidebar_notice = Some("Orbit conversation link copied".into());
+            self.sidebar_notice = Some("Ensembyte conversation link copied".into());
         } else {
             self.sidebar_notice = Some("Conversation link is not ready yet".into());
         }
@@ -6019,7 +6019,7 @@ impl Shell {
                     },
                     Err(err) => {
                         shell.runtime_change_error = Some(format!(
-                            "Could not stop the remote engine: {err}. Run `orbit daemon stop`, then quit and reopen Orbit."
+                            "Could not stop the remote engine: {err}. Run `ensembyte daemon stop`, then quit and reopen Ensembyte."
                         ).into());
                         cx.notify();
                     }
@@ -8617,7 +8617,7 @@ impl Shell {
             match update.prompt()? {
                 Prompt::Checking => (
                     "Checking for updates…".into(),
-                    format!("You're on Orbit {current}.").into(),
+                    format!("You're on Ensembyte {current}.").into(),
                     vec![UpdatePromptButton::Close("Cancel")],
                 ),
                 Prompt::CheckFailed(message) => (
@@ -8630,12 +8630,12 @@ impl Shell {
                 ),
                 Prompt::Result => match update.available() {
                     None => (
-                        "Orbit is up to date".into(),
+                        "Ensembyte is up to date".into(),
                         format!("Version {current} is the newest release.").into(),
                         vec![UpdatePromptButton::Close("OK")],
                     ),
                     Some(latest) => {
-                        let title: SharedString = format!("Orbit {latest} is available").into();
+                        let title: SharedString = format!("Ensembyte {latest} is available").into();
                         if let Some(blocker) = update.blocker() {
                             (
                                 title,
@@ -8662,8 +8662,8 @@ impl Shell {
                                     vec![UpdatePromptButton::Close("Hide")],
                                 ),
                                 Flow::Ready { version, .. } => (
-                                    format!("Orbit {version} is ready").into(),
-                                    "Restart to finish updating. If you don't, it installs the next time you quit Orbit."
+                                    format!("Ensembyte {version} is ready").into(),
+                                    "Restart to finish updating. If you don't, it installs the next time you quit Ensembyte."
                                         .into(),
                                     vec![
                                         UpdatePromptButton::Close("Later"),
@@ -8685,13 +8685,13 @@ impl Shell {
                         ) {
                             (
                                 title,
-                                "Run `orbit update` in a terminal to install it.".into(),
+                                "Run `ensembyte update` in a terminal to install it.".into(),
                                 vec![UpdatePromptButton::Close("OK")],
                             )
                         } else {
                             (
                                 title,
-                                "This copy of Orbit wasn't set up by an installer (for example, a source build), so it can't update itself."
+                                "This copy of Ensembyte wasn't set up by an installer (for example, a source build), so it can't update itself."
                                     .into(),
                                 vec![
                                     UpdatePromptButton::Close("Later"),
@@ -9064,7 +9064,7 @@ impl Shell {
         } else if remote_engine {
             "Stop daemon and quit"
         } else {
-            "Quit Orbit"
+            "Quit Ensembyte"
         };
 
         if self.sync_flow == SyncFlow::Enabling && needs_org {
@@ -9089,7 +9089,7 @@ impl Shell {
                 .child(
                     div().mt(px(6.0)).child(popover::dialog_body(
                         &theme,
-                        "Finish signing in in your browser. Orbit will keep using this local workspace until you quit and reopen.",
+                        "Finish signing in in your browser. Ensembyte will keep using this local workspace until you quit and reopen.",
                     )),
                 )
                 .child(
@@ -9133,14 +9133,14 @@ impl Shell {
                     )
                     .into(),
                     (Some(email), None) => format!(
-                        "You're signed in as {email}. Orbit can switch to your synced workspace now."
+                        "You're signed in as {email}. Ensembyte can switch to your synced workspace now."
                     )
                     .into(),
                     (None, Some(phrase)) => format!(
                         "Bring {phrase} from this device into your synced workspace, or start it fresh."
                     )
                     .into(),
-                    (None, None) => "Orbit can switch to your synced workspace now.".into(),
+                    (None, None) => "Ensembyte can switch to your synced workspace now.".into(),
                 };
                 let mut actions = div()
                     .mt(px(16.0))
@@ -9329,9 +9329,9 @@ impl Shell {
                     div().mt(px(6.0)).child(popover::dialog_body(
                         &theme,
                         if remote_engine {
-                            "Orbit is using a background daemon. Stop it and quit Orbit, then reopen to start the synced workspace. Existing local sessions stay on this device and will not be uploaded."
+                            "Ensembyte is using a background daemon. Stop it and quit Ensembyte, then reopen to start the synced workspace. Existing local sessions stay on this device and will not be uploaded."
                         } else {
-                            "Quit and reopen Orbit to start the synced workspace. Existing local sessions stay on this device and will not be uploaded."
+                            "Quit and reopen Ensembyte to start the synced workspace. Existing local sessions stay on this device and will not be uploaded."
                         },
                     )),
                 )
@@ -9376,7 +9376,7 @@ impl Shell {
                 .child(
                     div().mt(px(6.0)).child(popover::dialog_body(
                         &theme,
-                        "Orbit will remove your credentials, close the synced workspace, and continue in local mode.",
+                        "Ensembyte will remove your credentials, close the synced workspace, and continue in local mode.",
                     )),
                 )
                 .child(
@@ -9764,7 +9764,7 @@ impl Shell {
                                     .size(px(16.0))
                                     .text_color(theme.text_muted),
                             )
-                            .child(SharedString::from("Orbit conversation link")),
+                            .child(SharedString::from("Ensembyte conversation link")),
                     )
                     .when_some(harness_link, |menu, link| {
                         menu.child(
@@ -11036,7 +11036,7 @@ impl Shell {
                     .line_height(px(19.0))
                     .text_color(theme.text_muted)
                     .child(SharedString::from(
-                        "Orbit removed your credentials but could not finish closing the previous synced workspace. Retry before continuing in local mode.",
+                        "Ensembyte removed your credentials but could not finish closing the previous synced workspace. Retry before continuing in local mode.",
                     )),
             )
             .when_some(self.runtime_change_error.clone(), |card, error| {
@@ -11751,7 +11751,7 @@ impl Shell {
                         .text_size(crate::typography::ui_rems(18.0))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text)
-                        .child(SharedString::from("Log in to Orbit")),
+                        .child(SharedString::from("Log in to Ensembyte")),
                 )
                 .child(
                     div()
@@ -11906,11 +11906,11 @@ impl Shell {
         // then existing memberships and the account escape hatch.
         let blurb: SharedString = match email {
             Some(email) => format!(
-                "Orbit is organized around workspaces — create one for yourself or your team. Signed in as {email}."
+                "Ensembyte is organized around workspaces — create one for yourself or your team. Signed in as {email}."
             )
             .into(),
             None => {
-                "Orbit is organized around workspaces — create one for yourself or your team."
+                "Ensembyte is organized around workspaces — create one for yourself or your team."
                     .into()
             }
         };

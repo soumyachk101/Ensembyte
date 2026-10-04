@@ -16,4 +16,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-agent harness support and local-first session store.
 - Model Context Protocol (MCP) server integration.
 
-[1.0.0]: https://github.com/soumyachk101/Ensembyte-rust/releases/tag/v1.0.0
+[1.0.0]: https://github.com/soumyachk101/Ensembyte/releases/tag/v1.0.0

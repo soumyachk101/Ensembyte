@@ -1,7 +1,7 @@
-/* Word-lighting and media handoff for Swarm Code wordscroll.
+/* Word-lighting and media handoff for Ensembyte wordscroll.
    Same pin, same thresholds, same responsive behavior; only the palette
    changed: the slab is the site's deepest ink and every glow is the blue
-   of the Swarm Code icon. The static base is readable without JavaScript;
+   of the Ensembyte icon. The static base is readable without JavaScript;
    .ws-ready opts a section into the scroll-scrubbed treatment. */
 .wordscroll {
   position: relative;

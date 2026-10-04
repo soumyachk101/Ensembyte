@@ -404,7 +404,7 @@ pub(super) fn open(
     for (key, value) in [
         ("TERM", "xterm-256color"),
         ("COLORTERM", "truecolor"),
-        ("TERM_PROGRAM", "Orbit"),
+        ("TERM_PROGRAM", "Ensembyte"),
     ] {
         environment.insert(env_key(OsStr::new(key)), (key.into(), value.into()));
     }

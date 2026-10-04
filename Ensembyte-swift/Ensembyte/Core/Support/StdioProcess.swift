@@ -17,7 +17,7 @@ final class StdioProcess: @unchecked Sendable {
     private let stdin = Pipe()
     private let stdout = Pipe()
     private let stderr = Pipe()
-    private let writeQueue = DispatchQueue(label: "swarmcode.stdio.write")
+    private let writeQueue = DispatchQueue(label: "ensembyte.stdio.write")
     private let lock = NSLock()
     private var framer: StdioFramer
     private var errorBuffer = Data()

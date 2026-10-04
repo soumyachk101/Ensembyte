@@ -4,7 +4,7 @@ import Foundation
 /// protocol its SDK speaks.
 ///
 /// One `copilot --headless --stdio` process per thread, `Content-Length` framed.
-/// Sessions are created under Swarm Code's own id and resumed by it, so a
+/// Sessions are created under Ensembyte's own id and resumed by it, so a
 /// thread's conversation survives relaunches in `~/.copilot/session-state`.
 /// Turns arrive as `session.event` notifications. Permission prompts come as
 /// `permission.requested` events and are answered over
@@ -68,7 +68,7 @@ final class CopilotSession: ProviderSession {
     /// named by what it was sent to do.
     private var taskBriefs: [String: (description: String, prompt: String?)] = [:]
 
-    /// Commands Swarm Code answers with its own controls: permission modes, the model
+    /// Commands Ensembyte answers with its own controls: permission modes, the model
     /// picker, plan mode, the session list and the working directory.
     private static let ownCommands: Set<String> = ["allow-all", "yolo", "permissions", "model", "models", "plan", "session", "sessions", "cwd", "cd"]
 
@@ -248,7 +248,7 @@ final class CopilotSession: ProviderSession {
     }
 
     /// Drops the most recent turns from Copilot's own history. Files stay as they
-    /// are: Swarm Code restores those from its checkpoints.
+    /// are: Ensembyte restores those from its checkpoints.
     func rollback(turns: Int) async throws {
         guard let connection, let sessionID, turns > 0 else { return }
         let listed = try await connection.request("session.history.listRewindPoints", ["sessionId": .string(sessionID)])

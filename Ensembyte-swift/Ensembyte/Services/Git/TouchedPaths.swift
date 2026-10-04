@@ -30,7 +30,7 @@ enum TouchedPaths {
 
     /// Whether a repository-relative path is build output or a tool cache that no one
     /// wants landed or merged, even where the project's .gitignore missed it: a head's
-    /// build once left 2,700 compiler cache records under `SwarmCode.xcodeproj/-Xcc`
+    /// build once left 2,700 compiler cache records under `Ensembyte.xcodeproj/-Xcc`
     /// in its copy, and every one rode along into the lead's checkout and the merge.
     /// Only names that are unmistakably caches count; a source folder called `build`
     /// or `dist` stays the project's business. `.commandcode` is the folder Command Code

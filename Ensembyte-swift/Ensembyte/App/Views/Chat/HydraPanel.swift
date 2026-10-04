@@ -439,7 +439,7 @@ private struct HydraHeadTranscript: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if head.hydra?.kind == .swarm {
-                // A child Swarm Code runs itself can be steered and answered like any chat.
+                // A child Ensembyte runs itself can be steered and answered like any chat.
                 ComposerArea(runtime: runtime, workingDirectory: workingDirectory, compactModelChip: true, takesFocusOnAppear: false, showsChanges: false)
                     .overlay(alignment: .top) {
                         JumpToLatestButton(scrollState: scrollState)

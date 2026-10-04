@@ -8,14 +8,14 @@ import os
 /// sees a process that was killed rather than crashed. So the app watches itself. A thread
 /// of its own pings the main thread twice a second; when a ping goes unanswered for
 /// `stallThreshold`, it runs `sample` on the process and writes every thread's stack to
-/// `~/Library/Logs/Swarm Code/hang-<date>.txt`. `sample` reads the stacks from outside,
+/// `~/Library/Logs/Ensembyte/hang-<date>.txt`. `sample` reads the stacks from outside,
 /// so a main thread stuck in a loop or a lock is exactly what it captures. One report per
 /// stall; the next stall gets one of its own.
 ///
 /// This costs a timer on a background thread and a block on the main queue every half
 /// second, nothing more, so it stays on in every build.
 enum HangWatchdog {
-    private static let log = Logger(subsystem: "iordv.swarmcode", category: "hang")
+    private static let log = Logger(subsystem: "org.ensembyte.desktop", category: "hang")
 
     /// How long the main thread may go without answering before it counts as stuck. Long
     /// enough that a heavy but finite piece of work (a big diff, a slow layout pass) does

@@ -39,7 +39,7 @@ final class SignInViewController: UIViewController, ASWebAuthenticationPresentat
         let mark = UIImageView(image: UIImage(systemName: "sparkle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 44, weight: .light)))
         mark.tintColor = Palette.text
         let title = UILabel()
-        title.text = "Orbit"
+        title.text = "Ensembyte"
         title.font = Fonts.ui(.sansSemibold, 34)
         title.textColor = Palette.text
         let tagline = UILabel()

@@ -1,9 +1,9 @@
 /*
-  Swarm Code changelog page
+  Ensembyte changelog page
   =====================================================================
-  Faithful port of Swarm Code's inline changelog <style> block, re-tokened for
+  Faithful port of Ensembyte's inline changelog <style> block, re-tokened for
   this site's dark palette. Geometry, spacing, type sizes and animations
-  are Swarm Code's; only colours are mapped (light card fills to the dark
+  are Ensembyte's; only colours are mapped (light card fills to the dark
   wells, ink text to the dark text tokens, invisible borders and shadows
   to this site's flat tokens).
 
@@ -210,7 +210,7 @@
 }
 
 /* The glyph is sized and tinted once: a droplet on the same 11px
-   silhouette slot Swarm Code's moon and flask use. */
+   silhouette slot Ensembyte's moon and flask use. */
 .changelog-entry__channel-glyph {
   display: block;
   width: 11px;
@@ -343,7 +343,7 @@
   opacity: 1;
 }
 
-/* The icon's single face: the Swarm Code artwork. It cross-dissolves
+/* The icon's single face: the Ensembyte artwork. It cross-dissolves
    with a little scale and blur on hand-off between entries, so the icon
    reads as gliding down the page rather than being swapped. Reduced
    motion keeps the dissolve and drops the movement. */
@@ -501,7 +501,7 @@
   }
 }
 
-/* Soft halo that follows the hero letterforms. Swarm Code's is paper-coloured
+/* Soft halo that follows the hero letterforms. Ensembyte's is paper-coloured
    for its light art; here it is canvas-coloured for the dark page. One
    class on the copy group covers kicker, title and subtitle at once. */
 .scrub-frost {

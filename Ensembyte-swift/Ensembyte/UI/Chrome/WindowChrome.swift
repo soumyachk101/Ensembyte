@@ -99,8 +99,8 @@ final class WindowChromeProbeView: NSView {
 
 @MainActor
 enum WindowChrome {
-    private static let leadingIdentifier = "swarmcode.trafficLight.leading"
-    private static let topIdentifier = "swarmcode.trafficLight.top"
+    private static let leadingIdentifier = "ensembyte.trafficLight.leading"
+    private static let topIdentifier = "ensembyte.trafficLight.top"
     /// Windows `configure` has already set up. Weak, so a closed window drops out on its own.
     private static let configuredWindows = NSHashTable<NSWindow>.weakObjects()
 

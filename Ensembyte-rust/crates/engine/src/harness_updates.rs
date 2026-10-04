@@ -318,7 +318,7 @@ fn manual_update_command(harness: HarnessId, executable: &Path, can_apply: bool)
     if harness == HarnessId::Antigravity
         && orbit_harness::acp::is_managed_antigravity_server(executable)
     {
-        return Some("Update Orbit to install this release".into());
+        return Some("Update Ensembyte to install this release".into());
     }
     Some(
         claude_package_manager_command_for(harness, executable)
@@ -464,7 +464,7 @@ impl HarnessUpdateCoordinator {
                 worker: Mutex::new(None),
                 antigravity_release: Mutex::new(None),
                 client: reqwest::Client::builder()
-                    .user_agent(concat!("orbit/", env!("CARGO_PKG_VERSION")))
+                    .user_agent(concat!("ensembyte/", env!("CARGO_PKG_VERSION")))
                     .timeout(COMMAND_TIMEOUT)
                     .build()
                     .unwrap_or_default(),

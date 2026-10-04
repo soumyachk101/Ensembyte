@@ -8,7 +8,7 @@ import Foundation
 /// session, and every later turn resumes it with `--resume`, so a thread's conversation
 /// survives relaunches in `~/.commandcode/projects`.
 ///
-/// Headless runs cannot prompt, so the CLI is given `--yolo` and Swarm Code gates the
+/// Headless runs cannot prompt, so the CLI is given `--yolo` and Ensembyte gates the
 /// tools itself through a session mod (`CommandCodeAPI.approvalMod`, loaded with `--mod`):
 /// every tool that could change something lands as a request file in the run's approval
 /// directory, the app answers with a reply file, and the mod blocks the call or lets it
@@ -167,14 +167,18 @@ final class CommandCodeSession: ProviderSession {
 
         var environment = configuration.environment
         if runtimeMode != .fullAccess, let approvalDirectory {
+            environment["ENSEMBYTE_APPROVALS"] = approvalDirectory.path
             environment["SWARM_CODE_APPROVALS"] = approvalDirectory.path
         } else {
+            environment["ENSEMBYTE_APPROVALS"] = nil
             environment["SWARM_CODE_APPROVALS"] = nil
         }
         if let bridge = try? MCPBridge.installBridge() {
+            environment["ENSEMBYTE_MCP_BRIDGE"] = bridge.path
             environment["SWARM_CODE_MCP_BRIDGE"] = bridge.path
         }
         if FileManager.default.fileExists(atPath: MCPPaths.claudeConfigURL.path) {
+            environment["ENSEMBYTE_MCP_CONFIG"] = MCPPaths.claudeConfigURL.path
             environment["SWARM_CODE_MCP_CONFIG"] = MCPPaths.claudeConfigURL.path
         }
 

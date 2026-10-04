@@ -2224,7 +2224,7 @@ impl FilesSurface {
                                 if confirming_reload {
                                     "Discard unsaved changes?"
                                 } else {
-                                    "This file changed outside Orbit."
+                                    "This file changed outside Ensembyte."
                                 },
                             ))
                             .child(

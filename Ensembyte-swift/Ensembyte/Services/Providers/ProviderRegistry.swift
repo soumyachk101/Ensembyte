@@ -470,7 +470,7 @@ final class ProviderRegistry {
     // MARK: - Keeping the CLIs current
 
     /// Claude Code and Codex update themselves only inside their own interactive
-    /// sessions. Swarm Code runs both headless, so a Mac that uses them only through the
+    /// sessions. Ensembyte runs both headless, so a Mac that uses them only through the
     /// app stays on the version it was installed with, and a new model then fails
     /// outright: Opus 5.5 answers Claude Code 2.1.270 with "does not support this model;
     /// version 2.1.280 or newer is required". The app runs each CLI's own updater instead.

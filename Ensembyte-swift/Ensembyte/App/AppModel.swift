@@ -280,7 +280,7 @@ final class AppModel {
         if providers.status(.zai).isInstalled {
             await providers.loadCatalog(.zai)
         }
-        // The CLIs Swarm Code runs headless never update themselves, and a model newer
+        // The CLIs Ensembyte runs headless never update themselves, and a model newer
         // than the installed CLI fails outright. Their own updaters run here, in the
         // background, at most every twelve hours; a newer version reloads its catalog.
         Task { [providers] in
@@ -962,7 +962,7 @@ final class AppModel {
         threads.removeAll { $0.id == id }
         if let project = project(thread.projectID) {
             let git = Git(project.path)
-            // A head's copy of the checkout was Swarm Code's to make, so it always goes.
+            // A head's copy of the checkout was Ensembyte's to make, so it always goes.
             let worktree = removeWorktree || thread.hydra?.hasOwnCopy == true ? thread.worktreePath : nil
             Task {
                 await git.deleteCheckpoints(thread: id)
@@ -1352,7 +1352,7 @@ final class AppModel {
             NSApp.requestUserAttention(.criticalRequest)
         }
 
-        // 3. Modern macOS notification with Time-Sensitive interruption level and Swarm Code Logo
+        // 3. Modern macOS notification with Time-Sensitive interruption level and Ensembyte Logo
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

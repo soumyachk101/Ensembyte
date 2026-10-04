@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Builds Swarm Code's windows the way Swarm builds its settings window: a plain titled AppKit window
+/// Builds Ensembyte's windows the way the app builds its settings window: a plain titled AppKit window
 /// with a clear background and a SwiftUI glass pane, so no scene background draws a second corner.
 /// Every window is a `DCDisplayCycleGuardedWindow`: SwiftUI under a transparent title bar makes
 /// AppKit evaluate the view graph inside its own display cycle, and the guard is what keeps the
@@ -21,7 +21,8 @@ final class WindowManager {
         static let settings = NSSize(width: 780, height: 580)
     }
 
-    private static let mainFrameName = "SwarmCodeMainWindow"
+    private static let mainFrameName = "EnsembyteMainWindow"
+    private static let legacyMainFrameName = "SwarmCodeMainWindow"
 
     func showMain() {
         let window = mainWindow ?? makeMainWindow()
@@ -64,7 +65,7 @@ final class WindowManager {
         (window as? ThreadWindow)?.selectThread = { [weak model] offset in model?.selectThread(offset: offset) }
         (window as? ThreadWindow)?.selectThreadNumber = { [weak model] number in model?.selectThread(number: number) }
         window.contentMinSize = Size.mainMinimum
-        if !window.setFrameUsingName(Self.mainFrameName) {
+        if !window.setFrameUsingName(Self.mainFrameName) && !window.setFrameUsingName(Self.legacyMainFrameName) {
             window.center()
         }
         window.setFrameAutosaveName(Self.mainFrameName)

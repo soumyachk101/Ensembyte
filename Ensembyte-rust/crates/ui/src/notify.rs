@@ -24,19 +24,20 @@
 //! - failures are logged and swallowed — a missing notifier must never
 //!   bother the session flow.
 
-const DISABLE_ENV: &str = "ORBIT_DISABLE_NOTIFICATIONS";
+const DISABLE_ENV: &str = "ENSEMBYTE_DISABLE_NOTIFICATIONS";
+const LEGACY_DISABLE_ENV: &str = "ORBIT_DISABLE_NOTIFICATIONS";
 
 /// Reserved notification target routed to Settings → Agents rather than a
 /// conversation. Session ids are generated UUIDs, so this cannot collide
 /// with a real chat.
-pub(crate) const AGENT_UPDATES_TARGET: &str = "__orbit_agent_updates__";
+pub(crate) const AGENT_UPDATES_TARGET: &str = "__ensembyte_agent_updates__";
 
 /// Post a desktop banner, optionally linked to `chat_id`'s session. Call from the main thread
 /// (the macOS native path talks to AppKit); slow paths (spawning a CLI) hop to
 /// a background thread. Silently a no-op when disabled or no notifier is
 /// available.
 pub fn post(title: &str, body: &str, chat_id: Option<&str>) {
-    if std::env::var_os(DISABLE_ENV).is_some() {
+    if std::env::var_os(DISABLE_ENV).is_some() || std::env::var_os(LEGACY_DISABLE_ENV).is_some() {
         return;
     }
     post_impl(title, body, chat_id);
@@ -79,7 +80,7 @@ fn post_impl(title: &str, body: &str, chat_id: Option<&str>) {
 /// The identity banners are attributed to — the packaged app's bundle id
 /// (`dist/macos/Info.plist`), which the center resolves to its name + icon.
 #[cfg(target_os = "macos")]
-const MACOS_BUNDLE_ID: &std::ffi::CStr = c"sh.orbit.app";
+const MACOS_BUNDLE_ID: &std::ffi::CStr = c"org.ensembyte.desktop";
 
 /// `userInfo` key carrying the banner's chat id back to the click handler.
 #[cfg(target_os = "macos")]
@@ -212,8 +213,8 @@ mod delegate {
     pub(super) fn always_present() -> *mut Object {
         static DELEGATE: OnceLock<usize> = OnceLock::new();
         *DELEGATE.get_or_init(|| unsafe {
-            let mut decl = ClassDecl::new("OrbitNotifyDelegate", class!(NSObject))
-                .expect("OrbitNotifyDelegate registered twice");
+            let mut decl = ClassDecl::new("EnsembyteNotifyDelegate", class!(NSObject))
+                .expect("EnsembyteNotifyDelegate registered twice");
             decl.add_method(
                 sel!(userNotificationCenter:shouldPresentNotification:),
                 should_present as extern "C" fn(&Object, Sel, *mut Object, *mut Object) -> BOOL,
@@ -323,7 +324,7 @@ fn post_impl(title: &str, body: &str, _chat_id: Option<&str>) {
         // `--` ends option parsing: session titles are model-generated, so a
         // `-`-leading one must land as the summary, not as a flag.
         let result = std::process::Command::new("notify-send")
-            .args(["--app-name=Orbit", "--", &title, &body])
+            .args(["--app-name=Ensembyte", "--", &title, &body])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status();

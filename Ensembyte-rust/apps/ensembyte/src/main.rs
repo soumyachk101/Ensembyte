@@ -1,5 +1,5 @@
-//! orbit — headed by default; `orbit headless` runs the engine alone. Both start
-//! local-only without credentials. `orbit login` and `orbit logout` select the
+//! ensembyte — headed by default; `ensembyte headless` runs the engine alone. Both start
+//! local-only without credentials. `ensembyte login` and `ensembyte logout` select the
 //! profile used by the next engine start without mutating a live runtime.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
@@ -13,14 +13,14 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
-    name = "orbit",
+    name = "ensembyte",
     version,
     about = "Multi-device controller for coding agents"
 )]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
-    /// Open a Orbit conversation URL.
+    /// Open an Ensembyte conversation URL.
     #[arg(value_name = "URL")]
     open_url: Option<String>,
     #[cfg(windows)]
@@ -44,11 +44,11 @@ enum Command {
     #[cfg(target_os = "linux")]
     /// Trigger an Appshot in the running headed instance (desktop shortcut fallback).
     Appshot,
-    /// Serve the Orbit MCP (Model Context Protocol) server on stdin/stdout,
+    /// Serve the Ensembyte MCP (Model Context Protocol) server on stdin/stdout,
     /// proxying to the running engine's IPC. Agents use it to create, read,
     /// and message chats. Logs go to stderr; stdout is the protocol.
     Mcp,
-    /// Manage `orbit headless` as a background service (launchd / systemd --user).
+    /// Manage `ensembyte headless` as a background service (launchd / systemd --user).
     Daemon {
         #[command(subcommand)]
         command: DaemonCommand,
@@ -63,7 +63,7 @@ enum Command {
 
 #[derive(Subcommand)]
 enum DaemonCommand {
-    /// Install, enable, and start the service (captures ORBIT_* env).
+    /// Install, enable, and start the service (captures ENSEMBYTE_* / ORBIT_* env).
     Install,
     /// Stop and remove the service.
     Uninstall,
@@ -78,28 +78,29 @@ enum DaemonCommand {
 }
 
 /// Production edge (Cloudflare Worker + Durable Objects on the orbit.sh zone).
-/// `ORBIT_EDGE_URL` overrides (local dev / self-hosting).
+/// `ENSEMBYTE_EDGE_URL` / `ORBIT_EDGE_URL` overrides (local dev / self-hosting).
 const DEFAULT_EDGE_URL: &str = "https://edge.orbit.sh";
 
 /// Production WorkOS AuthKit client id — public knowledge (it appears in every
-/// authorize URL), so baking it in is safe. Overridden by `ORBIT_WORKOS_CLIENT_ID`;
-/// set it to the empty string — or set a dev bearer via `ORBIT_EDGE_TOKEN` — to
-/// force dev-mode auth instead.
+/// authorize URL), so baking it in is safe. Overridden by `ENSEMBYTE_WORKOS_CLIENT_ID` /
+/// `ORBIT_WORKOS_CLIENT_ID`; set it to the empty string — or set a dev bearer via
+/// `ENSEMBYTE_EDGE_TOKEN` / `ORBIT_EDGE_TOKEN` — to force dev-mode auth instead.
 const DEFAULT_WORKOS_CLIENT_ID: &str = "client_01KWD0EAKZKD50YCQJNYSRE4BY";
 
 fn edge_url_from_env() -> String {
-    std::env::var("ORBIT_EDGE_URL")
+    std::env::var("ENSEMBYTE_EDGE_URL")
+        .or_else(|_| std::env::var("ORBIT_EDGE_URL"))
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_EDGE_URL.into())
 }
 
 /// WorkOS client id resolution: explicit env wins (empty string = dev mode);
-/// otherwise a `ORBIT_EDGE_TOKEN` dev bearer keeps dev mode (smoke tests,
+/// otherwise a dev bearer keeps dev mode (smoke tests,
 /// local wrangler); otherwise the baked production client id makes optional
 /// sync available while a bare start remains local-only.
 fn workos_client_id_from_env(edge_token: &Option<String>) -> Option<String> {
-    match std::env::var("ORBIT_WORKOS_CLIENT_ID") {
+    match std::env::var("ENSEMBYTE_WORKOS_CLIENT_ID").or_else(|_| std::env::var("ORBIT_WORKOS_CLIENT_ID")) {
         Ok(v) if v.trim().is_empty() => None,
         Ok(v) => Some(v),
         Err(_) if edge_token.is_some() => None,
@@ -189,7 +190,7 @@ fn main() -> anyhow::Result<()> {
     {
         use tracing_subscriber::layer::SubscriberExt;
         use tracing_subscriber::util::SubscriberInitExt;
-        // `orbit mcp` owns stdout for the protocol: a single log line on it
+        // `ensembyte mcp` owns stdout for the protocol: a single log line on it
         // would corrupt the JSON-RPC stream, so its diagnostics go to stderr.
         if matches!(&cli.command, Some(Command::Mcp)) {
             tracing_subscriber::registry()
@@ -277,19 +278,24 @@ fn main() -> anyhow::Result<()> {
             DaemonCommand::Status => daemon::status(),
         },
         None => {
-            let edge_token = std::env::var("ORBIT_EDGE_TOKEN").ok();
-            // Headed: the UI probes ORBIT_IPC_PORT and connects to a running
+            let edge_token = std::env::var("ENSEMBYTE_EDGE_TOKEN")
+                .or_else(|_| std::env::var("ORBIT_EDGE_TOKEN"))
+                .ok();
+            // Headed: the UI probes ENSEMBYTE_IPC_PORT / ORBIT_IPC_PORT and connects to a running
             // daemon, or embeds the engine in-process (ARCHITECTURE §1).
             orbit_ui::run_app(orbit_ui::UiConfig {
                 data_dir: paths::data_dir(),
-                ipc_port: std::env::var("ORBIT_IPC_PORT")
+                ipc_port: std::env::var("ENSEMBYTE_IPC_PORT")
+                    .or_else(|_| std::env::var("ORBIT_IPC_PORT"))
                     .ok()
                     .and_then(|p| p.parse().ok())
                     .unwrap_or(27654),
                 edge_url: edge_url_from_env(),
                 workos_client_id: workos_client_id_from_env(&edge_token),
                 edge_token,
-                org_id: std::env::var("ORBIT_ORG_ID").ok(),
+                org_id: std::env::var("ENSEMBYTE_ORG_ID")
+                    .or_else(|_| std::env::var("ORBIT_ORG_ID"))
+                    .ok(),
                 default_harness: orbit_ui::HarnessId::ClaudeCode,
                 initial_url: cli.open_url,
             });
@@ -328,18 +334,23 @@ fn attach_parent_console() {
 /// operate on the exact session the daemon will load.
 fn engine_config_from_env() -> orbit_engine::EngineConfig {
     // Dev-mode bearer (no WorkOS): an explicit token enables sync.
-    let edge_token = std::env::var("ORBIT_EDGE_TOKEN").ok();
+    let edge_token = std::env::var("ENSEMBYTE_EDGE_TOKEN")
+        .or_else(|_| std::env::var("ORBIT_EDGE_TOKEN"))
+        .ok();
     orbit_engine::EngineConfig {
         data_dir: paths::data_dir(),
         edge_url: edge_url_from_env(),
-        ipc_port: std::env::var("ORBIT_IPC_PORT")
+        ipc_port: std::env::var("ENSEMBYTE_IPC_PORT")
+            .or_else(|_| std::env::var("ORBIT_IPC_PORT"))
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(27654),
         default_harness: harness_from_env(),
-        // WorkOS mode: the signed-in session's org wins; ORBIT_ORG_ID (dev
+        // WorkOS mode: the signed-in session's org wins; ENSEMBYTE_ORG_ID / ORBIT_ORG_ID (dev
         // default "dev-org") scopes the workspace room otherwise.
-        org_id: std::env::var("ORBIT_ORG_ID").ok(),
+        org_id: std::env::var("ENSEMBYTE_ORG_ID")
+            .or_else(|_| std::env::var("ORBIT_ORG_ID"))
+            .ok(),
         // Real auth against production by default; see
         // `workos_client_id_from_env` for the dev-mode escape hatches.
         workos_client_id: workos_client_id_from_env(&edge_token),
@@ -347,10 +358,14 @@ fn engine_config_from_env() -> orbit_engine::EngineConfig {
     }
 }
 
-/// `ORBIT_HARNESS` (kebab-case id) picks the default harness for chats without a
+/// `ENSEMBYTE_HARNESS` / `ORBIT_HARNESS` (kebab-case id) picks the default harness for chats without a
 /// config row — `mock` powers the e2e smoke; default `claude-code`.
 fn harness_from_env() -> orbit_engine::HarnessId {
-    match std::env::var("ORBIT_HARNESS").as_deref().map(str::trim) {
+    match std::env::var("ENSEMBYTE_HARNESS")
+        .or_else(|_| std::env::var("ORBIT_HARNESS"))
+        .as_deref()
+        .map(str::trim)
+    {
         Ok("mock") => orbit_engine::HarnessId::Mock,
         Ok("codex") => orbit_engine::HarnessId::Codex,
         Ok("cursor") => orbit_engine::HarnessId::Cursor,
@@ -363,14 +378,14 @@ fn harness_from_env() -> orbit_engine::HarnessId {
     }
 }
 
-/// `orbit sync`: dial the running engine's IPC and print per-room sync state.
+/// `ensembyte sync`: dial the running engine's IPC and print per-room sync state.
 /// The introspection surface every 2026-08 incident was missing — "is this
 /// device's workspace room actually receiving?" as a one-liner.
 async fn sync_cli(ipc_port: u16) -> anyhow::Result<()> {
     let client = orbit_rpc::connect_ws(&format!("ws://127.0.0.1:{ipc_port}"))
         .await
         .map_err(|e| {
-            anyhow::anyhow!("no engine listening on 127.0.0.1:{ipc_port} ({e}) — is orbit running?")
+            anyhow::anyhow!("no engine listening on 127.0.0.1:{ipc_port} ({e}) — is Ensembyte running?")
         })?;
     let status = client
         .call(orbit_rpc::methods::SYNC_STATUS, serde_json::json!({}))
@@ -486,7 +501,7 @@ async fn sync_cli(ipc_port: u16) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `{data_dir}/logs/orbit-{mode}.log`, previous launch preserved as `.old`.
+/// `{data_dir}/logs/ensembyte-{mode}.log`, previous launch preserved as `.old`.
 /// Headed and headless are separate files so an embedded-engine app and a
 /// daemon on the same machine never interleave writes.
 ///
@@ -497,7 +512,7 @@ async fn sync_cli(ipc_port: u16) -> anyhow::Result<()> {
 /// second unlinked it entirely, and the daemon spent the rest of the incident
 /// logging to an orphaned inode (an entire day of sync diagnostics gone at
 /// the exact moment they were needed). A launch that finds the canonical file
-/// locked logs to `orbit-{mode}.{pid}.log` instead; the next lock-holding
+/// locked logs to `ensembyte-{mode}.{pid}.log` instead; the next lock-holding
 /// launch sweeps pid-suffixed files older than a week.
 fn open_log_file(mode: &str) -> Option<std::fs::File> {
     let dir = paths::data_dir().join("logs");
@@ -507,7 +522,7 @@ fn open_log_file(mode: &str) -> Option<std::fs::File> {
 /// Dir-parameterized body of [`open_log_file`] (unit-testable without env).
 fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> {
     std::fs::create_dir_all(dir).ok()?;
-    let path = dir.join(format!("orbit-{mode}.log"));
+    let path = dir.join(format!("ensembyte-{mode}.log"));
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
@@ -524,7 +539,7 @@ fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> 
         if rc != 0 {
             // A live process owns the canonical log — leave it alone.
             return std::fs::File::create(
-                dir.join(format!("orbit-{mode}.{}.log", std::process::id())),
+                dir.join(format!("ensembyte-{mode}.{}.log", std::process::id())),
             )
             .ok();
         }
@@ -533,7 +548,7 @@ fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> 
         // to rotate — the probe itself created the empty file.)
         drop(existing);
         if preexisting {
-            let _ = std::fs::rename(&path, dir.join(format!("orbit-{mode}.log.old")));
+            let _ = std::fs::rename(&path, dir.join(format!("ensembyte-{mode}.log.old")));
         }
         let file = std::fs::File::create(&path).ok()?;
         unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
@@ -542,7 +557,7 @@ fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> 
     }
     #[cfg(not(unix))]
     {
-        let _ = std::fs::rename(&path, dir.join(format!("orbit-{mode}.log.old")));
+        let _ = std::fs::rename(&path, dir.join(format!("ensembyte-{mode}.log.old")));
         std::fs::File::create(&path).ok()
     }
 }
@@ -557,14 +572,14 @@ mod log_file_tests {
         let dir = dir.path();
         // First launch owns the canonical file and keeps writing.
         let first = open_log_file_in(dir, "headed").expect("first log");
-        assert!(dir.join("orbit-headed.log").is_file());
+        assert!(dir.join("ensembyte-headed.log").is_file());
         // Second launch while the first is alive: canonical file untouched,
         // pid-suffixed overflow file instead (the 2026-08-04 clobber).
         let second = open_log_file_in(dir, "headed").expect("second log");
-        let pid_path = dir.join(format!("orbit-headed.{}.log", std::process::id()));
+        let pid_path = dir.join(format!("ensembyte-headed.{}.log", std::process::id()));
         assert!(pid_path.is_file(), "expected pid-suffixed overflow log");
         assert!(
-            !dir.join("orbit-headed.log.old").exists(),
+            !dir.join("ensembyte-headed.log.old").exists(),
             "live canonical log must not be rotated away"
         );
         drop(second);
@@ -572,29 +587,38 @@ mod log_file_tests {
         drop(first);
         let third = open_log_file_in(dir, "headed").expect("third log");
         assert!(
-            dir.join("orbit-headed.log.old").is_file(),
+            dir.join("ensembyte-headed.log.old").is_file(),
             "rotation resumes"
         );
         drop(third);
     }
 }
 
-/// Delete `orbit-{mode}.{pid}.log` overflow files older than a week — they
-/// only exist when a second instance raced a live one for the canonical log.
+/// Delete `ensembyte-{mode}.{pid}.log` (and legacy `orbit-{mode}.{pid}.log`)
+/// overflow files older than a week — they only exist when a second instance
+/// raced a live one for the canonical log.
 #[cfg(unix)]
 fn sweep_stale_pid_logs(dir: &std::path::Path, mode: &str) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
-    let prefix = format!("orbit-{mode}.");
+    let prefix = format!("ensembyte-{mode}.");
+    let legacy_prefix = format!("orbit-{mode}.");
     let week = std::time::Duration::from_secs(7 * 24 * 60 * 60);
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
-        let Some(middle) = name
+        let middle = if let Some(middle) = name
             .strip_prefix(&prefix)
             .and_then(|rest| rest.strip_suffix(".log"))
-        else {
+        {
+            middle
+        } else if let Some(middle) = name
+            .strip_prefix(&legacy_prefix)
+            .and_then(|rest| rest.strip_suffix(".log"))
+        {
+            middle
+        } else {
             continue;
         };
         if !middle.chars().all(|c| c.is_ascii_digit()) {

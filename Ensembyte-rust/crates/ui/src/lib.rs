@@ -390,7 +390,7 @@ fn open_main_window(
                 // Linux/Windows `appears_transparent` hides the system titlebar
                 // for our custom-drawn chrome; harmless where unsupported.
                 titlebar: Some(TitlebarOptions {
-                    title: cfg!(target_os = "windows").then(|| "Orbit".into()),
+                    title: cfg!(target_os = "windows").then(|| "Ensembyte".into()),
                     appears_transparent: true,
                     // Native lights are 14px tall: top 14 → center 21, matching
                     // the 38px titlebar row with 4px top-only content padding.
@@ -400,7 +400,7 @@ fn open_main_window(
                 // Drag + start_window_move) — mark the content view app-owned
                 // so AppKit neither dead-zones the strip nor delays clicks.
                 app_owns_titlebar_drag: true,
-                // Linux: request client-side decorations — orbit draws its own
+                // Linux: request client-side decorations — ensembyte draws its own
                 // unified titlebar and (under CSD) its own caption buttons
                 // (shell.rs `render_linux_caption_controls`). Leaving this unset
                 // requests SERVER decorations, which stacked a compositor
@@ -578,7 +578,7 @@ fn deliver_appshot(
             }
             tracing::warn!(
                 count,
-                "Appshot captured with no Orbit window; preserving it for the next delivery"
+                "Appshot captured with no Ensembyte window; preserving it for the next delivery"
             );
         }
         return;

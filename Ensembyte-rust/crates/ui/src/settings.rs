@@ -380,7 +380,7 @@ fn install_staged_background(
     let data_dir = cx
         .try_global::<SettingsStore>()
         .map(|store| store.data_dir.clone())
-        .ok_or_else(|| "Unable to save the image. Restart Orbit and try again.".to_string())?;
+        .ok_or_else(|| "Unable to save the image. Restart Ensembyte and try again.".to_string())?;
     let prepared = prepare_background_file(staged, &data_dir)?;
     commit_background(source, prepared, color, cx)
 }
@@ -449,7 +449,7 @@ fn commit_background(
     let data_dir = cx
         .try_global::<SettingsStore>()
         .map(|store| store.data_dir.clone())
-        .ok_or_else(|| "Unable to save the image. Restart Orbit and try again.".to_string())?;
+        .ok_or_else(|| "Unable to save the image. Restart Ensembyte and try again.".to_string())?;
     let backgrounds_dir = data_dir.join(NEW_THREAD_BACKGROUND_DIR);
     let replacement = prepared.0.as_ref().unwrap().clone();
     let mut next = current(cx);
@@ -484,7 +484,7 @@ pub fn remove_new_thread_composer_background(cx: &mut App) -> Result<(), String>
     let data_dir = cx
         .try_global::<SettingsStore>()
         .map(|store| store.data_dir.clone())
-        .ok_or_else(|| "Unable to remove the image. Restart Orbit and try again.".to_string())?;
+        .ok_or_else(|| "Unable to remove the image. Restart Ensembyte and try again.".to_string())?;
     let mut next = current(cx);
     let previous = next.new_thread_composer_background.take();
     next.wallpaper_source = None;
@@ -865,7 +865,7 @@ pub struct UiSettings {
     /// Desktop banner notifications on the same transitions.
     /// `ORBIT_DISABLE_NOTIFICATIONS` overrides.
     pub notifications_enabled: bool,
-    /// Suppress the banner while a Orbit window is focused (the chime covers
+    /// Suppress the banner while an Ensembyte window is focused (the chime covers
     /// the foreground case).
     pub notifications_background_only: bool,
     pub files_panel_width: f32,

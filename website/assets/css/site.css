@@ -1,6 +1,6 @@
 /*
-  Swarm Code marketing site, shared design system
-  =================================================
+  Ensembyte marketing site, shared design system
+  ==============================================
 
   A dark Liquid Glass marketing site with notch navigation, glass pills,
   reveal motion, feature highlight rail, blog section, FAQ accordion and
@@ -40,7 +40,7 @@
   --glass-blur: blur(20px) saturate(180%);
   --glass-blur-soft: blur(14px) saturate(150%);
 
-  /* Accent, sampled from the Swarm Code icon's binary field. */
+  /* Accent, sampled from the Ensembyte icon's binary field. */
   --accent: #4f9cff;
   --accent-hover: #74b3ff;
   --accent-active: #2f86f5;
@@ -464,7 +464,7 @@ section {
 }
 
 /* Menu-bar nav dock: on the first page load of a visit the pill springs
-   open like the Swarm Code shelf (shelf curve + blur snapping into focus). A
+   open like the Ensembyte shelf (shelf curve + blur snapping into focus). A
    head-inline gate adds html.nav-intro-done on later loads so it never
    replays when navigating between pages. */
 :root {
@@ -885,9 +885,7 @@ html.nav-intro-done .nav__pill { animation: none; }
   flex-wrap: wrap;
 }
 
-.hero__ensembyte-link,
-.hero__swarmcode-link,
-.hero__swarmai-link {
+.hero__ensembyte-link {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -897,15 +895,9 @@ html.nav-intro-done .nav__pill { animation: none; }
   color: var(--text-tertiary);
   transition: color var(--dur-fast) var(--ease-out);
 }
-.hero__ensembyte-link img,
-.hero__swarmcode-link img,
-.hero__swarmai-link img { width: 18px; height: 18px; border-radius: 5px; }
-.hero__ensembyte-link svg,
-.hero__swarmcode-link svg,
-.hero__swarmai-link svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.hero__ensembyte-link:hover,
-.hero__swarmcode-link:hover,
-.hero__swarmai-link:hover { color: var(--text-primary); }
+.hero__ensembyte-link img { width: 18px; height: 18px; border-radius: 5px; }
+.hero__ensembyte-link svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hero__ensembyte-link:hover { color: var(--text-primary); }
 
 
 /* The binary field behind the hero. One canvas, fixed to the hero's box,
@@ -944,7 +936,7 @@ html.nav-intro-done .nav__pill { animation: none; }
   object-fit: cover;
 }
 
-/* Hero media block, same container geometry as the Swarm Code promo film. */
+/* Hero media block, same container geometry as the Ensembyte promo film. */
 .media-block {
   position: relative;
   width: 100%;
@@ -2219,7 +2211,7 @@ html.nav-intro-done .nav__pill { animation: none; }
   .themes__name { padding: 6px 10px; font-size: 12px; }
 }
 
-/* Binary twinkles for the wordscroll stages (replaces Swarm Code's sparks). */
+/* Binary twinkles for the wordscroll stages (replaces Ensembyte's sparks). */
 .wordscroll__bits {
   position: absolute;
   inset: 0 0 45% 0;

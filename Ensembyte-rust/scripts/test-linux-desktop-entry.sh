@@ -15,12 +15,12 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # A fake release: the tarball layout package-linux.sh produces, minus the real
 # binary. `uname` is shimmed so the curl installer also runs on a macOS dev box.
-PKG="orbit-$VERSION-linux-x86_64"
+PKG="ensembyte-$VERSION-linux-x86_64"
 mkdir -p "$WORK/site/releases" "$WORK/pkg/$PKG" "$WORK/shim"
-printf '#!/bin/sh\nexit 0\n' >"$WORK/pkg/$PKG/orbit"
-chmod 755 "$WORK/pkg/$PKG/orbit"
-cp "$ROOT/dist/orbit.desktop" "$WORK/pkg/$PKG/orbit.desktop"
-printf 'not-really-a-png' >"$WORK/pkg/$PKG/orbit.png"
+printf '#!/bin/sh\nexit 0\n' >"$WORK/pkg/$PKG/ensembyte"
+chmod 755 "$WORK/pkg/$PKG/ensembyte"
+cp "$ROOT/dist/ensembyte.desktop" "$WORK/pkg/$PKG/ensembyte.desktop"
+printf 'not-really-a-png' >"$WORK/pkg/$PKG/ensembyte.png"
 echo "$VERSION" >"$WORK/site/releases/latest.txt"
 tar -czf "$WORK/site/releases/$PKG.tar.gz" -C "$WORK/pkg" "$PKG"
 printf '#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; *) exec /usr/bin/uname "$@" ;; esac\n' >"$WORK/shim/uname"
@@ -44,7 +44,7 @@ mkdir -p "$WORK/tmp"
 run_curl() {
   local home="$1"; shift
   env -i HOME="$home" USER=tester PATH="$WORK/shim:/usr/bin:/bin" TMPDIR="$WORK/tmp" "$@" \
-    ORBIT_BASE_URL="file://$WORK/site" sh "$ROOT/edge/src/install.sh" >"$WORK/out.log" 2>&1 \
+    ENSEMBYTE_BASE_URL="file://$WORK/site" sh "$ROOT/edge/src/install.sh" >"$WORK/out.log" 2>&1 \
     || { cat "$WORK/out.log" >&2; fail "curl installer exited non-zero"; }
   [ -z "$(ls -A "$WORK/tmp")" ] || fail "curl installer left files in TMPDIR: $(ls -A "$WORK/tmp")"
 }
@@ -58,16 +58,16 @@ run_tarball() {
 
 # check HOME DATA_HOME
 check() {
-  local home="$1" data="$2" entry="$2/applications/orbit.desktop"
+  local home="$1" data="$2" entry="$2/applications/ensembyte.desktop"
   [ -f "$entry" ] || fail "missing $entry"
-  [ -f "$data/icons/hicolor/1024x1024/apps/orbit.png" ] || fail "missing hicolor icon"
+  [ -f "$data/icons/hicolor/1024x1024/apps/ensembyte.png" ] || fail "missing hicolor icon"
   # `$(...)` strips nothing needed here: paths in these tests have no newlines.
-  grep -qxF "TryExec=$home/.orbit/app/current/orbit" "$entry" || fail "TryExec: $(grep '^TryExec' "$entry")"
-  grep -qxF "Icon=$home/.orbit/app/current/orbit.png" "$entry" || fail "Icon: $(grep '^Icon' "$entry")"
-  grep -qxF "StartupWMClass=orbit" "$entry" || fail "StartupWMClass changed"
+  grep -qxF "TryExec=$home/.ensembyte/app/current/ensembyte" "$entry" || fail "TryExec: $(grep '^TryExec' "$entry")"
+  grep -qxF "Icon=$home/.ensembyte/app/current/ensembyte.png" "$entry" || fail "Icon: $(grep '^Icon' "$entry")"
+  grep -qxF "StartupWMClass=ensembyte" "$entry" || fail "StartupWMClass changed"
   [ "$(grep -c '^\[Desktop Entry\]' "$entry")" = 1 ] || fail "duplicated entry"
   [ "$(grep -c '^Exec=' "$entry")" = 1 ] || fail "Exec lines"
-  [ -z "$(find "$data" -name '.orbit*')" ] || fail "temp files left behind"
+  [ -z "$(find "$data" -name '.ensembyte*')" ] || fail "temp files left behind"
   # A user-level icon cache is only ever refreshed, never created.
   [ ! -e "$data/icons/hicolor/icon-theme.cache" ] || fail "created a hicolor icon cache"
   if command -v desktop-file-validate >/dev/null 2>&1; then
@@ -82,12 +82,12 @@ for installer in curl tarball; do
   home="$WORK/$installer-a/home"; mkdir -p "$home"
   run "$home"
   check "$home" "$home/.local/share"
-  grep -qxF "Exec=$home/.orbit/app/current/orbit %u" "$home/.local/share/applications/orbit.desktop" \
+  grep -qxF "Exec=$home/.ensembyte/app/current/ensembyte %u" "$home/.local/share/applications/ensembyte.desktop" \
     || fail "$installer: Exec line"
-  before="$(cat "$home/.local/share/applications/orbit.desktop")"
+  before="$(cat "$home/.local/share/applications/ensembyte.desktop")"
   run "$home"
   check "$home" "$home/.local/share"
-  [ "$before" = "$(cat "$home/.local/share/applications/orbit.desktop")" ] || fail "$installer: re-run changed the entry"
+  [ "$before" = "$(cat "$home/.local/share/applications/ensembyte.desktop")" ] || fail "$installer: re-run changed the entry"
 
   # XDG_DATA_HOME wins when absolute; a relative value is ignored per the spec.
   home="$WORK/$installer-b/home"; mkdir -p "$home"
@@ -104,8 +104,8 @@ for installer in curl tarball; do
   check "$home" "$home/.local/share"
   # Spec: quote the argument, `\` before " and $ (doubled again for the file's
   # string escaping), and `%%` for a literal `%`.
-  want="Exec=\"$WORK/$installer-d/"'h o\\$me\\"x%%y'"/.orbit/app/current/orbit\" %u"
-  grep -qxF "$want" "$home/.local/share/applications/orbit.desktop" \
-    || fail "$installer: Exec quoting: $(grep '^Exec=' "$home/.local/share/applications/orbit.desktop")"
+  want="Exec=\"$WORK/$installer-d/"'h o\\$me\\"x%%y'"/.ensembyte/app/current/ensembyte\" %u"
+  grep -qxF "$want" "$home/.local/share/applications/ensembyte.desktop" \
+    || fail "$installer: Exec quoting: $(grep '^Exec=' "$home/.local/share/applications/ensembyte.desktop")"
   echo "ok: $installer installer"
 done

@@ -279,11 +279,12 @@ impl Terminals {
             cmd.cwd(cwd);
             cmd.env("TERM", "xterm-256color");
             cmd.env("COLORTERM", "truecolor");
-            cmd.env("TERM_PROGRAM", "Orbit");
+            cmd.env("TERM_PROGRAM", "Ensembyte");
             for (name, value) in environment {
                 cmd.env(name, value);
             }
             if let Some(script) = initial_script.as_ref() {
+                cmd.env("ENSEMBYTE_ACTION_SCRIPT", script.path());
                 cmd.env("ORBIT_ACTION_SCRIPT", script.path());
             }
             let child = pair

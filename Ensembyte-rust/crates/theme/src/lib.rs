@@ -298,7 +298,7 @@ impl AccentPreset {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Orbit => "Orbit",
+            Self::Orbit => "Ensembyte",
             Self::Orange => "Orange",
             Self::Amber => "Amber",
             Self::Green => "Green",

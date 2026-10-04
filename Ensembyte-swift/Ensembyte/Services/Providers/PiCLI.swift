@@ -1,13 +1,13 @@
 import Foundation
 
-/// The small surface Swarm Code needs of the Pi coding harness (`pi`, the npm
+/// The small surface Ensembyte needs of the Pi coding harness (`pi`, the npm
 /// package `@earendil-works/pi-coding-agent`): where its login lives, its model
 /// catalog over RPC, and the gate extension that routes tool approvals to the app.
 ///
 /// Pi signs in per provider under `~/.pi/agent/auth.json` (or `PI_CODING_AGENT_DIR`
 /// when set); a bare provider API key in the environment also counts as signed in.
 enum PiCLI {
-    /// Pi's `--thinking` levels, which Swarm's effort strings map to 1:1.
+    /// Pi's `--thinking` levels, which Ensembyte's effort strings map to 1:1.
     static let thinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 
     /// Where the gate extension and each session's gate file live.
@@ -117,7 +117,7 @@ enum PiCLI {
     static func installExtension() throws -> URL {
         let directory = supportDirectory
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let file = directory.appendingPathComponent("swarm-gate.ts")
+        let file = directory.appendingPathComponent("ensembyte-gate.ts")
         let data = Data(extensionSource.utf8)
         if (try? Data(contentsOf: file)) != data {
             try data.write(to: file, options: .atomic)
@@ -125,7 +125,7 @@ enum PiCLI {
         return file
     }
 
-    /// The gate Swarm Code loads into every RPC session with `-e`. Pi itself keeps
+    /// The gate Ensembyte loads into every RPC session with `-e`. Pi itself keeps
     /// approving everything (`--approve`) or nothing (`--no-approve`); this extension
     /// gates the tools instead: every call that could change something is asked over
     /// `ctx.ui.select`, which in RPC mode surfaces on stdout as an
@@ -147,7 +147,7 @@ enum PiCLI {
 
     function readGate() {
       try {
-        const file = process.env.SWARM_CODE_PI_GATE || "";
+        const file = process.env.ENSEMBYTE_PI_GATE || process.env.SWARM_CODE_PI_GATE || "";
         return JSON.parse(fs.readFileSync(file, "utf8"));
       } catch {
         return {};
@@ -166,7 +166,8 @@ enum PiCLI {
 
     export default async function (pi) {
       try {
-        const bridge = process.env.SWARM_CODE_MCP_BRIDGE ? await import(process.env.SWARM_CODE_MCP_BRIDGE) : null;
+        const bridgePath = process.env.ENSEMBYTE_MCP_BRIDGE || process.env.SWARM_CODE_MCP_BRIDGE;
+        const bridge = bridgePath ? await import(bridgePath) : null;
         if (bridge) {
           for (const tool of await bridge.loadMCPTools()) {
             pi.registerTool({

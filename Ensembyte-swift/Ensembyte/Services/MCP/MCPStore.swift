@@ -310,7 +310,7 @@ final class MCPStore {
     }
 
     private func probeOnce(_ entry: MCPCatalogEntry, resolved: MCPResolvedServer) async throws -> MCPProbeResult {
-        // A server that signs in: the browser flow first (Swarm Code's own, with its
+        // A server that signs in: the browser flow first (Ensembyte's own, with its
         // branded page), then its route on the proxy, and only then the probe, which
         // goes through that route like every provider will.
         if let remote = resolved.oauthUpstream {

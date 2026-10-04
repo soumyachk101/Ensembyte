@@ -31,7 +31,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: package portable app
         run: ./scripts/package-windows.ps1 -ReleasesUrl "https://github.com/soumyachk101/Ensembyte/releases/latest/download"
-      - name: upload Windows assets to Ensembyte-rust-Release
+      - name: upload Windows assets to Ensembyte Release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
@@ -61,7 +61,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: package
         run: scripts/package-linux.sh
-      - name: upload Linux assets to Ensembyte-rust-Release
+      - name: upload Linux assets to Ensembyte Release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |

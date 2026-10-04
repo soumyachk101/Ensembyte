@@ -26,7 +26,7 @@ export interface Env {
    * key id. Unset ⇒ session notifications are decided and logged, not sent. */
   APNS_KEY_P8?: string;
   APNS_KEY_ID?: string;
-  /** Apple team id and the app's bundle id (defaults: the Orbit iOS app). */
+  /** Apple team id and the app's bundle id (defaults: the Ensembyte iOS app). */
   APNS_TEAM_ID?: string;
   APNS_TOPIC?: string;
 }

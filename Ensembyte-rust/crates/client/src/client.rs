@@ -1259,8 +1259,8 @@ impl Client {
                     "crates/text/src/layout.rs",
                     "crates/text/src/prepare.rs",
                     "crates/markdown/src/parser.rs",
-                    "apps/ios/Orbit/Transcript/TranscriptListView.swift",
-                    "apps/ios/Orbit/Composer/ComposerBar.swift",
+                    "apps/ios/Ensembyte/Transcript/TranscriptListView.swift",
+                    "apps/ios/Ensembyte/Composer/ComposerBar.swift",
                     "docs/mobile-rewrite.md",
                     "README.md",
                 ];
