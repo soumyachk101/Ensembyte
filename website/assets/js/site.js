@@ -13,6 +13,7 @@
     5. A guard against copying: selection, copy, drag and the context menu are off.
     6. The button morph hover: the two content layers every button's
        shared hover needs, built at runtime (see "Morph hover" in site.css).
+    7. GitHub star counter with 1-hour cache.
 */
 
 (function () {
@@ -234,6 +235,35 @@
     });
   }
 
+  /* ---------------------------------------------------------------- */
+  /* 7. GitHub Star Count: fetched & cached for 1 hour                */
+  /* ---------------------------------------------------------------- */
+
+  function initGitHubStars() {
+    var KEY = "ensembyte-gh-stars";
+    var show = function (n) {
+      var text = "★ " + new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n).toLowerCase();
+      var els = document.querySelectorAll(".gh-stars");
+      for (var i = 0; i < els.length; i++) {
+        els[i].textContent = text;
+        els[i].hidden = false;
+      }
+    };
+    var cached = null;
+    try { cached = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (cached && typeof cached.n === "number" && Number.isFinite(cached.n)) show(cached.n);
+    if (cached && Date.now() - cached.at < 3600e3) return;
+    fetch("https://api.github.com/repos/soumyachk101/Ensembyte", { credentials: "omit" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (data) {
+        var n = data && data.stargazers_count;
+        if (typeof n !== "number" || !Number.isFinite(n)) return;
+        show(n);
+        try { localStorage.setItem(KEY, JSON.stringify({ n: n, at: Date.now() })); } catch (e) {}
+      })
+      .catch(function () {});
+  }
+
   function onReady(callback) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", callback);
     else callback();
@@ -248,6 +278,7 @@
     markActiveNavLink();
     setCurrentYear();
     initWordmarkParallax();
+    initGitHubStars();
   });
 })();
 
