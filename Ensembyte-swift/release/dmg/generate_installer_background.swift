@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Renders the Swarm Code installer (DMG) window background at 1x and 2x, plus a
+// Renders the Ensembyte installer (DMG) window background at 1x and 2x, plus a
 // preview composite that mimics how Finder lays out the two icons on top of it.
 //
 // Usage: swift generate_installer_background.swift <output-directory> [path/to/AppIcon.icns]
@@ -8,7 +8,7 @@
 // .DS_Store (see release/dmg/README.md). If any of these constants change, the
 // .DS_Store must be re-baked so Finder's icon positions match the artwork:
 //   window content size: 660x370
-//   Swarm Code.app icon center: (165, 208)   Applications icon center: (495, 208)
+//   Ensembyte.app icon center: (165, 208)   Applications icon center: (495, 208)
 //   icon size: 128
 import AppKit
 

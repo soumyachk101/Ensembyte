@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.0.1] - 2026-10-04
+
+### Fixed
+- **Ensembyte for macOS** (`Ensembyte-swift/`): Fixed installer DMG background styling and wordmark.
+
 ## [1.0.0] - 2026-10-03
 
 ### Added

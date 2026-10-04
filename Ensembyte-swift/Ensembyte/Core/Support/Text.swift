@@ -4,8 +4,8 @@ enum AppInfo {
     static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Ensembyte"
     static let isDevelopment = Bundle.main.bundleIdentifier == "org.ensembyte.desktop.dev" || Bundle.main.bundleIdentifier == "iordv.swarmcode.dev"
     static let stateDirectoryName = isDevelopment ? ".ensembyte-dev" : ".ensembyte"
-    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
-    static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.1"
+    static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "2"
 }
 
 enum TextCleanup {

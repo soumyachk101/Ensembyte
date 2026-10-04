@@ -2,6 +2,11 @@
 
 All notable changes to Ensembyte are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.0.1] - 2026-10-04
+
+### Bug fixes
+- Fix installer DMG window background displaying legacy project branding.
+
 ## [1.0.0] - 2026-10-03
 
 Initial public release of Ensembyte for macOS: a high-performance native desktop app for coding agents. Apple silicon, macOS 26 or later.
