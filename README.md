@@ -1,25 +1,7 @@
 # Ensembyte
 
 <p align="center">
-  <img src="assets/ensembyte-logo.png" width="120" height="120" alt="Ensembyte" />
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" />
-  <img src="https://img.shields.io/badge/Swift-6.0-orange.svg?logo=swift" alt="Swift 6" />
-  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon%20(macOS%2026%2B)-black.svg?logo=apple" alt="macOS" />
-  <img src="https://img.shields.io/badge/Rust-2024-orange.svg?logo=rust" alt="Rust 2024" />
-  <img src="https://img.shields.io/badge/GPUI-GPU%20Accelerated-blue.svg?logo=nvidia" alt="GPUI" />
-  <img src="https://img.shields.io/badge/DMG-Ensembyte-blue" alt="DMG Releases" />
-  <img src="https://img.shields.io/github/v/release/soumyachk101/Ensembyte" alt="Latest Release" />
-</p>
-
-<p align="center">
-  <a href="https://github.com/soumyachk101/Ensembyte/releases"> Download</a>
-  &nbsp;·&nbsp;
-  <a href="https://ensembyte.vercel.app"> Website</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/soumyachk101/Ensembyte/blob/main/CONTRIBUTING.md"> Contributing</a>
+  <img src="assets/ensembyte-logo.png" alt="Ensembyte" width="160" height="160" />
 </p>
 
 <p align="center">
@@ -45,9 +27,9 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 |---|---|---|
 | **Platform** | **macOS** (Apple silicon, macOS 26+) | **Windows & Linux** (x86_64, ARM64) |
 | **Stack** | Swift 6 / SwiftUI + Liquid Glass | Rust 2024 / GPUI (GPU-accelerated) |
-| **Source** | [`Ensembyte-swift/`](Ensembyte-swift/) | [`Ensembyte-rust/`](Ensembyte-rust/) |
+| **Source** | [`Ensembyte-swift/`](Ensembyte-swift/) | [`Ensembyte-rust/`](Ensembyte-rust/) |https://github.com/emilkowalski/skills/blob/main/skills/apple-design/SKILL.md
 | **Packages** | Signed & Notarized `.dmg` | `.exe` / `.zip`, `.tar.gz` / `.AppImage` / `.deb` |
-| **Multi-Agent** |  Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
+| **Multi-Agent** | Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
 | **Design** | 26 tinted-glass themes, Liquid Glass | Minimalist dark/light, immediate-mode GPU |
 | **Sync** | Local-first, hidden git checkpoints | Local-first, optional Loro CRDT sync |
 
@@ -56,152 +38,26 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 
 ---
 
-## Screenshot Tour
-
-Here's what Ensembyte looks and feels like in action:
-
-###  The Main Window
-
-<p align="center">
-  <img src="assets/hero.webp" alt="Ensembyte main window" />
-</p>
-
-A beautiful Liquid Glass workspace with project sidebar, thread list, and streaming agent output — all in one view.
-
-###  Multi-Agent Queue
-
-<p align="center">
-  <img src="assets/queue.webp" alt="Multi-agent queue" />
-</p>
-
-<span align="center">Monitor multiple agents running in parallel — each in its own isolated git worktree, with live status, progress, and merge results.</span>
-
-###  Turn-by-Turn Diff Inspector
-
-<p align="center">
-  <img src="assets/diff.webp" alt="Diff inspector" />
-</p>
-
-Every model turn produces a hidden git checkpoint. Inspect precise line-by-line file modifications, accept or reject hunks, and navigate the full timeline of changes.
-
-###  Inline Permission Prompts
-
-<p align="center">
-  <img src="assets/question.webp" alt="Permission prompts" />
-</p>
-
-Answer approval requests, tool execution dialogs, and decision questions right in the streaming output — no terminal switching required.
-
-###  Live Notifications
-
-<p align="center">
-  <img src="assets/notify.webp" alt="Notifications" />
-</p>
-
-Get notified when a background agent completes, hits an error, or needs your attention — without losing your current context.
-
-###  Theme Palette — 26 Liquid Glass Themes
-
-<p align="center">
-  <img src="assets/palette.webp" alt="Theme palette" />
-</p>
-
-Twenty-six handcrafted tinted-glass color themes, from Midnight Ocean to Sunset Glow. Your workspace, your vibe.
-
-###  Thread Management
-
-<p align="center">
-  <img src="assets/threads.webp" alt="Thread management" />
-</p>
-
-Organize conversations into threads, pin important ones, search across history, and pick up right where you left off.
-
-###  Slash Commands
-
-<p align="center">
-  <img src="assets/slash.webp" alt="Slash commands" />
-</p>
-
-A powerful slash-command palette for quick actions — spawn agents, switch models, open files, manage worktrees, and more — all from the keyboard.
-
-###  Plan Rendering & Tool Execution
-
-<p align="center">
-  <img src="assets/plans.webp" alt="Plan rendering" />
-</p>
-
-Watch your agent's thinking unfold in real-time with streaming markdown, tool-call plans, to-do lists, and reasoning disclosures.
-
-###  Provider & Plan Limits
-
-<p align="center">
-  <img src="assets/limits.webp" alt="Provider limits" />
-</p>
-
-Live token expenditure, rolling rate-limit counters, and provider quota transparency — so you always know where you stand.
-
-###  Agent Switcher
-
-<p align="center">
-  <img src="assets/switcher.webp" alt="Agent switcher" />
-</p>
-
-Instantly switch between coding agents, models, and sessions — your context and history preserved across every transition.
-
-###  Model & Temperature Slider
-
-<p align="center">
-  <img src="assets/slider.webp" alt="Model slider" />
-</p>
-
-Fine-tune your model selection and temperature with a smooth, native macOS slider. Pick the right tool for the right job.
-
-###  Quoted Reasoning Blocks
-
-<p align="center">
-  <img src="assets/quote.webp" alt="Quoted reasoning" />
-</p>
-
-Collapsible, beautifully styled reasoning blocks that reveal the agent's chain of thought — clean, readable, and optionally expandable.
-
-###  Quick Recipes
-
-<p align="center">
-  <img src="assets/recipes.webp" alt="Quick recipes" />
-</p>
-
-Pre-built workflow recipes for common tasks: code review, bug investigation, feature implementation, refactoring — one click to spawn a specialized agent.
-
-###  Sidebar & Project Explorer
-
-<p align="center">
-  <img src="assets/sidebar.webp" alt="Sidebar" />
-</p>
-
-Resizable project sidebar with file trees, worktree indicators, and context-aware quick actions.
-
----
-
 ## Key Capabilities
 
 Both clients deliver the same powerful, keyboard-first experience — optimized for their respective platforms:
 
-###  One Workspace, Any Agent
+### Workspace & Streaming
 Project and thread sidebars, search, pinning, and per-thread runtimes. Real-time streaming of **thoughts, reasoning, tool execution, terminal outputs, and file diffs** — all in one pane.
 
-### 🔒 Inline Permission Prompts
-Answer approval requests, tool execution dialogs, and decision questions right in the stream without ever leaving Ensembyte.
+### Inline Permission Prompts
+Answer approval requests, tool execution dialogs, and decision questions right in the streaming output — no terminal switching required.
 
-### 🔁 Diff for Every Turn
+### Diff for Every Turn
 Automated git checkpoints let you inspect precise **line-by-line file modifications** across each model turn. Accept, reject, or navigate the full diff history.
 
-### 🔌 Model Context Protocol (MCP)
+### Model Context Protocol (MCP)
 Preloaded with MCP servers for system tools, web search, browser automation, and knowledge bases. Configure custom transports (stdio, HTTP, SSE) with an OAuth flow.
 
-### 💰 Spend & Quota Transparency
+### Spend & Quota Transparency
 Live token expenditure and rolling rate-limit counters keep provider costs **visible and honest**.
 
-### 🔐 Local-First, Zero Telemetry
+### Local-First, Zero Telemetry
 Everything runs on your machine. No cloud accounts, no data collection, no middleware. Your code, your subscriptions, your hardware.
 
 ---
@@ -211,7 +67,7 @@ Everything runs on your machine. No cloud accounts, no data collection, no middl
 Ensembyte connects to the CLI tools installed on your machine. Sign in once with each tool using your existing provider plan:
 
 | Provider | CLI Tool | Protocol / Transport | macOS (Swift) | Windows & Linux (Rust) |
-|----------|----------|---------------------|:---:|:---:|
+|---|---|---|---|---|
 | **Claude** | `claude` | stream-json + permission prompts | ✅ | ✅ |
 | **Codex** | `codex` | app-server JSON-RPC | ✅ | ✅ |
 | **Cursor** | `cursor-agent` | Agent Client Protocol (ACP) | ✅ | ✅ |
@@ -237,7 +93,7 @@ Ensembyte for macOS ships with **Hydra** — a unique multi-agent system where o
       │          │               │
    worktree   worktree    ...   worktree
       │          │               │
-    result     result    ...    result
+    result     result    ...   result
           \       |       |       /
            Merged Result (auto)
 ```
@@ -312,7 +168,7 @@ Download the appropriate package for your platform from:
 👉 **[Ensembyte Releases](https://github.com/soumyachk101/Ensembyte/releases)**
 
 | Platform | Package |
-|----------|---------|
+|---|---|
 | Windows x86_64 | `Ensembyte-Setup.exe` |
 | Windows x86_64 (portable) | `ensembyte-windows-x86_64.zip` |
 | Linux x86_64 | `ensembyte-linux-x86_64.tar.gz` |
@@ -451,30 +307,30 @@ Ensembyte/
 
 ---
 
-## Technology Highlights
+## Technology
 
 ### macOS Client
 
 | Technology | Role |
-|------------|------|
-| **Swift 6** | Language — strict concurrency, full memory safety |
-| **SwiftUI** | UI framework — declarative, reactive, Liquid Glass |
-| **SwiftTerm** | Embedded terminal emulation |
-| **Hydra** | Multi-agent orchestration engine |
-| **Liquid Glass** | Apple's native design language — glassmorphism, vibrancy |
-| **Keychain Services** | Secure credential storage |
-| **MCP (Swift)** | Model Context Protocol integration |
+|---|---|
+| Swift 6 | Language — strict concurrency, full memory safety |
+| SwiftUI | UI framework — declarative, reactive, Liquid Glass |
+| SwiftTerm | Embedded terminal emulation |
+| Hydra | Multi-agent orchestration engine |
+| Liquid Glass | Apple's native design language — glassmorphism, vibrancy |
+| Keychain Services | Secure credential storage |
+| MCP (Swift) | Model Context Protocol integration |
 
 ### Rust Client
 
 | Technology | Role |
-|------------|------|
-| **Rust 2024** | Language — zero-cost abstractions, memory safety |
-| **GPUI** | Immediate-mode GPU-accelerated UI framework |
-| **Loro CRDT** | Conflict-free Replicated Data Types for multi-device sync |
-| **Cloudflare Durable Objects** | Edge sync infrastructure |
-| **MCP (Rust)** | Model Context Protocol integration |
-| **Tokio** | Async runtime |
+|---|---|
+| Rust 2024 | Language — zero-cost abstractions, memory safety |
+| GPUI | Immediate-mode GPU-accelerated UI framework |
+| Loro CRDT | Conflict-free Replicated Data Types for multi-device sync |
+| Cloudflare Durable Objects | Edge sync infrastructure |
+| MCP (Rust) | Model Context Protocol integration |
+| Tokio | Async runtime |
 
 ---
 
@@ -483,9 +339,7 @@ Ensembyte/
 Ensembyte is built on three non-negotiable principles:
 
 1. **Local-First** — Everything runs on your machine. No cloud accounts, no data leaving your disk, no telemetry. Your code, your control.
-
 2. **Native Performance** — SwiftUI on Apple silicon, GPUI on Windows/Linux. No Electron. No webviews. No compromises. GPU-accelerated rendering, zero-copy data flow, and platform-perfect chrome.
-
 3. **Keyboard-First** — Every action has a keyboard shortcut. Ensembyte is built for developers who live in the terminal and want a UI that gets out of their way.
 
 ---
@@ -497,12 +351,12 @@ Ensembyte is designed, developed, and maintained by **Soumya Chakraborty** ([@so
 It is built upon incredible open-source foundations:
 
 | Component | Project | License |
-|-----------|---------|---------|
-| **Terminal Emulation** | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza | MIT |
-| **GPUI Toolkit** | [GPUI / Zed](https://github.com/zed-industries/zed) by Zed Industries | GPL / Apache 2.0 |
-| **CRDT Sync** | [Loro](https://github.com/loro-dev/loro) by Loro Dev | MIT / Apache 2.0 |
-| **Pulse Indicators** | Ported from [Zeron](https://github.com/zeronsh/zeron) by Wing | MIT |
-| **Icons** | [Lucide](https://lucide.dev) | ISC |
+|---|---|---|
+| Terminal Emulation | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza | MIT |
+| GPUI Toolkit | [GPUI / Zed](https://github.com/zed-industries/zed) by Zed Industries | GPL / Apache 2.0 |
+| CRDT Sync | [Loro](https://github.com/loro-dev/loro) by Loro Dev | MIT / Apache 2.0 |
+| Pulse Indicators | Ported from [Zeron](https://github.com/zeronsh/zeron) by Wing | MIT |
+| Icons | [Lucide](https://lucide.dev) | ISC |
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for complete attributions.
 
@@ -518,7 +372,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 4. **Follow Guidelines** — Adhere to our [Code of Conduct](CODE_OF_CONDUCT.md) and [Contributing Guide](CONTRIBUTING.md)
 5. **Sign Off** — All commits must include `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 
->  The macOS app uses **worktrees for all experimental work**. See [`AGENTS.md`](AGENTS.md) for the workflow.
+> The macOS app uses **worktrees for all experimental work**. See [`AGENTS.md`](AGENTS.md) for the workflow.
 
 ---
 
@@ -535,11 +389,3 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 Licensed under the **MIT License**. See [LICENSE](LICENSE) for full terms.
 
 Copyright © Soumya Chakraborty ([@soumyachk101](https://github.com/soumyachk101)).
-
----
-
-<p align="center">
-  Made with  by <a href="https://github.com/soumyachk101">Soumya Chakraborty</a>
-  <br/>
-  <a href="https://ensembyte.vercel.app">ensembyte.vercel.app</a> · <a href="https://github.com/soumyachk101/Ensembyte">GitHub</a> · <a href="https://github.com/soumyachk101/Ensembyte/releases">Releases</a>
-</p>

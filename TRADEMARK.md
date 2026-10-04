@@ -2,47 +2,59 @@
 
 ## Trademark Notice
 
-"Soumya Chakraborty", "Ensembyte", the Soumya Chakraborty logo, and the Ensembyte icon
-are trademarks of Soumya Chakraborty. All rights reserved.
+"Soumya Chakraborty", "Ensembyte", the Soumya Chakraborty logo, and the Ensembyte
+icon are trademarks of Soumya Chakraborty. All rights reserved.
 
-## What This Means
+## Source Code vs. Branding
 
-The source code of Ensembyte is available under the MIT License, but the names
-"Soumya Chakraborty" and "Ensembyte" and the associated branding are protected
-and are not licensed with the code.
+The source code of Ensembyte is available under the MIT License, which grants
+broad freedoms to use, modify, and redistribute the code. However, the names
+"Soumya Chakraborty" and "Ensembyte" and the associated visual branding
+(logos, icons, product names) are **not** licensed under the MIT License.
+They remain the exclusive property of Soumya Chakraborty.
 
-### You MAY:
+This means you are free to use the code however the MIT License permits, but
+you may not use our trademarks in ways that could cause confusion about the
+origin or endorsement of your project.
 
-- Refer to this project as "Ensembyte" when discussing or reviewing it
-- Use the names in factual statements (e.g., "based on Ensembyte")
-- Fork the code for personal use or contribution back to this project
+## Permitted Uses
 
-### You MAY NOT:
+You **may** do the following without explicit permission:
 
-- Distribute a modified version under the names "Soumya Chakraborty" or "Ensembyte"
-- Use "Soumya Chakraborty", "Ensembyte", or similar names for derivative products
-- Use the Soumya Chakraborty logo or the Ensembyte icon in your own projects
-- Imply official endorsement or affiliation without permission
+- Refer to this project as "Ensembyte" in factual, descriptive contexts (e.g., "based on Ensembyte", "compatible with Ensembyte")
+- Discuss, review, or write about the project using its name
+- Fork the code for personal use or for the purpose of contributing back to this project
 
-### If You Fork This Project:
+## Prohibited Uses
 
-If you create a derivative work, you must:
+You **may not** do the following without prior written permission:
 
-1. Choose a distinctly different name
-2. Create your own branding and icons
-3. Remove all Soumya Chakraborty trademarks from your distribution
-4. Clearly indicate your project is not affiliated with Soumya Chakraborty
+- Distribute a modified version of the software under the names "Soumya Chakraborty" or "Ensembyte"
+- Use "Soumya Chakraborty", "Ensembyte", or confusingly similar names for derivative or competing products
+- Use the Soumya Chakraborty logo, Ensembyte icon, or any derived artwork in your own projects or products
+- Register or claim ownership of domain names, social media handles, or package names that incorporate "Ensembyte" or "Soumya Chakraborty"
+- Imply official endorsement, sponsorship, or affiliation with Soumya Chakraborty without permission
 
-## Attribution
+## Forking Guidelines
 
-When discussing forks or derivatives, use language like:
+If you create a derivative work based on Ensembyte, you must:
 
-- "Based on Ensembyte" or "Forked from Ensembyte" ✅
-- "Ensembyte 2.0" or "Ensembyte Pro" ❌
+1. Choose a **distinctly different name** for your project — not "Ensembyte X" or similar
+2. Create your **own branding** and visual identity (logos, icons, color schemes)
+3. **Remove all** Soumya Chakraborty trademarks from your distribution
+4. Make it **explicitly clear** that your project is not affiliated with, endorsed by, or a continuation of Ensembyte
+
+## Language Guidelines
+
+When discussing forks or derivative works, use language like:
+
+- "Based on Ensembyte" or "Forked from Ensembyte" — permitted
+- "Ensembyte 2.0", "Ensembyte Pro", "Ensembyte-mod" — not permitted
 
 ## Contact
 
-For trademark licensing inquiries or permissions, contact:
+For trademark licensing inquiries, permission requests, or questions about
+this policy:
 
-- Email: hi@ensembyte.app
-- Website: https://ensembyte.app
+- **Email:** hi@ensembyte.app
+- **Website:** https://ensembyte.app
