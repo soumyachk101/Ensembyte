@@ -885,6 +885,7 @@ html.nav-intro-done .nav__pill { animation: none; }
   flex-wrap: wrap;
 }
 
+.hero__ensembyte-link,
 .hero__swarmcode-link,
 .hero__swarmai-link {
   display: inline-flex;
@@ -896,10 +897,13 @@ html.nav-intro-done .nav__pill { animation: none; }
   color: var(--text-tertiary);
   transition: color var(--dur-fast) var(--ease-out);
 }
+.hero__ensembyte-link img,
 .hero__swarmcode-link img,
 .hero__swarmai-link img { width: 18px; height: 18px; border-radius: 5px; }
+.hero__ensembyte-link svg,
 .hero__swarmcode-link svg,
 .hero__swarmai-link svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hero__ensembyte-link:hover,
 .hero__swarmcode-link:hover,
 .hero__swarmai-link:hover { color: var(--text-primary); }
 

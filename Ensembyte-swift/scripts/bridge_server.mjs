@@ -11,7 +11,7 @@ const sampleThreads = [
   {
     id: sampleThreadId,
     projectID: sampleProjectId,
-    projectName: 'Swarm Code',
+    projectName: 'Ensembyte',
     title: 'Mobile Companion Setup',
     provider: 'anthropic',
     model: 'claude-3-7-sonnet',
@@ -19,7 +19,7 @@ const sampleThreads = [
     hasUnread: false,
     updatedAt: new Date().toISOString(),
     messageCount: 2,
-    lastMessagePreview: 'Swarm Code Mobile is now live and paired with your Mac.'
+    lastMessagePreview: 'Ensembyte Mobile is now live and paired with your Mac.'
   }
 ];
 
@@ -40,7 +40,7 @@ const sampleThreadDetail = {
       id: 'entry-1',
       kind: 'user',
       date: new Date(Date.now() - 3600000).toISOString(),
-      text: 'Connect Swarm Code Mobile companion app to my Mac',
+      text: 'Connect Ensembyte Mobile companion app to my Mac',
       name: null,
       input: null,
       output: null,
@@ -51,7 +51,7 @@ const sampleThreadDetail = {
       id: 'entry-2',
       kind: 'assistant',
       date: new Date().toISOString(),
-      text: 'Swarm Code Mobile is connected and communicating with your Mac over WebSocket. You can send messages, inspect threads, and manage coding agents from your phone!',
+      text: 'Ensembyte Mobile is connected and communicating with your Mac over WebSocket. You can send messages, inspect threads, and manage coding agents from your phone!',
       name: null,
       input: null,
       output: null,
@@ -124,7 +124,7 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, path: '/ws/v1/stream' });
 
 wss.on('connection', (ws) => {
-  console.log('✓ Swarm Code Mobile connected over WebSocket!');
+  console.log('✓ Ensembyte Mobile connected over WebSocket!');
 
   ws.on('message', (data) => {
     try {
@@ -136,7 +136,7 @@ wss.on('connection', (ws) => {
         console.log(`Pairing code received: ${msg.code}. Pairing successful!`);
         ws.send(JSON.stringify({
           type: 'paired',
-          sessionToken: 'swarm_session_' + Date.now()
+          sessionToken: 'ensembyte_session_' + Date.now()
         }));
       } else if (msg.type === 'sendMessage') {
         // Echo reply streaming
@@ -145,7 +145,7 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({
             type: 'messageDelta',
             threadID: threadID,
-            content: `Echo from Swarm Code: "${msg.content}"`,
+            content: `Echo from Ensembyte: "${msg.content}"`,
             isTool: false
           }));
         }, 300);
@@ -170,7 +170,7 @@ wss.on('connection', (ws) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`=========================================`);
-  console.log(`  Swarm Code Bridge Server LIVE on port ${PORT}`);
+  console.log(`  Ensembyte Bridge Server LIVE on port ${PORT}`);
   console.log(`  Pairing Code: ${PAIRING_CODE} (any 6 digits will work)`);
   console.log(`=========================================`);
 });

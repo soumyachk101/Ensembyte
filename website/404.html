@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 — The source you are looking for is not here · Ensembyte</title>
   <meta name="description" content="This page has moved, been renamed, or never existed. Head back to the Ensembyte home page.">
-  <link rel="canonical" href="https://swarmcode.vercel.app/">
+  <link rel="canonical" href="https://ensembyte.org/">
   <meta name="theme-color" content="#0b0e14">
   <meta name="color-scheme" content="dark">
 
@@ -21,7 +21,7 @@
   <meta property="og:site_name" content="Ensembyte">
   <meta property="og:title" content="404 — The source you are looking for is not here">
   <meta property="og:description" content="This page has moved, been renamed, or never existed.">
-  <meta property="og:url" content="https://swarmcode.vercel.app/404.html">
+  <meta property="og:url" content="https://ensembyte.org/404.html">
 
   <!-- Favicon -->
   <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
@@ -1188,13 +1188,13 @@
       if (!terminalBody) return;
 
       var lines = [
-        { prompt: 'soumya@swarmcode', path: '~/Swarm-Code', cmd: 'git ls-files 404.html', cls: 't-cmd', type: 'input' },
+        { prompt: 'soumya@ensembyte', path: '~/Ensembyte', cmd: 'git ls-files 404.html', cls: 't-cmd', type: 'input' },
         { text: "fatal: pathspec '404.html' did not match any file(s) known to git", cls: 't-error', type: 'output' },
         { text: '# (this page has never been committed. Honest.)', cls: 't-comment', type: 'output' },
-        { prompt: 'soumya@swarmcode', path: '~/Swarm-Code', cmd: 'git log --all --oneline -- 404.html', cls: 't-cmd', type: 'input' },
+        { prompt: 'soumya@ensembyte', path: '~/Ensembyte', cmd: 'git log --all --oneline -- 404.html', cls: 't-cmd', type: 'input' },
         { text: '# (no commits found -- the file exists only in your imagination)', cls: 't-comment', type: 'output' },
         { text: '', type: 'spacer' },
-        { prompt: 'soumya@swarmcode', path: '~/Swarm-Code', cmd: '', cls: 't-cmd', type: 'input-final' }
+        { prompt: 'soumya@ensembyte', path: '~/Ensembyte', cmd: '', cls: 't-cmd', type: 'input-final' }
       ];
 
       var charDelay = 28;

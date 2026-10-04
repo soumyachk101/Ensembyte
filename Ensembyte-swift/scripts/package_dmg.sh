@@ -7,7 +7,7 @@
 # can carry the custom-icon Finder flag. Signing/notarization stay with the
 # caller (release.sh).
 #
-# Usage: package_dmg.sh --app <path/to/Swarm Code.app> --output <path/to/out.dmg>
+# Usage: package_dmg.sh --app <path/to/Ensembyte.app> --output <path/to/out.dmg>
 set -euo pipefail
 IFS=$'\n\t'
 

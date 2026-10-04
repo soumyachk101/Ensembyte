@@ -1,23 +1,23 @@
 #!/bin/bash
-# Mirror the released Swarm Code into Swarm Code Dev: copy its library,
+# Mirror the released Ensembyte into Ensembyte Dev: copy its library,
 # settings and API keys over, one way, never writing to the release side.
 #
 #   scripts/sync_dev_data.sh
 #
 # Dev's own changes since the last mirror are replaced, so it opens on the
-# real data as of this moment. Head worktrees and patches under ~/.swarm-code
-# are left alone; Dev keeps its own under ~/.swarm-code-dev.
+# real data as of this moment. Head worktrees and patches under ~/.ensembyte
+# are left alone; Dev keeps its own under ~/.ensembyte-dev.
 #
 # macOS may ask once per key to let `security` read the release item; choose
 # Always Allow and it will not ask again.
 set -euo pipefail
 
-RELEASE_NAME="Swarm Code"
-DEV_NAME="Swarm Code Dev"
+RELEASE_NAME="Ensembyte"
+DEV_NAME="Ensembyte Dev"
 RELEASE_LIB="$HOME/Library/Application Support/$RELEASE_NAME"
 DEV_LIB="$HOME/Library/Application Support/$DEV_NAME"
-RELEASE_DOMAIN=iordv.swarmcode
-DEV_DOMAIN=iordv.swarmcode.dev
+RELEASE_DOMAIN=org.ensembyte.desktop
+DEV_DOMAIN=org.ensembyte.desktop.dev
 DEV_APP="/Applications/$DEV_NAME.app"
 
 step() { printf '\n==> %s\n' "$1"; }
@@ -60,4 +60,4 @@ else
 fi
 
 echo
-echo "$DEV_NAME now mirrors $RELEASE_NAME. Worktrees stay separate (~/.swarm-code vs ~/.swarm-code-dev)."
+echo "$DEV_NAME now mirrors $RELEASE_NAME. Worktrees stay separate (~/.ensembyte vs ~/.ensembyte-dev)."
