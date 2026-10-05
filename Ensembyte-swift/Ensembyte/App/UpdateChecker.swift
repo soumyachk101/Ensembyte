@@ -167,8 +167,8 @@ final class UpdateChecker {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let stale = lastCheckedAt.map { Date.now.timeIntervalSince($0) > Self.checkInterval } ?? true
-                if stale { await check(background: true) }
+                let stale = self.lastCheckedAt.map { Date.now.timeIntervalSince($0) > Self.checkInterval } ?? true
+                if stale { await self.check(background: true) }
             }
         }
     }
