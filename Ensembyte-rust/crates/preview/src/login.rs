@@ -249,7 +249,7 @@ mod tests {
     /// A mux pair standing in for the P2P link: `requester` opens streams that
     /// the running device serves as `peer`.
     fn link(routes: &CallbackRoutes, peer: &str, stop: &CancellationToken) -> Mux {
-        let (a, b) = tokio::net::UnixStream::pair().unwrap();
+        let (a, b) = tokio::io::duplex(65536);
         let (ar, aw) = tokio::io::split(a);
         let (br, bw) = tokio::io::split(b);
         let connector: Arc<dyn Connector> = Arc::new(Routes(routes.clone()));

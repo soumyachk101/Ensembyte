@@ -37,8 +37,7 @@ ignore/
 *.tar.gz
 *.zip
 *.msi
-dist/
-**/dist/
+!Ensembyte-rust/dist/macos/Info.plist
 
 # Large binaries (keep them in assets, not in the repo root)
 ensembyte-hero
