@@ -4,6 +4,7 @@ import AppKit
 import AVFoundation
 import CoreMedia
 @preconcurrency import ScreenCaptureKit
+import UserNotifications
 
 extension NSImage: @unchecked @retroactive Sendable {}
 extension AVAssetTrack: @unchecked @retroactive Sendable {}
@@ -11,6 +12,7 @@ extension CMSampleBuffer: @unchecked @retroactive Sendable {}
 extension SCShareableContent: @unchecked @retroactive Sendable {}
 extension SCContentFilter: @unchecked @retroactive Sendable {}
 extension SCStreamConfiguration: @unchecked @retroactive Sendable {}
+extension UNNotificationSettings: @unchecked @retroactive Sendable {}
 #endif
 
 #if compiler(<6.2) || COMPILER_PRE_MACOS26

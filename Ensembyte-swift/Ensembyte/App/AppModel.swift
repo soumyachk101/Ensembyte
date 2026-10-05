@@ -1,7 +1,7 @@
 import AppKit
 import Security
 import SwiftUI
-import UserNotifications
+@preconcurrency import UserNotifications
 
 struct AppAlert: Identifiable {
     let id = UUID()
