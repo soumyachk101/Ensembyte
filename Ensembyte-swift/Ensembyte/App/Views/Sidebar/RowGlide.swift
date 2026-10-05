@@ -172,8 +172,8 @@ private struct RowGlideView: View {
         let departureFill = glide.departureFill
         let arrivalFill = glide.arrivalFill
         let settles = glide.direction == .settle
-        let departureImage = glide.departure
-        let arrivalImage = glide.arrival
+        nonisolated(unsafe) let departureImage = glide.departure
+        nonisolated(unsafe) let arrivalImage = glide.arrival
         let bounds = glide.bounds
         let shape = RoundedRectangle(cornerRadius: Chrome.rowCornerRadius, style: .continuous)
         Color.clear
