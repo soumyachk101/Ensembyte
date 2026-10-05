@@ -20,9 +20,6 @@
     <img src="https://github.com/soumyachk101/Ensembyte/actions/workflows/release.yml/badge.svg" alt="Release" />
   </a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
-  <a href="https://crates.io/crates/ensembyte">
-    <img src="https://img.shields.io/crates/v/ensembyte.svg" alt="Crates.io" />
-  </a>
 </p>
 
 ---
