@@ -95,7 +95,7 @@ enum MCPProbe {
         let connection = try MCPStdioConnection.launch(executable: executable, arguments: server.args, environment: environment)
         defer { connection.stop() }
 
-        func nextReply(_ method: String, _ params: JSONValue?) async throws -> JSONValue {
+        @Sendable func nextReply(_ method: String, _ params: JSONValue?) async throws -> JSONValue {
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 0 else {
                 throw exitError(code: nil, isOAuth: isOAuth, stderr: connection.errorTail)
@@ -142,16 +142,20 @@ enum MCPProbe {
 
     // MARK: - Remote servers over streamable HTTP
 
+    private final class ProbeSessionBox: @unchecked Sendable {
+        var id: String?
+    }
+
     private static func probeRemote(_ server: MCPResolvedServer, _ urlString: String) async throws -> MCPProbeResult {
         guard let url = URL(string: urlString) else {
             throw MCPProbeError.malformed("invalid URL")
         }
-        var sessionID: String?
+        let session = ProbeSessionBox()
 
-        func post(_ payload: JSONValue, id: Int?) async throws -> JSONValue? {
+        @Sendable func post(_ payload: JSONValue, id: Int?) async throws -> JSONValue? {
             do {
-                let posted = try await MCPWire.post(to: url, headers: server.headers, sessionID: sessionID, payload: payload, id: id, timeout: 30)
-                sessionID = posted.sessionID ?? sessionID
+                let posted = try await MCPWire.post(to: url, headers: server.headers, sessionID: session.id, payload: payload, id: id, timeout: 30)
+                session.id = posted.sessionID ?? session.id
                 return posted.body
             } catch let error as MCPHTTPError where (error.status == 401 || error.status == 403) && server.oauthUpstream != nil {
                 let status = error.status, body = error.body
@@ -182,7 +186,7 @@ enum MCPProbe {
             }
         }
 
-        func nearest(_ value: JSONValue?) throws -> JSONValue {
+        @Sendable func nearest(_ value: JSONValue?) throws -> JSONValue {
             guard let body = value else { throw MCPProbeError.malformed("empty reply") }
             try checkReply(body)
             guard body.object != nil else { throw MCPProbeError.malformed("invalid reply") }

@@ -64,7 +64,7 @@ struct SidebarView: View {
 
     /// The list's own coordinate space: the rows report their frames in it and the drag
     /// gesture reads its locations in it, whatever the scroll position.
-    private static let listSpace = "sidebar-list"
+    private nonisolated static let listSpace = "sidebar-list"
 
     var body: some View {
         // Where every thread sits, worked out once per pass: the grouping and the list below
@@ -1881,14 +1881,16 @@ private struct SidebarThreadRow: View, Equatable {
     /// re-evaluation skips rows whose thread did not change. Live state still reaches the
     /// body through the model's per-thread cells.
     nonisolated static func == (lhs: SidebarThreadRow, rhs: SidebarThreadRow) -> Bool {
-        lhs.snapshot.id == rhs.snapshot.id
-            && lhs.snapshot.title == rhs.snapshot.title
-            && lhs.snapshot.updatedAt == rhs.snapshot.updatedAt
-            && lhs.snapshot.isPinned == rhs.snapshot.isPinned
-            && lhs.snapshot.isSettled == rhs.snapshot.isSettled
-            && lhs.projectName == rhs.projectName
-            && lhs.isDragged == rhs.isDragged
-            && (lhs.onToggleFold != nil) == (rhs.onToggleFold != nil)
+        MainActor.assumeIsolated {
+            lhs.snapshot.id == rhs.snapshot.id
+                && lhs.snapshot.title == rhs.snapshot.title
+                && lhs.snapshot.updatedAt == rhs.snapshot.updatedAt
+                && lhs.snapshot.isPinned == rhs.snapshot.isPinned
+                && lhs.snapshot.isSettled == rhs.snapshot.isSettled
+                && lhs.projectName == rhs.projectName
+                && lhs.isDragged == rhs.isDragged
+                && (lhs.onToggleFold != nil) == (rhs.onToggleFold != nil)
+        }
     }
 
     /// The room the title leaves for what sits at the row's trailing end: the check and the
