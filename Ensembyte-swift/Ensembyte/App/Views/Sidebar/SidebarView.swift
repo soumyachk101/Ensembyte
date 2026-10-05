@@ -1411,7 +1411,7 @@ private struct SidebarHelperRow: View, Equatable {
 
     /// The ellipsis popover's items. Kept on the instance: a popover is not an AppKit menu.
 
-    static func == (lhs: SidebarHelperRow, rhs: SidebarHelperRow) -> Bool {
+    nonisolated static func == (lhs: SidebarHelperRow, rhs: SidebarHelperRow) -> Bool {
         lhs.snapshot.id == rhs.snapshot.id
             && lhs.snapshot.title == rhs.snapshot.title
             && lhs.snapshot.updatedAt == rhs.snapshot.updatedAt
@@ -1880,7 +1880,7 @@ private struct SidebarThreadRow: View, Equatable {
     /// Value inputs only: closures and the frame holder are ignored, so the parent's
     /// re-evaluation skips rows whose thread did not change. Live state still reaches the
     /// body through the model's per-thread cells.
-    static func == (lhs: SidebarThreadRow, rhs: SidebarThreadRow) -> Bool {
+    nonisolated static func == (lhs: SidebarThreadRow, rhs: SidebarThreadRow) -> Bool {
         lhs.snapshot.id == rhs.snapshot.id
             && lhs.snapshot.title == rhs.snapshot.title
             && lhs.snapshot.updatedAt == rhs.snapshot.updatedAt

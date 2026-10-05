@@ -37,6 +37,8 @@ ignore/
 *.tar.gz
 *.zip
 *.msi
+dist/
+**/dist/
 
 # Large binaries (keep them in assets, not in the repo root)
 ensembyte-hero

@@ -937,7 +937,7 @@ extension Animation {
 /// The face holds through the first half of the flight and fades over the second, the way
 /// the sidebar's ghost slips out of the list's edge (see `RowGlideAnimator`); with Reduce
 /// Motion on it fades where it stands.
-private struct SettleGlideModifier: ViewModifier, Animatable {
+private struct SettleGlideModifier: ViewModifier, @preconcurrency Animatable {
     var progress: Double
 
     var animatableData: Double {

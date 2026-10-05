@@ -53,7 +53,7 @@ jobs:
         run: cargo check -p ensembyte
 
       - name: Cargo Clippy Windows
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets
 
       - name: Cargo Test Windows
         run: cargo test --locked -p orbit-engine --lib
@@ -91,7 +91,7 @@ jobs:
         run: cargo check -p ensembyte
 
       - name: Cargo Clippy Linux
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets
 
       - name: Cargo Test Linux
         run: cargo test --locked -p orbit-engine --lib

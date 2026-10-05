@@ -232,7 +232,7 @@ private struct HeatmapCanvas: View {
 /// Draws the grid with each cell mixed `progress` of the way from the previous mode's
 /// colour to the current one. Animatable over `blend`, so SwiftUI redraws it every frame
 /// of a mode switch with the interpolated value.
-private struct HeatmapBlendModifier: ViewModifier, Animatable {
+private struct HeatmapBlendModifier: ViewModifier, @preconcurrency Animatable {
     let grid: TokenActivityGrid
     let previous: TokenActivityGrid?
     var blend: Double

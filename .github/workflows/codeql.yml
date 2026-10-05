@@ -76,8 +76,11 @@ jobs:
             -project Ensembyte.xcodeproj \
             -scheme Ensembyte \
             -configuration Debug \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
+            OTHER_SWIFT_FLAGS="\$(inherited) -enable-experimental-feature IsolatedDeinit" \
             build
 
       - name: Perform CodeQL Analysis

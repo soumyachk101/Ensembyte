@@ -846,7 +846,7 @@ struct HydraMergeTrack: View {
 }
 
 /// The track as drawn from its three continuous values; SwiftUI interpolates them.
-private struct HydraMergeTrackBody: View, Animatable {
+private struct HydraMergeTrackBody: View, @preconcurrency Animatable {
     /// The head's place along the track in dots: whole at rest on a dot, fractional in
     /// flight between two.
     var position: CGFloat

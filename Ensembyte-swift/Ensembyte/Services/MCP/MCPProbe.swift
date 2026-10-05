@@ -49,7 +49,7 @@ enum MCPProbeError: LocalizedError, Sendable {
 }
 
 enum MCPProbe {
-    @concurrent
+    @Sendable
     static func probe(_ server: MCPResolvedServer) async throws -> MCPProbeResult {
         if server.command != nil {
             return try await probeStdio(server)
