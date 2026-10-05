@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CHANGELOG = ROOT / "CHANGELOG.md"
+CHANGELOG = (ROOT / "CHANGELOG.md") if (ROOT / "CHANGELOG.md").exists() else (ROOT.parent / "CHANGELOG.md")
 OUT = (ROOT.parent / "website" / "changelog.json") if (ROOT.parent / "website").exists() else (ROOT / "website" / "changelog.json")
 
 RELEASE_RE = re.compile(r"^## \[(\d+(?:\.\d+)*)\](?: - (\d{4}-\d{2}-\d{2}))?\s*$")
@@ -22,7 +22,9 @@ SECTION_RE = re.compile(r"^### (.*)$")
 
 HEADING_MAP = {
     "new features": "New features",
+    "added": "New features",
     "bug fixes": "Bug fixes",
+    "fixed": "Bug fixes",
     "refinements": "Refinements",
 }
 # ### Thanks bullets land in the `thanks` list, not in the sections.

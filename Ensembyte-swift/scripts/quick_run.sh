@@ -30,6 +30,11 @@ TARGET="/Applications/$APP_NAME.app"
 
 step() { printf '\n==> %s\n' "$1"; }
 
+SIGN_FLAGS=()
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q 'NARHG44L48'; then
+  SIGN_FLAGS=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE="Manual")
+fi
+
 step "Building $APP_NAME (Debug)"
 xcodebuild \
   -project Ensembyte.xcodeproj \
@@ -38,6 +43,7 @@ xcodebuild \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED" \
   -skipPackagePluginValidation \
+  "${SIGN_FLAGS[@]}" \
   build 2>&1 | tail -n 5
 
 step "Installing the single copy to $TARGET"

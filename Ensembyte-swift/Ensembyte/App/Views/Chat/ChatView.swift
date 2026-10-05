@@ -971,7 +971,7 @@ private struct PanelScene {
     static func geometry(members: PanelMembers, runtime: ThreadRuntime, model: AppModel, paneSize: CGSize, composerAreaHeight: CGFloat, usageContentHeight: CGFloat?, holdsHydra: Bool = false, preferredSize: CGSize? = nil, usageHeightOverride: CGFloat? = nil) -> Geometry {
         let isMeasured = paneSize != .zero
         let preferred = preferredSize ?? model.settings.panelSize
-        let showsHydra = (!members.heads.isEmpty || holdsHydra) && isMeasured
+        let showsHydra = (!members.heads.isEmpty || holdsHydra) && isMeasured && !model.isThreadMode(for: runtime.threadID)
         let showsPopped = members.popped != nil && showsHydra
         let showsUsage = members.usage != nil && isMeasured
         let isHydraDocked = showsHydra

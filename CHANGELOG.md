@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.0] - 2026-10-06
+
+Ensembyte 1.1.0 introduces Hydra Thread View to the sidebar and live status glyphs for child heads.
+
+### New features
+- **Hydra Thread View** (`Ensembyte-swift/`): Hydra heads can now run in a new dedicated thread on the sidebar instead of a floating panel. Right-click any lead thread with Hydra enabled and choose "Switch to Thread View" to migrate heads into individual sidebar rows with full status glyphs. Switch back to floating panel mode anytime from the same menu.
+- **Head row status** (`Ensembyte-swift/`): Each Hydra head now shows its live status glyph (thinking, done, error) directly in its sidebar row, matching the floating panel indicator.
+
+### Bug fixes
+- Fixed sidebar layout for threads with many Hydra heads in thread mode.
+
 ## [1.0.1] - 2026-10-04
 
 ### Fixed

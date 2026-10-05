@@ -453,7 +453,8 @@ struct SidebarView: View {
     }
 
     /// The helpers under a thread: one small row each, or a single line naming them while
-    /// they are folded away.
+    /// they are folded away. In thread mode, Hydra heads get their own full rows
+    /// (like child threads) instead of being packed into a headCards card.
     private func helperItems(under thread: ChatThread, helpers: [ChatThread]) -> [SidebarItem] {
         // A settled thread is one small line; what it spawned comes back when it reopens.
         guard !thread.isSettled, !helpers.isEmpty else { return [] }
@@ -462,6 +463,19 @@ struct SidebarView: View {
         }
         let plain = helpers.filter { !$0.isHydraHead }
         let heads = Self.orderedHeads(helpers.filter(\.isHydraHead))
+
+        // Thread mode: heads are full rows, so we skip the card entirely.
+        if model.isThreadMode(for: thread.id), !heads.isEmpty {
+            // Show plain helpers first, then each head as its own row.
+            let plainItems = plain.map { helper in
+                SidebarItem(id: helper.id.uuidString, kind: .helper(helper, isLast: false))
+            }
+            let headItems = heads.enumerated().map { idx, head in
+                SidebarItem(id: head.id.uuidString, kind: .helper(head, isLast: idx == heads.count - 1 && plain.isEmpty))
+            }
+            return plainItems + headItems
+        }
+
         let showsHeads = !heads.isEmpty && !(model.settings.hydraAutoHidesIdleHeads && !hasRunningHead(heads))
         var items = plain.map { helper in
             SidebarItem(id: helper.id.uuidString, kind: .helper(helper, isLast: helper.id == plain.last?.id && !showsHeads))
@@ -826,7 +840,7 @@ struct SidebarView: View {
     }
 
     /// Each peer's slot: its row, the helper rows or folded line under it, and the list's
-    /// spacing after each.
+    /// spacing after each. In thread mode each Hydra head takes its own helper row.
     private func slotHeights(for order: [UUID]) -> [UUID: CGFloat] {
         let grouped = helpersByParent(placements: threadPlacements)
         var heights: [UUID: CGFloat] = [:]
@@ -834,18 +848,27 @@ struct SidebarView: View {
             var height = (rowHeights.values[id.uuidString] ?? Chrome.rowHeight) + 1
             let helpers = grouped[id] ?? []
             if !helpers.isEmpty {
-                if model.thread(id)?.foldsHelpers == true {
+                let thread = model.thread(id)
+                if thread?.foldsHelpers == true {
                     height += (rowHeights.values["helpers-\(id)"] ?? ThreadRowMetrics.helperHeight) + 1
                 } else {
                     for helper in helpers where !helper.isHydraHead {
                         height += (rowHeights.values[helper.id.uuidString] ?? ThreadRowMetrics.helperHeight) + 1
                     }
-                    let headCount = model.settings.hydraAutoHidesIdleHeads && !hasRunningHead(helpers.filter(\.isHydraHead))
-                        ? 0
-                        : helpers.count(where: \.isHydraHead)
-                    if headCount > 0 {
-                        let rows = (headCount + 5) / 6
-                        height += (rowHeights.values["heads-\(id)"] ?? ThreadRowMetrics.headCardHeight(rows: rows)) + 1
+                    let heads = helpers.filter(\.isHydraHead)
+                    // Thread mode: each head is its own row.
+                    if thread?.hydraThreadMode == true, !heads.isEmpty {
+                        for head in heads {
+                            height += (rowHeights.values[head.id.uuidString] ?? ThreadRowMetrics.helperHeight) + 1
+                        }
+                    } else {
+                        let headCount = model.settings.hydraAutoHidesIdleHeads && !hasRunningHead(heads)
+                            ? 0
+                            : heads.count
+                        if headCount > 0 {
+                            let rows = (headCount + 5) / 6
+                            height += (rowHeights.values["heads-\(id)"] ?? ThreadRowMetrics.headCardHeight(rows: rows)) + 1
+                        }
                     }
                 }
             }
@@ -2281,6 +2304,15 @@ private enum ThreadActions {
             guard let model else { return }
             Task { await model.forwardThread(threadID) }
         })
+        // Thread mode: show a toggle on threads with Hydra heads.
+        if !thread.isHelper && thread.hydraEnabled {
+            let label = thread.hydraThreadMode ? "Switch to Floating Panel" : "Switch to Thread View"
+            let symbol = thread.hydraThreadMode ? "square.grid.2x2" : "bubble.left.and.bubble.right"
+            items.append(RowAction(title: label, symbol: symbol) { [weak model, threadID] in
+                guard let model else { return }
+                model.setHydraThreadMode(!thread.hydraThreadMode, for: threadID)
+            })
+        }
         if let path = thread.worktreePath {
             items.append(RowAction(title: "Reveal worktree in Finder", symbol: "folder") { [weak model, path] in
                 guard model != nil else { return }

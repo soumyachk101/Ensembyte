@@ -184,6 +184,9 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     var hydraSpawnCount = 0
     /// Set on a head: the thread is one of its parent's team.
     var hydra: HydraHeadInfo?
+    /// Thread mode: when true, heads spawn as child threads in the sidebar
+    /// rather than appearing in a floating HydraPanel. Default is false (panel).
+    var hydraThreadMode = false
 
     /// Spawned from another thread, whichever side of the panel it is on.
     var isHelper: Bool { parentThreadID != nil }

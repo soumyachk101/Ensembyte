@@ -1,6 +1,28 @@
 {
-  "generated_at": "2026-10-04T13:52:00.000000+00:00",
+  "generated_at": "2026-10-05T18:41:24.109388+00:00",
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-10-06",
+      "platform": "mac",
+      "summary": "Ensembyte 1.1.0 introduces Hydra Thread View to the sidebar and live status glyphs for child heads.",
+      "sections": [
+        {
+          "title": "New features",
+          "items": [
+            "Hydra Thread View: Hydra heads can now run in a new dedicated thread on the sidebar instead of a floating panel. Right-click any lead thread with Hydra enabled and choose \"Switch to Thread View\" to migrate heads into individual sidebar rows with full status glyphs. Switch back to floating panel mode anytime from the same menu.",
+            "Head row status: Each Hydra head now shows its live status glyph (thinking, done, error) directly in its sidebar row, matching the floating panel indicator."
+          ]
+        },
+        {
+          "title": "Bug fixes",
+          "items": [
+            "Fixed sidebar layout for threads with many Hydra heads in thread mode."
+          ]
+        }
+      ],
+      "thanks": []
+    },
     {
       "version": "1.0.1",
       "date": "2026-10-04",

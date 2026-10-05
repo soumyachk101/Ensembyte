@@ -103,7 +103,10 @@ struct HydraButton: View {
     /// Shows the floating panel; shown, hides it. The panel fades and scales in and out
     /// in place while the chat slides to make room or take it back. Heads keep working
     /// either way. With nothing out yet the popover explains instead (see the body).
+    /// In thread mode the panel does not exist — heads live in the sidebar.
     private func togglePanel() {
+        let threadID = thread.id
+        guard !model.isThreadMode(for: threadID) else { return }
         withAnimation(Chrome.panelSlide) { runtime.isHydraPanelHidden.toggle() }
     }
 

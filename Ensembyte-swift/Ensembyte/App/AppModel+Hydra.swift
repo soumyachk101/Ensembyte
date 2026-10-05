@@ -214,6 +214,35 @@ extension AppModel {
         }
     }
 
+    /// Returns true when the given thread uses the nested-thread mode for Hydra heads
+    /// (no floating panel) rather than the default floating panel.
+    func isThreadMode(for threadID: UUID) -> Bool {
+        thread(threadID)?.hydraThreadMode ?? false
+    }
+
+    /// Switches a thread between floating-panel mode and nested-thread mode.
+    /// In thread mode the panel stays hidden and heads appear as child threads
+    /// in the sidebar.
+    func setHydraThreadMode(_ threadMode: Bool, for threadID: UUID) {
+        let previous = isThreadMode(for: threadID)
+        guard previous != threadMode else { return }
+        updateThread(threadID) {
+            $0.hydraThreadMode = threadMode
+            // In thread mode, always show helpers expanded so heads are visible
+            // in the sidebar. Leave the user's folding preference alone when
+            // switching back to floating mode.
+            if threadMode { $0.foldsHelpers = false }
+        }
+        // When switching to thread mode, dismiss any visible panel so the heads
+        // migrate to the sidebar; when switching back, leave the panel state
+        // untouched — the next head spawned will bring it forward.
+        if threadMode {
+            let runtime = runtime(for: threadID)
+            runtime.isHydraPanelHidden = true
+            runtime.hydraSelectedHeadID = nil
+        }
+    }
+
     /// The heads a lead still shows in its panel, in the order they were sent out. Read
     /// through the parent index and the heads' own cells, so the chat showing them is left
     /// alone when any other thread changes.
@@ -443,10 +472,13 @@ extension AppModel {
         head.hydra = info
         insertThread(head)
 
-        // A new head brings the panel back and takes the stage.
+        // A new head brings the panel back and takes the stage, unless the lead
+        // thread is in thread mode (heads appear as nested child threads).
         let leadRuntime = runtime(for: parentID)
-        leadRuntime.isHydraPanelHidden = false
-        leadRuntime.hydraSelectedHeadID = head.id
+        if !isThreadMode(for: parentID) {
+            leadRuntime.isHydraPanelHidden = false
+            leadRuntime.hydraSelectedHeadID = head.id
+        }
         return head
     }
 
