@@ -45,7 +45,7 @@ enum MCPWire {
 
     /// Paging for `tools/list`: ten pages at most, each cursor fed back until the server
     /// stops handing one out. The caller owns the request and its error type.
-    nonisolated static func listTools(_ page: (JSONValue) async throws -> JSONValue) async throws -> [JSONValue] {
+    nonisolated static func listTools(_ page: @Sendable (JSONValue) async throws -> JSONValue) async throws -> [JSONValue] {
         var tools: [JSONValue] = []
         var cursor: String?
         for _ in 0..<10 {
