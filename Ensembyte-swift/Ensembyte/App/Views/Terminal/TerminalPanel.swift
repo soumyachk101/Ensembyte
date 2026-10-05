@@ -402,12 +402,16 @@ final class TerminalHostContainer: NSView {
         resizeObservers.append(center.addObserver(
             forName: NSWindow.willStartLiveResizeNotification, object: window, queue: .main
         ) { [weak self] _ in
-            self?.hostedView?.autoresizingMask = []
+            MainActor.assumeIsolated {
+                self?.hostedView?.autoresizingMask = []
+            }
         })
         resizeObservers.append(center.addObserver(
             forName: NSWindow.didEndLiveResizeNotification, object: window, queue: .main
         ) { [weak self] _ in
-            self?.finishResize()
+            MainActor.assumeIsolated {
+                self?.finishResize()
+            }
         })
     }
 
@@ -418,8 +422,10 @@ final class TerminalHostContainer: NSView {
         // the whole drag; with it the frame (and its one re-wrap) follows at most per beat.
         guard pendingSync == nil else { return }
         let work = DispatchWorkItem { [weak self] in
-            self?.pendingSync = nil
-            self?.syncFrame()
+            MainActor.assumeIsolated {
+                self?.pendingSync = nil
+                self?.syncFrame()
+            }
         }
         pendingSync = work
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50), execute: work)
