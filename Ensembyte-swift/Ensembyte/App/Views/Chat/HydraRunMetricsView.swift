@@ -230,7 +230,7 @@ private struct HydraRunMetricsCard: View, Equatable {
 
     /// Only the snapshot decides the drawing: the panel redraws for plenty of reasons that
     /// leave the card's text alone.
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.metrics == rhs.metrics }
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.metrics == rhs.metrics }
 
 
     var body: some View {

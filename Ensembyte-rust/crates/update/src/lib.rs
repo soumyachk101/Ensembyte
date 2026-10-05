@@ -1469,6 +1469,7 @@ fn now_ms() -> i64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::unused_io_amount)]
 mod tests {
     use super::*;
 

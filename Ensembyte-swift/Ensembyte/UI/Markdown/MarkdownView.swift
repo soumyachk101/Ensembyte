@@ -908,7 +908,7 @@ enum FaviconCache {
     /// Hosts with no icon are remembered too, and concurrent asks share one request: a streaming
     /// reply restarts its row's task on every token, and scrolling re-runs it on every appear.
     private static var failed: Set<String> = []
-    private static var inFlight: [String: Task<NSImage?, Never>] = [:]
+    private static var inFlight: [String: Task<Data?, Never>] = [:]
 
     static func image(for host: String) async -> NSImage? {
         let key = host.lowercased()
@@ -920,20 +920,25 @@ enum FaviconCache {
             failed.insert(key)
             return nil
         }
-        if let task = inFlight[key] { return await task.value }
-        let task = Task { () -> NSImage? in
-            guard let data = await iconData(for: key), let clean = cleaned(data) else { return nil }
-            return resizedIcon(clean)
-        }
-        inFlight[key] = task
-        let image = await task.value
-        inFlight[key] = nil
-        if let image {
-            if memory.count >= 300 { memory.removeAll(keepingCapacity: true) }
-            memory[key] = image
+        let data: Data?
+        if let task = inFlight[key] {
+            data = await task.value
         } else {
-            failed.insert(key)
+            let task = Task { () -> Data? in
+                await iconData(for: key)
+            }
+            inFlight[key] = task
+            data = await task.value
+            inFlight[key] = nil
         }
+        if let hit = memory[key] { return hit }
+        guard let data, let clean = cleaned(data) else {
+            failed.insert(key)
+            return nil
+        }
+        let image = resizedIcon(clean)
+        if memory.count >= 300 { memory.removeAll(keepingCapacity: true) }
+        memory[key] = image
         return image
     }
 

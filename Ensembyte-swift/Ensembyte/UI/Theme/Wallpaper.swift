@@ -23,7 +23,7 @@ final class WallpaperStore {
 
     /// One blur context for every render: making one per picture stalls the softness slider.
     /// The context draws from any thread, so it sits outside the main actor.
-    nonisolated static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated(unsafe) static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     static let acceptedTypes: [UTType] = [.image]
 
