@@ -107,11 +107,11 @@ struct Member {
     fast: bool,
 }
 
+type CatalogCache = Mutex<Option<(Instant, Vec<Model>, Vec<Group>)>>;
+
 #[derive(Default)]
 pub(super) struct Catalog {
-    // Only overlapping callers share a result. A later picker open always
-    // probes again, including after errors, login changes, or model rollouts.
-    latest: Mutex<Option<(Instant, Vec<Model>, Vec<Group>)>>,
+    latest: CatalogCache,
 }
 
 impl Catalog {

@@ -815,10 +815,11 @@ pub fn restart_service() -> anyhow::Result<()> {
     if cfg!(target_os = "macos") {
         let output = std::process::Command::new("id").arg("-u").output()?;
         let uid = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let _ = run(
+        run(
             "launchctl",
             &["kickstart", "-k", &format!("gui/{uid}/org.ensembyte.app")],
-        ).or_else(|_| {
+        )
+        .or_else(|_| {
             run(
                 "launchctl",
                 &["kickstart", "-k", &format!("gui/{uid}/sh.orbit.app")],
@@ -826,10 +827,11 @@ pub fn restart_service() -> anyhow::Result<()> {
         })?;
         Ok(())
     } else {
-        let _ = run(
+        run(
             "systemctl",
             &["--user", "--no-block", "restart", "ensembyte.service"],
-        ).or_else(|_| {
+        )
+        .or_else(|_| {
             run(
                 "systemctl",
                 &["--user", "--no-block", "restart", "orbit.service"],

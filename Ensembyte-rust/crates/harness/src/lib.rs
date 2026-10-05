@@ -405,7 +405,6 @@ pub(crate) async fn shutdown_child(child: &mut process::Child, kill_grace: std::
         let _ = kill_grace;
         let _ = child.start_kill();
         let _ = child.wait().await;
-        return;
     }
     #[cfg(not(windows))]
     {

@@ -107,8 +107,8 @@ impl Normalizer {
                         id: id.clone(),
                         call: tool(name, &args),
                     });
-                    self.tools.insert(id, (name.into(), args));
                 }
+                self.tools.entry(id).or_insert((name.into(), frame["args"].clone()));
             }
             "tool_execution_end" => {
                 let id = string(frame, "toolCallId").to_owned();
