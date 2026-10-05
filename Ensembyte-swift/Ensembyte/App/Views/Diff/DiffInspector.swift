@@ -256,7 +256,9 @@ struct DiffLinesView: View, Equatable {
     // Skip re-renders when a sibling card changes: hunk arrays defeat the
     // default diff, so compare only the file identity and hunk count.
     nonisolated static func == (lhs: DiffLinesView, rhs: DiffLinesView) -> Bool {
-        lhs.sectionsKey == rhs.sectionsKey && lhs.showsLineNumbers == rhs.showsLineNumbers
+        MainActor.assumeIsolated {
+            lhs.sectionsKey == rhs.sectionsKey && lhs.showsLineNumbers == rhs.showsLineNumbers
+        }
     }
 
     /// What the rows depend on, cheaply: the same path with more or fewer lines (the
@@ -271,8 +273,8 @@ struct DiffLinesView: View, Equatable {
 
     /// Large files render collapsed: materializing thousands of rows at once is what
     /// makes opening a diff feel laggy. The full diff is one instant tap away.
-    private static let collapsedLineLimit = 200
-    private static let tintedChunk = 40
+    private nonisolated static let collapsedLineLimit = 200
+    private nonisolated static let tintedChunk = 40
 
     private var totalLines: Int {
         file.hunks.reduce(0) { $0 + $1.lines.count }

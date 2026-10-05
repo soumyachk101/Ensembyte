@@ -773,10 +773,12 @@ final class ClaudeSession: ProviderSession {
     private static func turnSpend(_ message: JSONValue) -> Int {
         guard let usage = message["usage"] else { return 0 }
         func tokens(_ value: JSONValue?) -> Int {
-            (value?["input_tokens"]?.int ?? 0)
-                + (value?["cache_read_input_tokens"]?.int ?? 0)
-                + (value?["cache_creation_input_tokens"]?.int ?? 0)
-                + (value?["output_tokens"]?.int ?? 0)
+            guard let value else { return 0 }
+            let input = value["input_tokens"]?.int ?? 0
+            let cacheRead = value["cache_read_input_tokens"]?.int ?? 0
+            let cacheCreation = value["cache_creation_input_tokens"]?.int ?? 0
+            let output = value["output_tokens"]?.int ?? 0
+            return input + cacheRead + cacheCreation + output
         }
         if let iterations = usage["iterations"]?.array, !iterations.isEmpty {
             return iterations.reduce(0) { $0 + tokens($1) }
@@ -787,10 +789,11 @@ final class ClaudeSession: ProviderSession {
     private static func contextUsage(_ message: JSONValue) -> ContextUsage? {
         guard let usage = message["usage"] else { return nil }
         let last = usage["iterations"]?.array?.last ?? usage
-        let used = (last["input_tokens"]?.int ?? 0)
-            + (last["cache_read_input_tokens"]?.int ?? 0)
-            + (last["cache_creation_input_tokens"]?.int ?? 0)
-            + (last["output_tokens"]?.int ?? 0)
+        let input = last["input_tokens"]?.int ?? 0
+        let cacheRead = last["cache_read_input_tokens"]?.int ?? 0
+        let cacheCreation = last["cache_creation_input_tokens"]?.int ?? 0
+        let output = last["output_tokens"]?.int ?? 0
+        let used = input + cacheRead + cacheCreation + output
         guard used > 0 else { return nil }
         let window = message["modelUsage"]?.object?.values.compactMap { $0["contextWindow"]?.int }.max()
         return ContextUsage(usedTokens: used, windowTokens: window)
