@@ -78,6 +78,8 @@ jobs:
             -configuration Debug \
             -skipPackagePluginValidation \
             -skipMacroValidation \
+            MACOSX_DEPLOYMENT_TARGET=15.0 \
+            OTHER_SWIFT_FLAGS="-DCOMPILER_PRE_MACOS26" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             build
