@@ -1,0 +1,72 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out this form as completely as possible.
+
+  - type: textarea
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I click X, the app crashes instead of..."
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the behavior.
+      placeholder: |
+        1. Open Ensembyte
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual Behavior
+      description: What actually happened.
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Ensembyte Version
+      description: Which version of Ensembyte are you using?
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Client
+      description: Which client are you using?
+      placeholder: "macOS (Swift) / Windows (Rust) / Linux (Rust)"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: OS Version
+      description: What OS and version are you running?
+      placeholder: "e.g. macOS 26.0, Ubuntu 24.04, Windows 11"
+      validations:
+        required: true
+
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or logs about the problem here.
+      placeholder: "Paste logs, screenshots, or other relevant information."

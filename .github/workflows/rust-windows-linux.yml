@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Rust toolchain
         run: rustup show active-toolchain || rustup toolchain install
@@ -45,12 +45,18 @@ jobs:
           "GPUI_FXC_PATH=$($fxc.FullName)" >> $env:GITHUB_ENV
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7
         with:
           workspaces: Ensembyte-rust
 
       - name: Cargo Check Windows
         run: cargo check -p ensembyte
+
+      - name: Cargo Clippy Windows
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Cargo Test Windows
+        run: cargo test --locked -p orbit-engine --lib
 
   linux-build:
     name: Linux (x86_64)
@@ -62,7 +68,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install Linux system dependencies for GPUI
         run: |
@@ -77,9 +83,23 @@ jobs:
         run: rustup show active-toolchain || rustup toolchain install
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7
         with:
           workspaces: Ensembyte-rust
 
       - name: Cargo Check Linux
         run: cargo check -p ensembyte
+
+      - name: Cargo Clippy Linux
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Cargo Test Linux
+        run: cargo test --locked -p orbit-engine --lib
+
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit --version "^0.21"
+
+      - name: Cargo Deny (licenses + advisories)
+        run: |
+          cargo install --locked cargo-deny --version "^0.15"
+          cargo deny --workspace --log-level warn check all

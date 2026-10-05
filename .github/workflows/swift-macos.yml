@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Select Xcode 16
         run: |
@@ -37,6 +37,13 @@ jobs:
             sudo xcode-select -s "$XCODE_APP"
           fi
           xcodebuild -version
+
+      - name: Resolve Swift Package Dependencies
+        run: |
+          cd Ensembyte-swift
+          xcodebuild -resolvePackageDependencies \
+            -project Ensembyte.xcodeproj \
+            -scheme Ensembyte
 
       - name: Build Ensembyte macOS (Debug)
         run: |

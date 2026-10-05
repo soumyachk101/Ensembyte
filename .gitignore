@@ -38,6 +38,9 @@ ignore/
 *.zip
 *.msi
 
+# Large binaries (keep them in assets, not in the repo root)
+ensembyte-hero
+
 # Agent, IDE, & Tool scratch
 .agents/
 .claude/

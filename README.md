@@ -9,6 +9,22 @@
   Drive your AI coding agents locally — with style, speed, and zero telemetry.
 </p>
 
+<p align="center">
+  <a href="https://github.com/soumyachk101/Ensembyte/actions/workflows/swift-macos.yml">
+    <img src="https://github.com/soumyachk101/Ensembyte/actions/workflows/swift-macos.yml/badge.svg" alt="macOS CI" />
+  </a>
+  <a href="https://github.com/soumyachk101/Ensembyte/actions/workflows/rust-windows-linux.yml">
+    <img src="https://github.com/soumyachk101/Ensembyte/actions/workflows/rust-windows-linux.yml/badge.svg" alt="Rust CI" />
+  </a>
+  <a href="https://github.com/soumyachk101/Ensembyte/actions/workflows/release.yml">
+    <img src="https://github.com/soumyachk101/Ensembyte/actions/workflows/release.yml/badge.svg" alt="Release" />
+  </a>
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+  <a href="https://crates.io/crates/ensembyte">
+    <img src="https://img.shields.io/crates/v/ensembyte.svg" alt="Crates.io" />
+  </a>
+</p>
+
 ---
 
 ## What is Ensembyte?
@@ -27,7 +43,7 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 |---|---|---|
 | **Platform** | **macOS** (Apple silicon, macOS 26+) | **Windows & Linux** (x86_64, ARM64) |
 | **Stack** | Swift 6 / SwiftUI + Liquid Glass | Rust 2024 / GPUI (GPU-accelerated) |
-| **Source** | [`Ensembyte-swift/`](Ensembyte-swift/) | [`Ensembyte-rust/`](Ensembyte-rust/) |https://github.com/emilkowalski/skills/blob/main/skills/apple-design/SKILL.md
+| **Source** | [`Ensembyte-swift/`](Ensembyte-swift/) | [`Ensembyte-rust/`](Ensembyte-rust/) |
 | **Packages** | Signed & Notarized `.dmg` | `.exe` / `.zip`, `.tar.gz` / `.AppImage` / `.deb` |
 | **Multi-Agent** | Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
 | **Design** | 26 tinted-glass themes, Liquid Glass | Minimalist dark/light, immediate-mode GPU |

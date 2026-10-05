@@ -1,0 +1,47 @@
+name: Documentation
+description: Report issues or suggest improvements for documentation
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve Ensembyte's documentation. Report typos, unclear sections, missing information, or suggest entirely new documentation.
+
+  - type: textarea
+    attributes:
+      label: Location
+      description: Where is the documentation issue? (file path, URL, section name)
+      placeholder: "README.md > Building from Source"
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Issue
+      description: What is wrong or missing?
+      placeholder: "The build instructions don't mention Xcode 16..."
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Suggested Fix
+      description: How would you fix or improve this?
+      placeholder: "Add a note about Xcode 16 being required..."
+    validations:
+      required: false
+
+  - type: dropdown
+    attributes:
+      label: Type
+      description: What kind of documentation issue is this?
+      options:
+        - Typo / grammar
+        - Incorrect information
+        - Missing information
+        - Unclear explanation
+        - New documentation needed
+        - Other
+    validations:
+      required: true
