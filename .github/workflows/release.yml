@@ -13,10 +13,10 @@ on:
       tag:
         description: 'Release tag (e.g. v1.0.0)'
         required: true
-        default: 'v1.0.0'
 
 permissions:
-  contents: write
+  contents: read
+  # contents: write is granted per-job below only when needed
 
 jobs:
   # =========================================================================
@@ -30,13 +30,35 @@ jobs:
       run:
         shell: pwsh
         working-directory: Ensembyte-rust
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Setup Rust toolchain
-        run: rustup show active-toolchain || rustup toolchain install
+      - name: Validate release tag
+        run: |
+          $TAG = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $env:GITHUB_EVENT_INPUT_TAG
+          } else {
+            $env:GITHUB_REF_NAME
+          }
+          if (-not $TAG -or $TAG -notmatch '^v\d+\.\d+\.\d+') {
+            Write-Error "Invalid or missing release tag: $TAG"
+            exit 1
+          }
+          echo "TAG=$TAG" >> $env:GITHUB_ENV
+          echo "Validating tag $TAG exists in repository..."
+          $ref = gh api "repos/soumyachk101/Ensembyte/git/ref/tags/$TAG" --silent 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Tag $TAG does not exist in the repository. Aborting."
+            exit 1
+          }
+          Write-Host "Tag $TAG validated successfully."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Locate Windows SDK shader compiler (GPUI FXC)
         run: |
@@ -57,8 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { "${{ github.event.inputs.tag }}" } else { "${{ github.ref_name }}" }
-          gh release upload "$tag" target/package/*.exe target/package/*.zip --repo soumyachk101/Ensembyte --clobber
+          gh release upload "${{ env.TAG }}" target/package/*.exe target/package/*.zip --repo soumyachk101/Ensembyte --clobber
 
   # =========================================================================
   # Linux Build (Exclusively Ensembyte-rust)
@@ -70,10 +91,36 @@ jobs:
     defaults:
       run:
         working-directory: Ensembyte-rust
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Validate release tag
+        run: |
+          TAG="${GITHUB_EVENT_NAME:-push}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          if [ -z "$TAG" ] || ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "ERROR: Invalid or missing release tag: $TAG"
+            exit 1
+          fi
+          echo "Validating tag $TAG exists in repository..."
+          gh api repos/soumyachk101/Ensembyte/git/ref/tags/"$TAG" --silent > /dev/null 2>&1
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Tag $TAG does not exist in the repository. Aborting."
+            exit 1
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "Tag $TAG validated successfully."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Linux system dependencies for GPUI
         run: |
@@ -99,8 +146,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.ref_name }}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          fi
-          gh release upload "$TAG" target/package/*.tar.gz --repo soumyachk101/Ensembyte --clobber
+          gh release upload "${{ env.TAG }}" target/package/*.tar.gz --repo soumyachk101/Ensembyte --clobber
