@@ -17,7 +17,7 @@ final class RowGlideAnimator {
     /// The motion of the glide and of the rows making room for it, so they land together.
     nonisolated static let spring = Chrome.glideSpring
 
-    struct Glide: Identifiable {
+    struct Glide: Identifiable, @unchecked Sendable {
         enum Direction {
             case settle
             case reopen
@@ -169,6 +169,12 @@ private struct RowGlideView: View {
     var body: some View {
         let from = glide.from
         let to = glide.to
+        let departureFill = glide.departureFill
+        let arrivalFill = glide.arrivalFill
+        let settles = glide.direction == .settle
+        let departureImage = glide.departure
+        let arrivalImage = glide.arrival
+        let bounds = glide.bounds
         let shape = RoundedRectangle(cornerRadius: Chrome.rowCornerRadius, style: .continuous)
         Color.clear
             .keyframeAnimator(initialValue: 0.0, trigger: hasStarted) { _, progress in
@@ -181,8 +187,7 @@ private struct RowGlideView: View {
                 )
                 // The lift comes up as the row takes off and is gone by the time it lands.
                 let lift = min(Self.smoothstep(0, 0.12, p), 1 - Self.smoothstep(0.7, 1, p))
-                let fill = max(glide.departureFill + (glide.arrivalFill - glide.departureFill) * p, 0.12 * lift)
-                let settles = glide.direction == .settle
+                let fill = max(departureFill + (arrivalFill - departureFill) * p, 0.12 * lift)
                 let checkTravel = Self.smoothstep(0.05, 0.95, p)
                 let checkStart = settles ? frame.maxX - Self.trailingCheckInset : frame.minX + Self.leadingCheckInset
                 let checkEnd = settles ? frame.minX + Self.leadingCheckInset : frame.maxX - Self.trailingCheckInset
@@ -190,11 +195,11 @@ private struct RowGlideView: View {
                 // the frame between them clips whichever is the larger, and the one fades into
                 // the other on the way.
                 ZStack(alignment: .topLeading) {
-                    Image(nsImage: glide.departure)
+                    Image(nsImage: departureImage)
                         .resizable()
                         .frame(width: from.width, height: from.height, alignment: .topLeading)
                         .opacity(1 - Self.smoothstep(0.2, 0.65, p))
-                    Image(nsImage: glide.arrival)
+                    Image(nsImage: arrivalImage)
                         .resizable()
                         .frame(width: to.width, height: to.height, alignment: .topLeading)
                         .opacity(Self.smoothstep(0.35, 0.8, p))
@@ -220,7 +225,7 @@ private struct RowGlideView: View {
                         .position(x: checkStart + (checkEnd - checkStart) * checkTravel, y: frame.midY)
                 }
                 .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
-                .clipShape(FrameShape(frame: glide.bounds))
+                .clipShape(FrameShape(frame: bounds))
             } keyframes: { _ in
                 SpringKeyframe(1.0, spring: RowGlideAnimator.spring)
             }
