@@ -1,10 +1,12 @@
 import SwiftUI
 #if compiler(<6.2) || COMPILER_PRE_MACOS26
 import AppKit
+import AVFoundation
 import CoreMedia
 @preconcurrency import ScreenCaptureKit
 
 extension NSImage: @unchecked @retroactive Sendable {}
+extension AVAssetTrack: @unchecked @retroactive Sendable {}
 extension CMSampleBuffer: @unchecked @retroactive Sendable {}
 extension SCShareableContent: @unchecked @retroactive Sendable {}
 extension SCContentFilter: @unchecked @retroactive Sendable {}

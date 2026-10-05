@@ -251,7 +251,7 @@ private struct HydraRightTap: NSViewRepresentable {
 
 private final class HydraRightTapHost: NSView {
     var action: () -> Void
-    private var monitor: Any?
+    nonisolated(unsafe) private var monitor: Any?
 
     init(action: @escaping () -> Void) {
         self.action = action
@@ -261,7 +261,11 @@ private final class HydraRightTapHost: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    deinit { removeMonitor() }
+    deinit {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()

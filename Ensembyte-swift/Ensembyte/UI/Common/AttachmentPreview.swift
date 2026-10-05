@@ -1,5 +1,5 @@
 import AppKit
-import AVFoundation
+@preconcurrency import AVFoundation
 import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
@@ -270,6 +270,7 @@ struct AttachmentLargePreview: View {
 
     /// Loads a movie's display size off the tap path, once per path. Called when the
     /// video thumbnail appears; the panel's `videoDisplaySize` then reads the cache.
+    @MainActor
     static func prefetchVideoSize(for attachment: Attachment) async {
         guard attachment.isVideo, videoSizes[attachment.path] == nil else { return }
         let asset = AVURLAsset(url: attachment.url)
@@ -285,6 +286,7 @@ struct AttachmentLargePreview: View {
 
     /// The coordinator can pass this as `imageSize` so the panel is sized up front exactly
     /// like a photo; the body uses it as the fallback too.
+    @MainActor
     static func videoDisplaySize(for attachment: Attachment) -> CGSize {
         videoSizes[attachment.path] ?? imageBounds
     }
