@@ -56,7 +56,6 @@ jobs:
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
-            OTHER_SWIFT_FLAGS="\$(inherited) -enable-experimental-feature IsolatedDeinit" \
             build
 
       - name: Verify build artifacts

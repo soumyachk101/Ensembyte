@@ -208,7 +208,6 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -enable-experimental-feature IsolatedDeinit";
 			};
 			name = Release;
 		};
@@ -278,7 +277,6 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -enable-experimental-feature IsolatedDeinit";
 			};
 			name = Debug;
 		};

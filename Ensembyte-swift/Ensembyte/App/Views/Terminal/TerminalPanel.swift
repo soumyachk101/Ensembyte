@@ -383,12 +383,12 @@ final class TerminalHostContainer: NSView {
     /// The terminal view being held. Set on attach; nil only before the first one.
     weak var hostedView: NSView?
     /// A coalesced frame sync after the last beat, cancelled by the next one.
-    private var pendingSync: DispatchWorkItem?
+    private nonisolated(unsafe) var pendingSync: DispatchWorkItem?
     /// Resize observers for this container's window, re-registered on window moves.
-    private var resizeObservers: [NSObjectProtocol] = []
+    private nonisolated(unsafe) var resizeObservers: [NSObjectProtocol] = []
 
-    // Isolated, so the main-actor state can be torn down here at all.
-    isolated deinit {
+    // Clean up observers and pending work on deinit.
+    deinit {
         pendingSync?.cancel()
         for observer in resizeObservers { NotificationCenter.default.removeObserver(observer) }
     }
