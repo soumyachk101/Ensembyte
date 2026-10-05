@@ -330,7 +330,7 @@ struct HydraReportRow: View {
     }
 
     /// The title without the one full stop a note's first line ends on.
-    static func withoutTrailingStop(_ title: String) -> String {
+    nonisolated static func withoutTrailingStop(_ title: String) -> String {
         title.hasSuffix(".") ? String(title.dropLast()) : title
     }
 
@@ -374,7 +374,7 @@ struct HydraReportRow: View {
     }
 
     /// The address on the body's first line, when that line is an address and nothing else.
-    static func leadingURL(in body: String) -> URL? {
+    nonisolated static func leadingURL(in body: String) -> URL? {
         guard let line = body.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces),
               line.lowercased().hasPrefix("http://") || line.lowercased().hasPrefix("https://"),
               !line.contains(where: \.isWhitespace) else { return nil }
@@ -382,7 +382,7 @@ struct HydraReportRow: View {
     }
 
     /// The body past its first line: what a note says after the address it leads with.
-    static func withoutFirstLine(_ body: String) -> String {
+    nonisolated static func withoutFirstLine(_ body: String) -> String {
         guard let newline = body.firstIndex(where: \.isNewline) else { return "" }
         return String(body[newline...]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -795,6 +795,7 @@ enum HydraMergePhase: Equatable {
 
 /// A merge outcome note read for the pill: the title it leads with, the merge request's
 /// address when the body leads with one, and what the note says past that.
+@MainActor
 private struct HydraMergeOutcome {
     let title: String
     /// The note past its title, for the popover.

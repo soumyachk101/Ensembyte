@@ -1,6 +1,7 @@
 import AppKit
-import AVFoundation
-import ScreenCaptureKit
+@preconcurrency import AVFoundation
+@preconcurrency import CoreMedia
+@preconcurrency import ScreenCaptureKit
 import SwiftUI
 
 /// Renders the real app with mock data into stills and films for the marketing site:
@@ -1037,7 +1038,7 @@ final class Recorder {
         await stopFilm()
     }
 
-    private static func filter() async -> SCContentFilter? {
+    private nonisolated static func filter() async -> SCContentFilter? {
         guard let content = try? await SCShareableContent.currentProcess,
               let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first
         else { return nil }

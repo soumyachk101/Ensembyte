@@ -1,4 +1,13 @@
 import SwiftUI
+#if compiler(<6.2) || COMPILER_PRE_MACOS26
+import CoreMedia
+@preconcurrency import ScreenCaptureKit
+
+extension CMSampleBuffer: @unchecked @retroactive Sendable {}
+extension SCShareableContent: @unchecked @retroactive Sendable {}
+extension SCContentFilter: @unchecked @retroactive Sendable {}
+extension SCStreamConfiguration: @unchecked @retroactive Sendable {}
+#endif
 
 #if compiler(<6.2) || COMPILER_PRE_MACOS26
 
