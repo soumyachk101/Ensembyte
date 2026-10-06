@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 parakeet-rs = "=0.3.8"
-cpal = "=0.17.3"
+cpal = "=0.18.2"
 rubato = "=0.16.2"
 reqwest.workspace = true
 tokio.workspace = true
