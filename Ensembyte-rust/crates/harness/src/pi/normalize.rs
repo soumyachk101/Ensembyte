@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::collections::HashMap;
-use orbit_proto::{AgentEvent, DoneStatus, ToolCall, ToolDiff};
+use ensembyte_proto::{AgentEvent, DoneStatus, ToolCall, ToolDiff};
 
 #[derive(Default)]
 pub(super) struct Normalizer {
@@ -202,8 +202,8 @@ fn tool(name: &str, args: &Value) -> ToolCall {
         "find" => ToolCall::Glob {
             pattern: string(args, "pattern").into(),
         },
-        name if name.starts_with("orbit_") => ToolCall::Mcp {
-            server: "orbit".into(),
+        name if name.starts_with("ensembyte_") => ToolCall::Mcp {
+            server: "ensembyte".into(),
             tool: name[6..].into(),
             input: Some(args.clone()),
         },

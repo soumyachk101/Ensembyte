@@ -578,7 +578,7 @@ extension Credentials {
     }
 
     private static let service = "org.ensembyte.ios"
-    private static let legacyService = "sh.orbit.ios"
+    private static let legacyService = "sh.ensembyte.ios"
     private static let account = "credentials"
 
     static func stored() -> Credentials? {
@@ -666,7 +666,7 @@ struct AccountProfile: Codable {
     var orgName: String?
 
     private static let service = "org.ensembyte.ios"
-    private static let legacyService = "sh.orbit.ios"
+    private static let legacyService = "sh.ensembyte.ios"
     private static let account = "profile"
 
     static func load() -> AccountProfile {

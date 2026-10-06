@@ -232,7 +232,7 @@ pub struct RunRequest {
     /// Absolute paths of image attachments already staged on the run device
     /// (composer uploads: UploadChunk/UploadCommit → durable path). The same
     /// paths also ride the prompt text as `Attached images (local files …)`
-    /// refs (orbit's `withAttachments` transport — that's what persists in the
+    /// refs (ensembyte's `withAttachments` transport — that's what persists in the
     /// doc); this field additionally lets a harness inline the bytes as image
     /// content blocks. Additive + serde-defaulted for wire compat.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -244,7 +244,7 @@ pub struct RunRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<WorktreeSpec>,
     /// Orbit's own MCP server, injected by the HOST engine as it starts the
-    /// run: the `orbit mcp` subcommand of this same binary, pointed at the
+    /// run: the `ensembyte mcp` subcommand of this same binary, pointed at the
     /// engine's loopback IPC and stamped with the originating chat so the
     /// agent can spawn, read, and message side chats. Additive +
     /// serde-defaulted — an old host leaves it unset and the agent simply has
@@ -278,7 +278,7 @@ pub struct McpServer {
 pub struct WorktreeSpec {
     /// The repo whose worktree to create (the space's folder on the host).
     pub repo_path: String,
-    /// Base ref the fresh `orbit/<name>` branch is created off.
+    /// Base ref the fresh `ensembyte/<name>` branch is created off.
     pub base: String,
     /// Owning project used to resolve host-local setup Actions. Optional for
     /// wire compatibility with clients that only request worktree creation.
@@ -545,7 +545,7 @@ pub enum DoneStatus {
 
 /// The normalized streaming event every harness emits.
 ///
-/// Mirrors orbit's `AgentEvent` tagged enum.
+/// Mirrors ensembyte's `AgentEvent` tagged enum.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AgentEvent {

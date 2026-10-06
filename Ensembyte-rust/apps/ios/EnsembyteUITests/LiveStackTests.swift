@@ -6,14 +6,14 @@ import XCTest
 ///
 ///   (cd edge && npx wrangler dev --port 27650 --var AUTH_MODE:dev) &
 ///   ORBIT_DATA_DIR=/tmp/e ORBIT_IPC_PORT=27811 ORBIT_EDGE_URL=http://localhost:27650 \
-///     ORBIT_EDGE_TOKEN=alice@org1 ORBIT_ORG_ID=org1 ORBIT_HARNESS=mock orbit headless &
+///     ENSEMBYTE_EDGE_TOKEN=alice@org1 ENSEMBYTE_ORG_ID=org1 ENSEMBYTE_HARNESS=mock ensembyte headless &
 ///   TEST_RUNNER_ORBIT_LIVE_EDGE=http://localhost:27650 xcodebuild test \
 ///     -only-testing:EnsembyteUITests/LiveStackTests …
 final class LiveStackTests: XCTestCase {
     func testSendRoundTripsThroughRealEngine() throws {
         let edge = try XCTUnwrap(ProcessInfo.processInfo.environment["ORBIT_LIVE_EDGE"], "set TEST_RUNNER_ORBIT_LIVE_EDGE")
         let app = XCUIApplication()
-        // The draft's harness wins over the engine's ORBIT_HARNESS default:
+        // The draft's harness wins over the engine's ENSEMBYTE_HARNESS default:
         // pin the mock so the test never starts a real agent.
         app.launchArguments = ["-signedout", "-dev", "alice", "org1", "-edge", edge, "-harness", "mock"]
         app.launch()

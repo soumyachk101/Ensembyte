@@ -174,11 +174,11 @@ final class SessionFlowTests: XCTestCase {
     /// Settings turns notifications on (system prompt), and tapping a
     /// session notification opens that session. The notification is sent
     /// from the host (`xcrun simctl push`, same payload as the edge) once the
-    /// test signals it's in the background via /tmp/orbit-push-ready.
+    /// test signals it's in the background via /tmp/ensembyte-push-ready.
     func testNotificationTapOpensSession() throws {
         // Needs a host-side sender (see the comment above); skip without one.
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: "/tmp/orbit-push-host"), "no host push sender")
-        let ready = "/tmp/orbit-push-ready"
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: "/tmp/ensembyte-push-host"), "no host push sender")
+        let ready = "/tmp/ensembyte-push-ready"
         try? FileManager.default.removeItem(atPath: ready)
         let app = launch()
         XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 10))

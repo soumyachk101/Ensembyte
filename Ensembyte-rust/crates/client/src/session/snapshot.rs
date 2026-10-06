@@ -5,8 +5,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
-use orbit_proto::{ChatIndicator, ContextUsage, UserInputQuestion};
+use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
+use ensembyte_proto::{ChatIndicator, ContextUsage, UserInputQuestion};
 
 use crate::connectivity::SendState;
 

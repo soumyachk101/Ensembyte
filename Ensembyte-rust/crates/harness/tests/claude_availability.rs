@@ -4,7 +4,7 @@
 //! Child-process probes: resolution reads process env (PATH, the override), so
 //! each case re-runs this test binary with a controlled environment.
 
-use orbit_harness::{ClaudeHarness, Harness};
+use ensembyte_harness::{ClaudeHarness, Harness};
 
 #[test]
 fn availability_child() {
@@ -36,7 +36,7 @@ fn probe(path: &std::path::Path, override_path: Option<&std::path::Path>, expect
         command.env_remove(key);
     }
     // The login-shell PATH snapshot would otherwise carry this machine's shell.
-    command.env("ORBIT_NO_LOGIN_SHELL", "1");
+    command.env("ENSEMBYTE_NO_LOGIN_SHELL", "1");
     command
         .env("PATH", path)
         .env("CLAUDE_AVAILABILITY_EXPECTED", expected.to_string());

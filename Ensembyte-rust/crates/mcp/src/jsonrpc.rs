@@ -153,7 +153,7 @@ pub async fn handle_request(tools: &Tools, id: Value, method: &str, params: Valu
                     "protocolVersion": version,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": {
-                        "name": "orbit",
+                        "name": "ensembyte",
                         "version": env!("CARGO_PKG_VERSION"),
                     },
                     "instructions": INSTRUCTIONS,

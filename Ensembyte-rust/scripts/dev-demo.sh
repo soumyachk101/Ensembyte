@@ -5,7 +5,7 @@
 #   scripts/dev-demo.sh            # build, seed demo data, open the app
 #   scripts/dev-demo.sh --slow     # pace mock streams (~10s) to watch streaming
 #
-# Everything lives under /tmp/orbit-demo-*; re-runs reuse it. Ctrl-C cleans up.
+# Everything lives under /tmp/ensembyte-demo-*; re-runs reuse it. Ctrl-C cleans up.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,7 +29,7 @@ for _ in $(seq 1 40); do
   sleep 0.25
 done
 
-probe() { cargo run -q -p orbit-rpc --example rpc_probe -- "ws://127.0.0.1:$IPC" "$@"; }
+probe() { cargo run -q -p ensembyte-rpc --example rpc_probe -- "ws://127.0.0.1:$IPC" "$@"; }
 
 if [[ ! -f "$DAEMON_DIR/.demo-seeded" ]]; then
   echo "▸ seeding demo chats"

@@ -1,5 +1,5 @@
 //! Mends half-streamed inline markdown for display (after streamdown's
-//! `remend`, ported to orbit's incremental parser).
+//! `remend`, ported to ensembyte's incremental parser).
 //!
 //! While a block is streaming, an unclosed `**bold`, `*em`, `` `code ``,
 //! `~~strike` or `[link](partial-url` parses as literal text; the closing
@@ -12,7 +12,7 @@
 //! flip when the row completes — instead of jittering throughout.
 //!
 //! Repairs, in the spirit of remend's handler set (its katex/html/comparison
-//! handlers don't apply here — orbit renders raw HTML literally and has no
+//! handlers don't apply here — ensembyte renders raw HTML literally and has no
 //! math):
 //! - emphasis parity: `**a`→`**a**`, `*a`→`*a*`, `_a`/`__a`, `~~a`, nested
 //!   closers innermost-first (`**a *b` → `**a *b***`), half-streamed closers
@@ -39,11 +39,11 @@
 //! top-level block of the stream, so per-append work stays O(tail) — the same
 //! bound as the incremental reparse itself. remend re-scans the entire
 //! accumulated message every delta; feeding just the tail is what makes the
-//! port fit orbit's parser.
+//! port fit ensembyte's parser.
 
 /// Sentinel destination for a link whose URL is still streaming. The renderer
 /// styles it like any link but must not register it as clickable.
-pub const PENDING_LINK_URL: &str = "orbit:pending-link";
+pub const PENDING_LINK_URL: &str = "ensembyte:pending-link";
 
 /// One unclosed emphasis-family delimiter run (`*`, `_`, or `~~`).
 struct OpenDelim {
@@ -375,10 +375,10 @@ mod tests {
 
     #[test]
     fn links_mend_to_pending_sentinel() {
-        mends("[docs](https://x.dev/lo", "[docs](orbit:pending-link)");
-        mends("[docs](", "[docs](orbit:pending-link)");
-        mends("see [do", "see [do](orbit:pending-link)");
-        mends("![alt](https://x/i.p", "![alt](orbit:pending-link)");
+        mends("[docs](https://x.dev/lo", "[docs](ensembyte:pending-link)");
+        mends("[docs](", "[docs](ensembyte:pending-link)");
+        mends("see [do", "see [do](ensembyte:pending-link)");
+        mends("![alt](https://x/i.p", "![alt](ensembyte:pending-link)");
         stays("see [");
         stays("[x] task-like"); // completed bracket, no url
     }
@@ -386,13 +386,13 @@ mod tests {
     #[test]
     fn link_urls_allow_nested_parens() {
         stays("[a](https://x.dev/(y)) done");
-        mends("[a](https://x.dev/(y", "[a](orbit:pending-link)");
+        mends("[a](https://x.dev/(y", "[a](ensembyte:pending-link)");
     }
 
     #[test]
     fn emphasis_inside_link_text_closes_inside() {
-        mends("[**a", "[**a**](orbit:pending-link)");
-        mends("**a [b", "**a [b](orbit:pending-link)**");
+        mends("[**a", "[**a**](ensembyte:pending-link)");
+        mends("**a [b", "**a [b](ensembyte:pending-link)**");
     }
 
     #[test]

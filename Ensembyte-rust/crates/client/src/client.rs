@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use chrono::{TimeZone, Utc};
 use tokio_util::sync::CancellationToken;
-use orbit_doc::RegistryDoc;
-use orbit_proto::{Chat, ChatConfig, SidebarPinChange, SidebarSectionChange};
+use ensembyte_doc::RegistryDoc;
+use ensembyte_proto::{Chat, ChatConfig, SidebarPinChange, SidebarSectionChange};
 
 use crate::attachments::{self, AttachmentCache};
 use crate::auth::TokenProvider;
@@ -280,7 +280,7 @@ impl ClientInner {
 
     pub(crate) fn registry_write<R>(
         self: &Arc<Self>,
-        f: impl FnOnce(&mut RegistryDoc) -> std::result::Result<R, orbit_doc::DocError>,
+        f: impl FnOnce(&mut RegistryDoc) -> std::result::Result<R, ensembyte_doc::DocError>,
     ) -> Result<R> {
         let result = self.workspace.mutate(f)?;
         self.after_registry_write();
@@ -410,7 +410,7 @@ impl ClientInner {
             queued_attachments: device
                 .version
                 .as_deref()
-                .and_then(orbit_proto::version_triple)
+                .and_then(ensembyte_proto::version_triple)
                 .is_some_and(|v| v >= QUEUED_ATTACHMENTS_MIN),
             mid_turn_steering,
         }
@@ -768,7 +768,7 @@ impl Client {
     fn chat_write(
         &self,
         chat_id: &str,
-        f: impl FnOnce(&mut RegistryDoc) -> std::result::Result<bool, orbit_doc::DocError>,
+        f: impl FnOnce(&mut RegistryDoc) -> std::result::Result<bool, ensembyte_doc::DocError>,
     ) -> Result<()> {
         if self.inner.registry_write(f)? {
             Ok(())
@@ -945,7 +945,7 @@ impl Client {
         {
             return Ok(existing.id.clone());
         }
-        let space = orbit_proto::Space {
+        let space = ensembyte_proto::Space {
             id: crate::new_id(),
             device_id: device_id.to_owned(),
             path: path.to_owned(),
@@ -964,7 +964,7 @@ impl Client {
                 .relay
                 .call(
                     device_id,
-                    orbit_rpc::methods::MUTATE,
+                    ensembyte_rpc::methods::MUTATE,
                     serde_json::json!({
                         "op": "createSpace",
                         "spaceId": id,
@@ -1096,7 +1096,7 @@ impl Client {
                     .relay
                     .call(
                         device_id,
-                        orbit_rpc::methods::LIST_HARNESSES,
+                        ensembyte_rpc::methods::LIST_HARNESSES,
                         serde_json::json!({}),
                     )
                     .await
@@ -1139,7 +1139,7 @@ impl Client {
                     .relay
                     .call(
                         device_id,
-                        orbit_rpc::methods::LIST_MODELS,
+                        ensembyte_rpc::methods::LIST_MODELS,
                         serde_json::json!({ "harness": harness }),
                     )
                     .await
@@ -1232,7 +1232,7 @@ impl Client {
                     .relay
                     .call(
                         device_id,
-                        orbit_rpc::methods::LIST_REFS,
+                        ensembyte_rpc::methods::LIST_REFS,
                         serde_json::json!({ "repoPath": repo_path }),
                     )
                     .await?;
@@ -1249,7 +1249,7 @@ impl Client {
         chat_id: Option<String>,
         space_id: Option<String>,
         query: &str,
-    ) -> Result<Vec<orbit_proto::FileSearchMatch>> {
+    ) -> Result<Vec<ensembyte_proto::FileSearchMatch>> {
         match self.inner.backend() {
             Backend::Demo(_) => {
                 const FILES: &[&str] = &[
@@ -1268,7 +1268,7 @@ impl Client {
                 Ok(FILES
                     .iter()
                     .filter(|p| q.is_empty() || p.to_lowercase().contains(&q))
-                    .map(|p| orbit_proto::FileSearchMatch {
+                    .map(|p| ensembyte_proto::FileSearchMatch {
                         path: (*p).to_owned(),
                         is_dir: false,
                     })
@@ -1279,7 +1279,7 @@ impl Client {
                     .relay
                     .call(
                         device_id,
-                        orbit_rpc::methods::SEARCH_FILES,
+                        ensembyte_rpc::methods::SEARCH_FILES,
                         serde_json::json!({ "query": query, "chatId": chat_id, "spaceId": space_id }),
                     )
                     .await?;
@@ -1303,7 +1303,7 @@ impl Client {
                 };
                 let value = live
                     .relay
-                    .call(device_id, orbit_rpc::methods::LIST_FOLDERS, params)
+                    .call(device_id, ensembyte_rpc::methods::LIST_FOLDERS, params)
                     .await?;
                 serde_json::from_value(value).map_err(|e| ClientError::HostError(e.to_string()))
             }
@@ -1318,7 +1318,7 @@ impl Client {
                 .relay
                 .call(
                     device_id,
-                    orbit_rpc::methods::SWITCH_REF,
+                    ensembyte_rpc::methods::SWITCH_REF,
                     serde_json::json!({ "repoPath": repo_path, "refName": ref_name }),
                 )
                 .await
@@ -1343,7 +1343,7 @@ impl Client {
                 }
                 let value = live
                     .relay
-                    .call(device_id, orbit_rpc::methods::CREATE_WORKTREE, params)
+                    .call(device_id, ensembyte_rpc::methods::CREATE_WORKTREE, params)
                     .await?;
                 value
                     .get("path")
@@ -1410,8 +1410,8 @@ impl Client {
     pub fn set_network_online(&self, online: bool) {
         let was = self.inner.path_online.swap(online, Ordering::AcqRel);
         if !self.inner.is_demo() {
-            // Parks/un-parks every sync backoff in the process (orbit-sync).
-            orbit_sync::wake::set_path_online(online);
+            // Parks/un-parks every sync backoff in the process (ensembyte-sync).
+            ensembyte_sync::wake::set_path_online(online);
         }
         if was != online {
             self.inner.recompute_connectivity();

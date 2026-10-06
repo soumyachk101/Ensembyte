@@ -1,12 +1,12 @@
 //! Opt-in real-model checks through the production queue and command executor.
-//! ORBIT_TEST_HARNESS=claude ORBIT_TEST_MODEL=claude-haiku-4-5 cargo test -p orbit-engine --test steering_live -- --ignored --nocapture
+//! ENSEMBYTE_TEST_HARNESS=claude ENSEMBYTE_TEST_MODEL=claude-haiku-4-5 cargo test -p ensembyte-engine --test steering_live -- --ignored --nocapture
 use std::{sync::Arc, time::Duration};
-use orbit_doc::{MessageRole, SessionCommandPayload};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{
+use ensembyte_doc::{MessageRole, SessionCommandPayload};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{
     AcpHarness, ClaudeHarness, CodexHarness, CursorHarness, Harness, OpencodeHarness,
 };
-use orbit_proto::{ChatConfig, RunRequest, SandboxLevel, SessionStatus};
+use ensembyte_proto::{ChatConfig, RunRequest, SandboxLevel, SessionStatus};
 
 async fn wait(core: &EngineCore, mut predicate: impl FnMut() -> bool, what: &str) {
     if tokio::time::timeout(Duration::from_secs(180), async {
@@ -32,9 +32,9 @@ async fn wait(core: &EngineCore, mut predicate: impl FnMut() -> bool, what: &str
 #[tokio::test]
 #[ignore = "uses real model quota; select harness and inexpensive model explicitly"]
 async fn rapid_steers_preserve_children_context_and_held_queue() {
-    let name = std::env::var("ORBIT_TEST_HARNESS").expect("select harness");
-    let model = std::env::var("ORBIT_TEST_MODEL").ok();
-    let burst: usize = std::env::var("ORBIT_TEST_BURST")
+    let name = std::env::var("ENSEMBYTE_TEST_HARNESS").expect("select harness");
+    let model = std::env::var("ENSEMBYTE_TEST_MODEL").ok();
+    let burst: usize = std::env::var("ENSEMBYTE_TEST_BURST")
         .ok()
         .map(|s| s.parse().unwrap())
         .unwrap_or(3);
@@ -47,7 +47,7 @@ async fn rapid_steers_preserve_children_context_and_held_queue() {
         "grok" => Arc::new(AcpHarness::grok()),
         "devin" => Arc::new(AcpHarness::devin()),
         "hermes" => Arc::new(AcpHarness::hermes()),
-        "pi" => Arc::new(orbit_harness::PiHarness::new()),
+        "pi" => Arc::new(ensembyte_harness::PiHarness::new()),
         "antigravity" => Arc::new(AcpHarness::antigravity()),
         _ => panic!("unknown harness"),
     };
@@ -210,8 +210,8 @@ async fn rapid_steers_preserve_children_context_and_held_queue() {
             .filter(|event| {
                 matches!(
                     event.event,
-                    orbit_proto::AgentEvent::Done {
-                        status: orbit_proto::DoneStatus::Completed,
+                    ensembyte_proto::AgentEvent::Done {
+                        status: ensembyte_proto::DoneStatus::Completed,
                         ..
                     }
                 )

@@ -14,7 +14,7 @@ use windows_sys::Win32::System::Threading::{
 };
 
 const CONFIG: &str = "ensembyte-update.json";
-const LEGACY_CONFIG: &str = "orbit-update.json";
+const LEGACY_CONFIG: &str = "orbit-update.json"; // legacy (pre-rename)
 /// The running image, moved aside during a swap. A running executable can be
 /// renamed but not deleted, so the file survives until the process exits and
 /// is removed by the relaunched instance (or the next update attempt).
@@ -32,7 +32,7 @@ struct Config {
 }
 
 pub(super) fn is_managed(exe: &Path) -> bool {
-    exe.file_name().is_some_and(|name| name == "ensembyte.exe" || name == "orbit.exe")
+    exe.file_name().is_some_and(|name| name == "ensembyte.exe" || name == "orbit.exe" /* legacy dir name (pre-rename) */)
         && exe.parent().is_some_and(|dir| dir.join(CONFIG).is_file() || dir.join(LEGACY_CONFIG).is_file())
 }
 
@@ -102,7 +102,7 @@ pub async fn stage(
     ensure!(
         output.status.success()
             && (reported == format!("ensembyte {}", manifest.version)
-                || reported == format!("orbit {}", manifest.version)),
+                || reported == format!("ensembyte {}" /* was orbit */, manifest.version)),
         "staged executable has the wrong version or cannot run"
     );
     let _ = temporary.keep();
@@ -146,7 +146,7 @@ pub fn apply(staged: &Path, directory: &Path, relaunch: bool) -> anyhow::Result<
     let installed = if directory.join("ensembyte.exe").exists() {
         directory.join("ensembyte.exe")
     } else {
-        directory.join("orbit.exe")
+        directory.join("ensembyte.exe") /* was orbit */
     };
     ensure!(
         std::env::current_exe()?.canonicalize()? == installed.canonicalize()?,

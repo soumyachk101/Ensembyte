@@ -12,8 +12,8 @@ use gpui::{
     KeyDownEvent, ObjectFit, Pixels, Point, Render, ScrollDelta, SharedString, StyledImage as _,
     Subscription, Window, div, img, point, prelude::*, px,
 };
-use orbit_theme::vscode::{ImportReport, SourceCompilation};
-use orbit_theme::{
+use ensembyte_theme::vscode::{ImportReport, SourceCompilation};
+use ensembyte_theme::{
     AccentPreset, AccentSelection, CustomThemeEntry, CustomThemeStatus, InstallMode,
     SurfacePreference, SurfaceTreatment, ThemeRegistry, ThemeSelection,
 };
@@ -1519,10 +1519,10 @@ fn preview(
     }
 }
 
-fn model_appearance(appearance: Appearance) -> orbit_theme::Appearance {
+fn model_appearance(appearance: Appearance) -> ensembyte_theme::Appearance {
     match appearance {
-        Appearance::Dark => orbit_theme::Appearance::Dark,
-        Appearance::Light => orbit_theme::Appearance::Light,
+        Appearance::Dark => ensembyte_theme::Appearance::Dark,
+        Appearance::Light => ensembyte_theme::Appearance::Light,
     }
 }
 
@@ -1549,7 +1549,7 @@ fn compact_action(
     widgets::text_action(theme, widgets::ActionTone::Outlined, label).id(id.into())
 }
 
-fn import_scene_preview(variant: &orbit_theme::ThemeVariant) -> AnyElement {
+fn import_scene_preview(variant: &ensembyte_theme::ThemeVariant) -> AnyElement {
     let theme = Theme::from_variant(
         variant,
         AccentSelection::ThemeDefault,
@@ -1681,7 +1681,7 @@ fn report_panel(theme: &Theme, report: &ImportReport) -> impl IntoElement {
             .children(report.adjustments.iter().map(|adjustment| {
                 div().mt(px(4.0)).child(SharedString::from(format!(
                     "Adjusted · {} {} → {} · {}",
-                    adjustment.orbit_role,
+                    adjustment.ensembyte_role,
                     adjustment.original,
                     adjustment.resolved,
                     adjustment.reason
@@ -1711,7 +1711,7 @@ fn report_panel(theme: &Theme, report: &ImportReport) -> impl IntoElement {
             .children(report.mappings.iter().map(|mapping| {
                 div().mt(px(4.0)).child(SharedString::from(format!(
                     "{} ← {}",
-                    mapping.orbit_role, mapping.vscode_key
+                    mapping.ensembyte_role, mapping.vscode_key
                 )))
             })),
     )
@@ -4290,12 +4290,12 @@ mod tests {
         let registry = ThemeRegistry::builtin();
         assert_eq!(
             registry
-                .variants_for(orbit_theme::Appearance::Light)
+                .variants_for(ensembyte_theme::Appearance::Light)
                 .count(),
             10
         );
         assert_eq!(
-            registry.variants_for(orbit_theme::Appearance::Dark).count(),
+            registry.variants_for(ensembyte_theme::Appearance::Dark).count(),
             20
         );
     }

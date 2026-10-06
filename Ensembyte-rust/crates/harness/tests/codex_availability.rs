@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use orbit_harness::{CodexHarness, Harness};
+use ensembyte_harness::{CodexHarness, Harness};
 
 #[test]
 fn availability_child() {

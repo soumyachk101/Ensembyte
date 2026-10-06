@@ -1,6 +1,6 @@
 use super::*;
 use gpui::{AppContext, TestAppContext, VisualTestContext};
-use orbit_proto::{WorkspaceDirectoryPage, WorkspaceEntry, WorkspaceEntryKind};
+use ensembyte_proto::{WorkspaceDirectoryPage, WorkspaceEntry, WorkspaceEntryKind};
 
 pub(crate) fn state() -> AppState {
     let mut state = AppState::new();
@@ -18,7 +18,7 @@ pub(crate) fn state() -> AppState {
 pub(crate) fn explorer(state: Entity<AppState>, cx: &mut Context<FilesSurface>) -> FilesSurface {
     let mut files = FilesSurface::new_explorer(state, "chat".into(), false, cx);
     files.effective_checkout_id = Some("checkout".into());
-    files.mutation_capabilities = Some(orbit_proto::WorkspaceMutationCapabilities {
+    files.mutation_capabilities = Some(ensembyte_proto::WorkspaceMutationCapabilities {
         move_entry: true,
         delete_entry: true,
     });

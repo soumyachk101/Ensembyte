@@ -456,20 +456,20 @@ mod tests {
         assert!(
             url.starts_with("https://api.workos.com/user_management/authorize?response_type=code")
         );
-        assert!(url.contains("redirect_uri=orbit%3A%2F%2Fcallback"));
+        assert!(url.contains("redirect_uri=ensembyte%3A%2F%2Fcallback"));
         assert!(url.contains("state=s%20t%261"));
         assert_eq!(
-            parse_auth_callback("orbit://callback?code=abc&state=s%20t%261"),
+            parse_auth_callback("ensembyte://callback?code=abc&state=s%20t%261"),
             Some(AuthCallback::Code {
                 code: "abc".into(),
                 state: Some("s t&1".into())
             })
         );
         assert!(matches!(
-            parse_auth_callback("orbit://callback?error=access_denied"),
+            parse_auth_callback("ensembyte://callback?error=access_denied"),
             Some(AuthCallback::Error { .. })
         ));
-        assert_eq!(parse_auth_callback("orbit://callback"), None);
+        assert_eq!(parse_auth_callback("ensembyte://callback"), None);
     }
 
     /// A raw HTTP/1.1 responder: counts requests, answers each with `reply`.

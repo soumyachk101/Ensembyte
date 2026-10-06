@@ -6,7 +6,7 @@ use gpui::{Context, HighlightStyle, SharedString, Window};
 use gpui_base::input::{
     FoldRange, HighlightStyleResolver, InputEdit, InputEditorStyle, InputHighlighter, Rope,
 };
-use orbit_syntax::{HighlightKind, HighlightedDocument};
+use ensembyte_syntax::{HighlightKind, HighlightedDocument};
 
 use super::editor::FileEditorState;
 use crate::theme::{SyntaxPalette, Theme};
@@ -268,7 +268,7 @@ fn kind_for_name(name: &str) -> Option<HighlightKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orbit_syntax::{HighlightSpan, LanguageId};
+    use ensembyte_syntax::{HighlightSpan, LanguageId};
 
     fn highlighted(source: &str, spans: Vec<HighlightSpan>) -> HighlightedDocument {
         HighlightedDocument::from_absolute_spans(LanguageId::Rust, source, spans).unwrap()

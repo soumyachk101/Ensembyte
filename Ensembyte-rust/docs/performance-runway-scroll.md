@@ -54,19 +54,19 @@ samples to each local output directory.
 
 ## Reproduction
 
-Build each revision with `cargo build --release --locked -p orbit` and copy the
+Build each revision with `cargo build --release --locked -p ensembyte` and copy the
 binaries to distinct paths. Use fresh output directories and a dedicated display.
 Run main/candidate/candidate/main sequentially with the following environment:
 
 ```sh
 Xvfb :108 -screen 0 1440x900x24 -nolisten tcp
-DISPLAY=:108 WAYLAND_DISPLAY= LP_NUM_THREADS=4 ORBIT_FRAME_STATS=0 \
-  ORBIT_PROFILE_PSS=1 ORBIT_PROFILE_SUBMIT_UI=1 ORBIT_PROFILE_IDLE_MS=45000 \
+DISPLAY=:108 WAYLAND_DISPLAY= LP_NUM_THREADS=4 ENSEMBYTE_FRAME_STATS=0 \
+  ENSEMBYTE_PROFILE_PSS=1 ENSEMBYTE_PROFILE_SUBMIT_UI=1 ENSEMBYTE_PROFILE_IDLE_MS=45000 \
   CLAUDE_CODE_EXECUTABLE="$PWD/scripts/replay-claude.py" \
-  ORBIT_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
-  node scripts/resource-profile.mjs /path/to/orbit /tmp/fresh-run claude-code
+  ENSEMBYTE_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
+  node scripts/resource-profile.mjs /path/to/ensembyte /tmp/fresh-run claude-code
 ```
 
 For the short workload, use `scripts/fixtures/runway-short-stream.jsonl`, set
-`ORBIT_REPLAY_DELAY_MS=400`, `ORBIT_PROFILE_PRE_IDLE_MS=5000` and
-`ORBIT_PROFILE_IDLE_MS=20000`. The replay makes no model API calls.
+`ENSEMBYTE_REPLAY_DELAY_MS=400`, `ENSEMBYTE_PROFILE_PRE_IDLE_MS=5000` and
+`ENSEMBYTE_PROFILE_IDLE_MS=20000`. The replay makes no model API calls.

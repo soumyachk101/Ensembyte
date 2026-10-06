@@ -181,7 +181,7 @@ impl AgentAccounts {
                         "extensionVersion": DEVIN_CLI_VERSION,
                         "locale": "en_US",
                         "os": std::env::consts::OS,
-                        "sessionId": "orbit-accounts",
+                        "sessionId": "ensembyte-accounts",
                         "requestId": "1",
                     }
                 })),
@@ -320,7 +320,7 @@ impl AgentAccounts {
                 ))
                 .header("Authorization", format!("token {token}"))
                 .header("Accept", "application/json")
-                .header("User-Agent", "orbit"),
+                .header("User-Agent", "ensembyte"),
         )
         .await?;
         copilot_usage_snapshot(&body).ok_or_else(|| schema_error("copilot", &body))

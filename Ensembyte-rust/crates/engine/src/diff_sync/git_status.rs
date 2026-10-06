@@ -1,5 +1,5 @@
 use super::*;
-use orbit_proto::{CheckoutGitStatus, GitFileState, GitFileStatus};
+use ensembyte_proto::{CheckoutGitStatus, GitFileState, GitFileStatus};
 
 fn state(code: u8) -> Option<GitFileState> {
     Some(match code {

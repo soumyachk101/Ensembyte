@@ -20,7 +20,7 @@ pub struct PreviewService {
     pub cwd: String,
     /// Process creation time, milliseconds since the Unix epoch.
     pub started_at: u64,
-    pub orbit_owned: bool,
+    pub ensembyte_owned: bool,
 }
 
 impl PreviewService {

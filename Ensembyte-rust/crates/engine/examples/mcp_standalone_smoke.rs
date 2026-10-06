@@ -1,15 +1,15 @@
 //! Isolated MCP stdio instance for manual discovery/create/converse smoke tests.
-//! Run with `cargo run -p orbit-engine --example mcp_standalone_smoke`.
+//! Run with `cargo run -p ensembyte-engine --example mcp_standalone_smoke`.
 //! Uses a temporary profile and scripted harness, never the user's workspace.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls, mock::MockHarness};
-use orbit_mcp::{Origin, Tools, Orbit};
-use orbit_proto::{
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls, mock::MockHarness};
+use ensembyte_mcp::{Origin, Tools, Orbit};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SteeringMode,
 };
 
@@ -31,13 +31,13 @@ async fn main() -> anyhow::Result<()> {
         .create_chat("smoke-origin", Some("smoke-project"), None, None, None)?;
     core.workspace.rename_chat("smoke-origin", "Coordinator")?;
     let tools = Tools::new(Arc::new(Orbit::with_client(
-        orbit_rpc::memory_client(core.rpc_service()),
+        ensembyte_rpc::memory_client(core.rpc_service()),
         Origin {
             chat_id: Some("smoke-origin".into()),
             device_id: Some("smoke-device".into()),
         },
     )));
-    orbit_mcp::serve_stdio(Arc::new(tools)).await?;
+    ensembyte_mcp::serve_stdio(Arc::new(tools)).await?;
     core.shutdown().await;
     Ok(())
 }

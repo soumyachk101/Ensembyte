@@ -1,5 +1,5 @@
 [package]
-name = "orbit-harness"
+name = "ensembyte-harness"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -22,7 +22,7 @@ path = "tests/fixtures/pi_rpc.rs"
 required-features = ["native-fixture"]
 
 [dependencies]
-orbit-proto.workspace = true
+ensembyte-proto.workspace = true
 base64 = "0.22"
 reqwest.workspace = true
 tokio.workspace = true

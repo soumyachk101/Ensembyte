@@ -48,12 +48,12 @@ on a later picker open; overlapping successful probes remain coalesced.
 
 - `cursor-agent update`: upgraded from `2026.08.11-e8db854` to
   `2026.09.15-d2fe57e`; `cursor-agent --list-models` succeeds.
-- `cargo run -p orbit-harness --example cursor_models_probe`: 39 picker models
+- `cargo run -p ensembyte-harness --example cursor_models_probe`: 39 picker models
   through the real managed SDK/shim path, previously only 2 fallback rows.
-- `cargo run -p orbit-harness --example opencode_models_probe`: 8 live models.
+- `cargo run -p ensembyte-harness --example opencode_models_probe`: 8 live models.
 - Local Codex app-server `model/list`: 6 models; automated pagination coverage
   also passes.
-- `cargo test -p orbit-harness`: 282 passed, 0 failed, 10 opt-in tests ignored.
+- `cargo test -p ensembyte-harness`: 282 passed, 0 failed, 10 opt-in tests ignored.
 - `git diff --check`: clean.
 
 New tests execute the production JavaScript shim with a synthetic SDK and

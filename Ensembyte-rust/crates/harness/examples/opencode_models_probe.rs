@@ -4,9 +4,9 @@
 //! OPENCODE_EXECUTABLE); no provider auth required (the anonymous Zen tier
 //! always connects).
 //!
-//!     cargo run -p orbit-harness --example opencode_models_probe
+//!     cargo run -p ensembyte-harness --example opencode_models_probe
 
-use orbit_harness::{Harness, OpencodeHarness};
+use ensembyte_harness::{Harness, OpencodeHarness};
 
 #[tokio::main]
 async fn main() {

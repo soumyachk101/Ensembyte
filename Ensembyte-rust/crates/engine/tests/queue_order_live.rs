@@ -3,16 +3,16 @@
 //! its busy state lands, or any remote client), the composer queue, and
 //! explicit steering (queue-row Steer / Send next, MCP `send_message` steer).
 //!
-//! ORBIT_TEST_HARNESS=pi cargo test -p orbit-engine --test queue_order_live -- --ignored --nocapture
-//! ORBIT_TEST_MODEL optionally pins the model; ORBIT_TEST_SCENARIO runs one of
+//! ENSEMBYTE_TEST_HARNESS=pi cargo test -p ensembyte-engine --test queue_order_live -- --ignored --nocapture
+//! ENSEMBYTE_TEST_MODEL optionally pins the model; ENSEMBYTE_TEST_SCENARIO runs one of
 //! `sends`, `queue`, `steer`.
 use std::{sync::Arc, time::Duration};
-use orbit_doc::{MessagePart, MessageRole, SessionCommandPayload, SessionMessageEntry};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{
+use ensembyte_doc::{MessagePart, MessageRole, SessionCommandPayload, SessionMessageEntry};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{
     AcpHarness, ClaudeHarness, CodexHarness, CursorHarness, Harness, OpencodeHarness,
 };
-use orbit_proto::{ChatConfig, HarnessId, RunRequest, SandboxLevel, SessionStatus};
+use ensembyte_proto::{ChatConfig, HarnessId, RunRequest, SandboxLevel, SessionStatus};
 
 const CHAT: &str = "order";
 
@@ -25,7 +25,7 @@ fn harness(name: &str) -> Arc<dyn Harness> {
         "grok" => Arc::new(AcpHarness::grok()),
         "devin" => Arc::new(AcpHarness::devin()),
         "hermes" => Arc::new(AcpHarness::hermes()),
-        "pi" => Arc::new(orbit_harness::PiHarness::new()),
+        "pi" => Arc::new(ensembyte_harness::PiHarness::new()),
         "antigravity" => Arc::new(AcpHarness::antigravity()),
         _ => panic!("unknown harness {name}"),
     }
@@ -87,7 +87,7 @@ impl Rig {
         registry.register(harness);
         let core =
             EngineCore::assemble(&dir.path().join("engine"), Arc::new(registry), id, None).unwrap();
-        let model = std::env::var("ORBIT_TEST_MODEL").ok();
+        let model = std::env::var("ENSEMBYTE_TEST_MODEL").ok();
         let cwd = dir.path().to_str().unwrap().to_owned();
         core.workspace
             .create_space(CHAT, &core.device_id, &cwd, None, false)
@@ -340,8 +340,8 @@ async fn scenario(name: &str, which: &str) {
 #[tokio::test]
 #[ignore = "uses real model quota; select the harness explicitly"]
 async fn messages_sent_during_a_turn_keep_transcript_order() {
-    let name = std::env::var("ORBIT_TEST_HARNESS").expect("select harness");
-    let only = std::env::var("ORBIT_TEST_SCENARIO").ok();
+    let name = std::env::var("ENSEMBYTE_TEST_HARNESS").expect("select harness");
+    let only = std::env::var("ENSEMBYTE_TEST_SCENARIO").ok();
     for which in ["sends", "queue", "steer"] {
         if only.as_deref().is_none_or(|o| o == which) {
             scenario(&name, which).await;

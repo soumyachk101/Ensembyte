@@ -6,7 +6,7 @@
 //! settle, so the quiesce watchdog is that turn shape's ONLY settle path.
 //! With the shared 120s window every background notification ended in ~2min
 //! of phantom Working. Self-continued turns now use a much shorter window
-//! (`ORBIT_SELF_TURN_QUIESCE_MS`); prompt/steer turns keep the normal one.
+//! (`ENSEMBYTE_SELF_TURN_QUIESCE_MS`); prompt/steer turns keep the normal one.
 //!
 //! This file exists separately from `turn_quiesce.rs` because the env knobs
 //! are process-global: here the NORMAL window is set far beyond the test
@@ -20,9 +20,9 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use tokio::sync::{Mutex, mpsc};
 
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SessionStatus, SteeringMode,
 };
@@ -40,8 +40,8 @@ fn init_env() {
         // SAFETY: called before any engine (and thus any reader of the vars)
         // exists in this test process.
         unsafe {
-            std::env::set_var("ORBIT_TURN_QUIESCE_MS", QUIESCE_MS.to_string());
-            std::env::set_var("ORBIT_SELF_TURN_QUIESCE_MS", SELF_QUIESCE_MS.to_string());
+            std::env::set_var("ENSEMBYTE_TURN_QUIESCE_MS", QUIESCE_MS.to_string());
+            std::env::set_var("ENSEMBYTE_SELF_TURN_QUIESCE_MS", SELF_QUIESCE_MS.to_string());
         }
     });
 }

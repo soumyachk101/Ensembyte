@@ -21,10 +21,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
-use orbit_doc::parts::MessagePart;
-use orbit_doc::parts::MessageStatus;
-use orbit_doc::schema::{MessageRole, SessionMessageEntry};
-use orbit_text::WidthCache;
+use ensembyte_doc::parts::MessagePart;
+use ensembyte_doc::parts::MessageStatus;
+use ensembyte_doc::schema::{MessageRole, SessionMessageEntry};
+use ensembyte_text::WidthCache;
 
 use display::{DisplayBuilder, RowDisplay};
 use markdown::{Ctx, Px};
@@ -52,15 +52,15 @@ struct MeasurerBridge {
     styles: Arc<Mutex<HashMap<u16, StyleDesc>>>,
 }
 
-impl orbit_text::FallbackMeasurer for MeasurerBridge {
-    fn measure(&self, style: orbit_text::StyleId, text: &str) -> f32 {
+impl ensembyte_text::FallbackMeasurer for MeasurerBridge {
+    fn measure(&self, style: ensembyte_text::StyleId, text: &str) -> f32 {
         let Some(desc) = self.styles.lock().unwrap().get(&style.0).cloned() else {
             return 0.0;
         };
         self.platform.measure(desc.face, desc.size, desc.ligatures, text.to_owned())
     }
 
-    fn measure_run(&self, style: orbit_text::StyleId, text: &str, advances: &mut Vec<f32>) -> bool {
+    fn measure_run(&self, style: ensembyte_text::StyleId, text: &str, advances: &mut Vec<f32>) -> bool {
         let Some(desc) = self.styles.lock().unwrap().get(&style.0).cloned() else {
             return false;
         };
@@ -297,20 +297,20 @@ pub(crate) const FIXTURE: &str = include_str!("fixture.md");
 pub fn debug_line_starts(text_system: Arc<TextSystem>, face: FaceRole, size: f32, width: f32, text: String) -> Vec<u32> {
     let styles = Arc::new(Mutex::new(HashMap::new()));
     let fallback = text_system.measurer.clone().map(|platform| {
-        Arc::new(MeasurerBridge { platform, styles: styles.clone() }) as Arc<dyn orbit_text::FallbackMeasurer>
+        Arc::new(MeasurerBridge { platform, styles: styles.clone() }) as Arc<dyn ensembyte_text::FallbackMeasurer>
     });
     let mut typo = Typography::new(&text_system.faces, fallback, styles);
     let (family, weight, italic) = style::decompose(face);
     let style = typo.style(family, weight, italic, size);
-    let spans = [orbit_text::Span::new(0..text.len(), style.id)];
-    let p = orbit_text::prepare(
+    let spans = [ensembyte_text::Span::new(0..text.len(), style.id)];
+    let p = ensembyte_text::prepare(
         &typo.book,
         &mut WidthCache::new(),
         &text,
         if text.is_empty() { &[] } else { &spans },
-        &orbit_text::PrepareOptions {
-            white_space: orbit_text::WhiteSpace::PreWrap,
-            overflow_wrap: orbit_text::OverflowWrap::Anywhere,
+        &ensembyte_text::PrepareOptions {
+            white_space: ensembyte_text::WhiteSpace::PreWrap,
+            overflow_wrap: ensembyte_text::OverflowWrap::Anywhere,
             ..Default::default()
         },
     );
@@ -344,7 +344,7 @@ pub struct TranscriptView {
     tx: Mutex<Sender<Msg>>,
     shared: Arc<Shared>,
     /// Live session subscription (Rust→Rust; rows never cross FFI).
-    watch: Mutex<Option<orbit_client::SnapshotWatch>>,
+    watch: Mutex<Option<ensembyte_client::SnapshotWatch>>,
 }
 
 #[uniffi::export]
@@ -357,7 +357,7 @@ impl TranscriptView {
         });
         let worker_shared = shared.clone();
         thread::Builder::new()
-            .name("orbit-layout".into())
+            .name("ensembyte-layout".into())
             .spawn(move || Worker::new(&text, worker_shared, listener).run(rx))
             .expect("spawn layout thread");
         Arc::new(Self {
@@ -498,7 +498,7 @@ impl Worker {
             Arc::new(MeasurerBridge {
                 platform,
                 styles: styles.clone(),
-            }) as Arc<dyn orbit_text::FallbackMeasurer>
+            }) as Arc<dyn ensembyte_text::FallbackMeasurer>
         });
         Self {
             typo: Typography::new(&text.faces, fallback, styles),

@@ -9,10 +9,10 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 
-use orbit_doc::{MessageRole, MessageStatus, SessionCommandPayload, SessionMessageEntry};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_doc::{MessageRole, MessageStatus, SessionCommandPayload, SessionMessageEntry};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
@@ -138,10 +138,10 @@ async fn sending_a_message_unarchives_the_chat() {
     )
     .expect("engine core assembles");
 
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
     client
         .call(
-            orbit_rpc::methods::MUTATE,
+            ensembyte_rpc::methods::MUTATE,
             serde_json::json!({
                 "op": "createChat",
                 "chatId": CHAT,

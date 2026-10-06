@@ -5,7 +5,7 @@ mod common;
 use std::sync::Arc;
 
 use common::*;
-use orbit_text::*;
+use ensembyte_text::*;
 
 fn assert_send_sync<T: Send + Sync>() {}
 fn assert_send<T: Send>() {}

@@ -2,8 +2,8 @@
 //! projectless, child, archived), live statuses, and PRs in every state.
 
 use chrono::Utc;
-use orbit_doc::RegistryDoc;
-use orbit_proto::{
+use ensembyte_doc::RegistryDoc;
+use ensembyte_proto::{
     ChangeRequestState, ChangeRequestSummary, Chat, ChatConfig, CheckoutChangeRequestStatus,
     ConversationSourceContext, Device, HarnessId, ReasoningLevel, SandboxLevel, Session,
     SessionStatus, SidebarPinChange, SidebarSectionChange, Space,
@@ -71,7 +71,7 @@ pub(crate) fn chats() -> Vec<DemoChat> {
             created_ago_ms: HOUR,
             ..chat(
                 "chat-veil",
-                Some("space-orbit"),
+                Some("space-ensembyte"),
                 MAC,
                 "Streaming veil on transcript rows",
                 "Opening the PR now. Running the checks first:",
@@ -87,7 +87,7 @@ pub(crate) fn chats() -> Vec<DemoChat> {
             model: "claude-opus-5",
             ..chat(
                 "chat-picker",
-                Some("space-orbit"),
+                Some("space-ensembyte"),
                 MAC,
                 "Model picker catalog sync",
                 "Before I wire the RPC, two decisions:",
@@ -103,7 +103,7 @@ pub(crate) fn chats() -> Vec<DemoChat> {
             seen: false,
             ..chat(
                 "chat-tabs",
-                Some("space-orbit"),
+                Some("space-ensembyte"),
                 MAC,
                 "Tool group header colors",
                 "Done — failed children stay quiet.",
@@ -178,7 +178,7 @@ pub(crate) fn chats() -> Vec<DemoChat> {
             last_ago_ms: 10 * MIN,
             ..chat(
                 "chat-cjk",
-                Some("space-orbit"),
+                Some("space-ensembyte"),
                 MAC,
                 "多言語テキストのレイアウト 🌏",
                 "日本語の長い段落です。",
@@ -200,7 +200,7 @@ pub(crate) fn chats() -> Vec<DemoChat> {
             last_ago_ms: 30 * MIN,
             ..chat(
                 "chat-side",
-                Some("space-orbit"),
+                Some("space-ensembyte"),
                 MAC,
                 "Side chat: veil timing",
                 "α = 0.2 over inter-append gaps",
@@ -212,7 +212,7 @@ pub(crate) fn chats() -> Vec<DemoChat> {
             created_ago_ms: 4 * DAY,
             ..chat(
                 "chat-oklch",
-                Some("space-orbit"),
+                Some("space-ensembyte"),
                 MAC,
                 "OKLCH conversion drift",
                 "Gamma encode matches now.",
@@ -257,7 +257,7 @@ pub(crate) fn spaces(now: i64) -> Vec<Space> {
             false,
             20 * DAY,
         ),
-        space("space-orbit", MAC, "/Users/dev/ensembyte", None, true, 9 * DAY),
+        space("space-ensembyte", MAC, "/Users/dev/ensembyte", None, true, 9 * DAY),
         space("space-edge", VPS, "/srv/deploys/edge", None, true, 4 * DAY),
         space(
             "space-mobile",
@@ -339,7 +339,7 @@ pub(crate) fn seed(
     fixture: DemoFixture,
     self_id: &str,
     self_name: &str,
-) -> Result<Seeded, orbit_doc::DocError> {
+) -> Result<Seeded, ensembyte_doc::DocError> {
     let now = crate::now_ms();
     let all_devices = devices(self_id, self_name, now);
     let mut change_requests = Vec::new();

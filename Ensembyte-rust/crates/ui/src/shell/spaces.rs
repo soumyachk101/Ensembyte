@@ -12,7 +12,7 @@ use super::*;
 use crate::pickers::{breadcrumbs, browser_rows, completion_prefix_len, parent_path};
 use gpui::{FocusHandle, Window};
 use std::collections::HashSet;
-use orbit_proto::{ChatIndicator, Device, DriveEntry, DriveListing, FolderListing, Space};
+use ensembyte_proto::{ChatIndicator, Device, DriveEntry, DriveListing, FolderListing, Space};
 
 /// Promote the user's ordered pins above the untouched activity projection.
 /// Every unpinned id keeps exactly the relative order supplied by recency.
@@ -192,8 +192,8 @@ pub(super) fn pinned_drag_scroll_delta(
 
 #[cfg(test)]
 mod pinned_session_tests {
-    fn pin_change(id: &str) -> orbit_proto::SidebarPinChange {
-        orbit_proto::SidebarPinChange::Pin {
+    fn pin_change(id: &str) -> ensembyte_proto::SidebarPinChange {
+        ensembyte_proto::SidebarPinChange::Pin {
             session_id: id.into(),
             after: None,
             before: None,
@@ -238,7 +238,7 @@ mod pinned_session_tests {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -246,9 +246,9 @@ mod pinned_session_tests {
     }
 
     fn remote_pin_state(state: &mut super::AppState, synced: bool, initialized: bool) {
-        state.workspace_scope = Some(orbit_proto::WorkspaceScope::Synced);
-        state.auth = Some(orbit_proto::AuthState::SignedIn {
-            user: orbit_proto::UserProfile {
+        state.workspace_scope = Some(ensembyte_proto::WorkspaceScope::Synced);
+        state.auth = Some(ensembyte_proto::AuthState::SignedIn {
+            user: ensembyte_proto::UserProfile {
                 id: "user".into(),
                 email: "test@example.com".into(),
                 name: None,
@@ -259,7 +259,7 @@ mod pinned_session_tests {
         state.sidebar_preferences.initialized = initialized;
     }
 
-    fn pin_test_chat(id: &str) -> orbit_proto::Chat {
+    fn pin_test_chat(id: &str) -> ensembyte_proto::Chat {
         serde_json::from_value(serde_json::json!({
             "id": id, "title": id, "deviceId": "local", "archived": false,
             "createdAt": chrono::Utc::now(),
@@ -275,14 +275,14 @@ mod pinned_session_tests {
         let (out, requests) = tokio::sync::mpsc::channel(16);
         let (replies, inbound) = tokio::sync::mpsc::channel(16);
         (
-            crate::state::EngineHandle::from_test_client(orbit_rpc::RpcClient::new(out, inbound)),
+            crate::state::EngineHandle::from_test_client(ensembyte_rpc::RpcClient::new(out, inbound)),
             requests,
             replies,
         )
     }
 
-    fn pin_snapshot(revision: u64, pins: &[&str]) -> orbit_proto::SidebarPreferencesState {
-        orbit_proto::SidebarPreferencesState {
+    fn pin_snapshot(revision: u64, pins: &[&str]) -> ensembyte_proto::SidebarPreferencesState {
+        ensembyte_proto::SidebarPreferencesState {
             sections: vec![],
             revision,
             synced: true,
@@ -660,7 +660,7 @@ mod pinned_session_tests {
                     let id = shell.sidebar_pin_write.as_ref().unwrap().id;
                     shell.state.update(cx, |state, _| {
                         if change_profile {
-                            state.workspace_scope = Some(orbit_proto::WorkspaceScope::Local);
+                            state.workspace_scope = Some(ensembyte_proto::WorkspaceScope::Local);
                         } else {
                             state.set_test_engine(replacement);
                         }
@@ -765,7 +765,7 @@ mod pinned_session_tests {
         let window = pin_test_shell(cx, dir.path());
         window
             .update(cx, |shell, window, cx| {
-                let saved: Vec<String> = (0..orbit_proto::MAX_SIDEBAR_PINS)
+                let saved: Vec<String> = (0..ensembyte_proto::MAX_SIDEBAR_PINS)
                     .map(|n| format!("hidden-{n}"))
                     .collect();
                 for remote in [false, true] {
@@ -838,7 +838,7 @@ mod pinned_session_tests {
                     cx
                 ));
                 assert!(!shell.validate_sidebar_pin_change(&key, &ids(&[""]), cx));
-                let saved: Vec<_> = (0..orbit_proto::MAX_SIDEBAR_PINS)
+                let saved: Vec<_> = (0..ensembyte_proto::MAX_SIDEBAR_PINS)
                     .map(|n| format!("pin-{n}"))
                     .collect();
                 let reordered = super::sidebar_session_drop_pins(
@@ -1041,7 +1041,7 @@ mod pinned_session_tests {
                         edge_token: None,
                         org_id: None,
                         workos_client_id: None,
-                        default_harness: orbit_proto::HarnessId::Mock,
+                        default_harness: ensembyte_proto::HarnessId::Mock,
                     },
                     cx,
                 );
@@ -1161,7 +1161,7 @@ mod pinned_session_tests {
                         edge_token: None,
                         org_id: None,
                         workos_client_id: None,
-                        default_harness: orbit_proto::HarnessId::Mock,
+                        default_harness: ensembyte_proto::HarnessId::Mock,
                     },
                     cx,
                 );
@@ -1565,7 +1565,7 @@ mod pinned_session_tests {
             for id in shell.active_sidebar_pins(cx) {
                 shell.apply_sidebar_pin_change(
                     key.clone(),
-                    orbit_proto::SidebarPinChange::Unpin { session_id: id },
+                    ensembyte_proto::SidebarPinChange::Unpin { session_id: id },
                     cx,
                 );
             }
@@ -1664,7 +1664,7 @@ mod pinned_session_tests {
                         edge_token: None,
                         org_id: None,
                         workos_client_id: None,
-                        default_harness: orbit_proto::HarnessId::Mock,
+                        default_harness: ensembyte_proto::HarnessId::Mock,
                     },
                     cx,
                 );
@@ -1951,17 +1951,17 @@ pub(super) fn pinned_drag_snapshot_is_valid(
 
 struct ActiveChatRow {
     status: ChatIndicator,
-    chat: orbit_proto::Chat,
+    chat: ensembyte_proto::Chat,
     folder: String,
     branch: Option<String>,
-    change_request: Option<orbit_proto::ChangeRequestSummary>,
+    change_request: Option<ensembyte_proto::ChangeRequestSummary>,
     group: Option<(String, String)>,
 }
 
 pub(super) fn compare_sidebar_chats(
     sort: SidebarSort,
-    left: &orbit_proto::Chat,
-    right: &orbit_proto::Chat,
+    left: &ensembyte_proto::Chat,
+    right: &ensembyte_proto::Chat,
 ) -> std::cmp::Ordering {
     let primary = match sort {
         SidebarSort::Created => right.created_at.cmp(&left.created_at),
@@ -2816,20 +2816,20 @@ impl Shell {
             let after = index.checked_sub(1).and_then(|i| next.get(i)).cloned();
             let before = next.get(index + 1).cloned();
             if saved.contains(&payload.chat_id) {
-                orbit_proto::SidebarPinChange::Move {
+                ensembyte_proto::SidebarPinChange::Move {
                     session_id: payload.chat_id.clone(),
                     after,
                     before,
                 }
             } else {
-                orbit_proto::SidebarPinChange::Pin {
+                ensembyte_proto::SidebarPinChange::Pin {
                     session_id: payload.chat_id.clone(),
                     after,
                     before,
                 }
             }
         } else {
-            orbit_proto::SidebarPinChange::Unpin {
+            ensembyte_proto::SidebarPinChange::Unpin {
                 session_id: payload.chat_id.clone(),
             }
         };
@@ -2837,7 +2837,7 @@ impl Shell {
             && !matches!(target, SidebarSessionDrop::Pinned(_))
         {
             if !self.change_sidebar_section(
-                orbit_proto::SidebarSectionChange::Assign {
+                ensembyte_proto::SidebarSectionChange::Assign {
                     session_id: payload.chat_id.clone(),
                     section_id: target_section.map(str::to_owned),
                 },
@@ -4224,7 +4224,7 @@ impl Shell {
             .as_ref()
             .map_or(saved_pins.as_slice(), |ids| ids.as_slice());
         let state = self.state.read(cx);
-        let mut chats: Vec<orbit_proto::Chat> = state
+        let mut chats: Vec<ensembyte_proto::Chat> = state
             .sidebar_chats(Utc::now(), filter.as_deref())
             .into_iter()
             .map(|(_, chat)| chat.clone())
@@ -4254,7 +4254,7 @@ impl Shell {
             })
             .collect();
         let ordered = if self.settings.sidebar_organization != SidebarOrganization::InOneList {
-            let mut groups: Vec<(Option<(String, String)>, Vec<orbit_proto::Chat>)> = Vec::new();
+            let mut groups: Vec<(Option<(String, String)>, Vec<ensembyte_proto::Chat>)> = Vec::new();
             for chat in chats {
                 let key = Some((
                     if self.settings.sidebar_organization == SidebarOrganization::ByProject {
@@ -4304,7 +4304,7 @@ impl Shell {
 
     /// The group a chat's row sits under when the sidebar groups by device or
     /// by project; `None` in one list.
-    fn sidebar_group_key(&self, chat: &orbit_proto::Chat) -> Option<String> {
+    fn sidebar_group_key(&self, chat: &ensembyte_proto::Chat) -> Option<String> {
         match self.settings.sidebar_organization {
             SidebarOrganization::ByDevice => Some(chat.device_id.clone()),
             SidebarOrganization::ByProject => Some(
@@ -4364,7 +4364,7 @@ impl Shell {
             {
                 if section.collapsed {
                     if !self.change_sidebar_section(
-                        orbit_proto::SidebarSectionChange::Collapse {
+                        ensembyte_proto::SidebarSectionChange::Collapse {
                             id: section.id.clone(),
                             collapsed: false,
                         },
@@ -4427,7 +4427,7 @@ impl Shell {
     fn sidebar_chat_data(
         &self,
         status: ChatIndicator,
-        chat: orbit_proto::Chat,
+        chat: ensembyte_proto::Chat,
         state: &AppState,
     ) -> ActiveChatRow {
         // Line 1 is "project @ device" (t3code's project row);
@@ -5130,9 +5130,9 @@ impl Shell {
     }
 
     /// The Archived shelf's chats under the project filter, in sidebar order.
-    fn archived_sidebar_chats(&self, cx: &App) -> Vec<orbit_proto::Chat> {
+    fn archived_sidebar_chats(&self, cx: &App) -> Vec<ensembyte_proto::Chat> {
         let filter = self.settings.space_filter.as_deref();
-        let mut rows: Vec<orbit_proto::Chat> = self
+        let mut rows: Vec<ensembyte_proto::Chat> = self
             .state
             .read(cx)
             .chats
@@ -5517,7 +5517,7 @@ impl Shell {
 
     /// The current listing's folder rows filtered by the search query
     /// (prefix matches first — `popover::filter_indices`).
-    fn add_space_filtered(&self, cx: &App) -> Vec<orbit_proto::FolderEntry> {
+    fn add_space_filtered(&self, cx: &App) -> Vec<ensembyte_proto::FolderEntry> {
         let Some(flow) = self.add_space.as_ref() else {
             return Vec::new();
         };
@@ -6789,8 +6789,8 @@ mod tests {
         (Some((device.into(), device.into())), vec![value])
     }
 
-    fn chat(id: &str) -> orbit_proto::Chat {
-        orbit_proto::Chat {
+    fn chat(id: &str) -> ensembyte_proto::Chat {
+        ensembyte_proto::Chat {
             id: id.into(),
             device_id: "device".into(),
             title: None,
@@ -6852,7 +6852,7 @@ mod tests {
 #[cfg(feature = "project-palette-fixture")]
 impl Shell {
     pub fn fixture_project_responses(&mut self, cx: &mut Context<Self>) {
-        if std::env::var_os("ORBIT_FIXTURE_BACKGROUND").is_some() {
+        if std::env::var_os("ENSEMBYTE_FIXTURE_BACKGROUND").is_some() {
             self.composer
                 .read(cx)
                 .pickers()
@@ -6953,7 +6953,7 @@ mod project_flow_tests {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )

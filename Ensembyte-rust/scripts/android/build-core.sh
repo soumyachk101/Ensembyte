@@ -15,16 +15,16 @@ OUT="${1:-$ROOT/target/android-core}"
 mkdir -p "$OUT/kotlin" "$OUT/jniLibs"
 cd "$ROOT"
 
-cargo build --locked -p orbit-mobile --lib --profile mobile
-cargo build --locked -p orbit-mobile --bin uniffi-bindgen --features bindgen --profile mobile
-HOST_LIB="$ROOT/target/mobile/liborbit_mobile.$([[ "$(uname)" == Darwin ]] && echo dylib || echo so)"
+cargo build --locked -p ensembyte-mobile --lib --profile mobile
+cargo build --locked -p ensembyte-mobile --bin uniffi-bindgen --features bindgen --profile mobile
+HOST_LIB="$ROOT/target/mobile/libensembyte_mobile.$([[ "$(uname)" == Darwin ]] && echo dylib || echo so)"
 "$ROOT/target/mobile/uniffi-bindgen" generate --library "$HOST_LIB" --language kotlin \
   --no-format --out-dir "$OUT/kotlin"
 echo "kotlin bindings: $OUT/kotlin"
 
 if command -v cargo-ndk >/dev/null && [[ -n "${ANDROID_NDK_HOME:-}" ]]; then
   cargo ndk -t arm64-v8a -t x86_64 -o "$OUT/jniLibs" \
-    build --locked -p orbit-mobile --lib --profile mobile
+    build --locked -p ensembyte-mobile --lib --profile mobile
   echo "jniLibs: $OUT/jniLibs"
 else
   echo "note: cargo-ndk / ANDROID_NDK_HOME not found — skipped the .so build"

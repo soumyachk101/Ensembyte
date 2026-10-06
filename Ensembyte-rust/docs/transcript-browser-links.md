@@ -20,12 +20,12 @@ The fixture uses synthetic chat data, temporary app storage, and a local HTTP se
 - [Native scenario](../crates/ui/examples/browser-fixture/transcript_links.rs)
 
 ```sh
-cargo test -p orbit-ui
-cargo build -p orbit
-cargo build -p orbit-ui --example browser-fixture --features browser-fixture
-ORBIT_TRANSCRIPT_LINK_FIXTURE_ONLY=1 \
+cargo test -p ensembyte-ui
+cargo build -p ensembyte
+cargo build -p ensembyte-ui --example browser-fixture --features browser-fixture
+ENSEMBYTE_TRANSCRIPT_LINK_FIXTURE_ONLY=1 \
   BROWSER_FIXTURE_BINARY=target/debug/examples/browser-fixture \
-  scripts/test-linux-browser.sh /tmp/orbit-transcript-links
+  scripts/test-linux-browser.sh /tmp/ensembyte-transcript-links
 ```
 
 If FFmpeg lacks `libx264`, add `BROWSER_FIXTURE_VIDEO_CODEC=mpeg4` to the runner environment.
@@ -35,18 +35,18 @@ The Linux runner exercises X11 and nested Wayland with native pointer input. It 
 On macOS, build the same example and run it with the release application's Info.plist:
 
 ```sh
-ORBIT_TRANSCRIPT_LINK_FIXTURE_ONLY=1 \
+ENSEMBYTE_TRANSCRIPT_LINK_FIXTURE_ONLY=1 \
   scripts/run-macos-browser-fixture.sh target/debug/examples/browser-fixture \
-  /tmp/orbit-transcript-links-macos
+  /tmp/ensembyte-transcript-links-macos
 ```
 
-Native runtime-failure validation can be run on Linux by placing an empty `libwebkit2gtk-4.1.so.0` in a temporary directory, setting `LD_LIBRARY_PATH` to that directory, and setting `ORBIT_LINK_FIXTURE_MISSING_RUNTIME=1` for the fixture. This simulates the dynamic loader's failure without changing installed packages. The main application must remain usable and expose the error and external-browser control.
+Native runtime-failure validation can be run on Linux by placing an empty `libwebkit2gtk-4.1.so.0` in a temporary directory, setting `LD_LIBRARY_PATH` to that directory, and setting `ENSEMBYTE_LINK_FIXTURE_MISSING_RUNTIME=1` for the fixture. This simulates the dynamic loader's failure without changing installed packages. The main application must remain usable and expose the error and external-browser control.
 
 ## Validation recorded for this change
 
-- `cargo test -p orbit-ui`: 916 tests passed, plus doc tests.
-- `cargo build -p orbit`: passed.
-- `cargo check -p orbit`: passed.
+- `cargo test -p ensembyte-ui`: 916 tests passed, plus doc tests.
+- `cargo build -p ensembyte`: passed.
+- `cargo check -p ensembyte`: passed.
 - Rustfmt checks passed for the modified library modules and the new native scenario; shell syntax and whitespace checks passed. The existing browser fixture's formatting was preserved.
 - Linux X11: native input, clipboard, navigation, tab ownership/close, and visual disclosure over WebKitGTK verified.
 - Linux Wayland: native pointer, clipboard, keyboard actions, navigation, and tab close assertions passed in nested Weston. Captures did not reliably reflect updated frames, including with software Vulkan and an explicit frame request; visual verification of Wayland overlays remains outstanding.

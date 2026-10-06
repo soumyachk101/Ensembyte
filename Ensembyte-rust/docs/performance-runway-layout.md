@@ -74,17 +74,17 @@ claim. Normal shared-host noise limits interpretation of small differences.
 
 ## Reproduction
 
-Build each revision with `cargo build --release --locked -p orbit`, copy each
+Build each revision with `cargo build --release --locked -p ensembyte`, copy each
 binary to an immutable path, and run `scripts/resource-profile.mjs` sequentially
 in main/candidate/candidate/main order for each workload. Use:
 
 ```sh
-DISPLAY=:108 WAYLAND_DISPLAY= LP_NUM_THREADS=4 ORBIT_FRAME_STATS=0 \
-  ORBIT_PROFILE_PSS=1 ORBIT_PROFILE_SUBMIT_UI=1 \
-  ORBIT_PROFILE_PRE_IDLE_MS=10000 ORBIT_PROFILE_IDLE_MS=45000 \
-  ORBIT_REPLAY_DELAY_MS=40 \
+DISPLAY=:108 WAYLAND_DISPLAY= LP_NUM_THREADS=4 ENSEMBYTE_FRAME_STATS=0 \
+  ENSEMBYTE_PROFILE_PSS=1 ENSEMBYTE_PROFILE_SUBMIT_UI=1 \
+  ENSEMBYTE_PROFILE_PRE_IDLE_MS=10000 ENSEMBYTE_PROFILE_IDLE_MS=45000 \
+  ENSEMBYTE_REPLAY_DELAY_MS=40 \
   CLAUDE_CODE_EXECUTABLE="$PWD/scripts/replay-claude.py" \
-  ORBIT_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
+  ENSEMBYTE_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
   node scripts/resource-profile.mjs /path/to/binary /tmp/fresh-run claude-code
 ```
 

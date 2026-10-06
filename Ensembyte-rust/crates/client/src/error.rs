@@ -36,8 +36,8 @@ pub enum ClientError {
     Internal(String),
 }
 
-impl From<orbit_doc::DocError> for ClientError {
-    fn from(err: orbit_doc::DocError) -> Self {
+impl From<ensembyte_doc::DocError> for ClientError {
+    fn from(err: ensembyte_doc::DocError) -> Self {
         ClientError::Internal(err.to_string())
     }
 }

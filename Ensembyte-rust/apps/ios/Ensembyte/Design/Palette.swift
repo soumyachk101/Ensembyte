@@ -78,7 +78,7 @@ enum Palette {
         case .syntaxTag: dynamic(0xBE185D, 0xF472B6)
         case .syntaxAttribute: dynamic(0xB91C1C, 0xF87171)
         case .syntaxEscape: dynamic(0x0E7490, 0x22D3EE)
-        // Tool groups — desktop orbit tokens (see tools.rs).
+        // Tool groups — desktop ensembyte tokens (see tools.rs).
         case .textFaint: dynamic(0x797981, 0x85858A)
         case .textSoft: dynamic(0x303035, 0xE8E8EA, alpha: 0.85)
         case .toolRail: dual(UIColor(white: 0, alpha: 0.162), UIColor(white: 1, alpha: 0.12))

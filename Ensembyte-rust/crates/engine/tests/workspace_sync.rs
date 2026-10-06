@@ -4,8 +4,8 @@
 //! The in-memory bridge below stands in for the edge room: it cross-imports Loro
 //! updates (`export(updates)`) between the two engines' workspace docs on a timer,
 //! which is exactly what `RoomClient` + the SessionRoom DO do over the wire. A live
-//! variant against a real edge runs behind `#[ignore]` (ORBIT_EDGE_WS, like
-//! orbit-sync's edge_convergence test).
+//! variant against a real edge runs behind `#[ignore]` (ENSEMBYTE_EDGE_WS, like
+//! ensembyte-sync's edge_convergence test).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,14 +14,14 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 
-use orbit_doc::{CommandBasedOn, SessionCommandEntry, SessionCommandPayload, SessionCommandStatus};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_doc::{CommandBasedOn, SessionCommandEntry, SessionCommandPayload, SessionCommandStatus};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, ChatConfig, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SessionStatus, SteeringMode,
 };
-use orbit_rpc::methods;
+use ensembyte_rpc::methods;
 
 const VIEWER: &str = "viewer-device";
 
@@ -122,8 +122,8 @@ fn assemble(dir: &std::path::Path, device_id: &str) -> EngineCore {
 async fn bridge(
     a: &EngineCore,
     b: &EngineCore,
-) -> orbit_sync::registry::mock_server::MockRegistryServer {
-    let server = orbit_sync::registry::mock_server::MockRegistryServer::start().await;
+) -> ensembyte_sync::registry::mock_server::MockRegistryServer {
+    let server = ensembyte_sync::registry::mock_server::MockRegistryServer::start().await;
     a.workspace.connect_registry_url(&server.url());
     b.workspace.connect_registry_url(&server.url());
     server
@@ -226,8 +226,8 @@ async fn two_engines_share_a_workspace() {
 
     // CreateSpace + CreateChat on A (Mutate over the real RPC surface), hosted
     // by dev-a via the space.
-    let client_a = orbit_rpc::memory_client(a.rpc_service());
-    let client_b = orbit_rpc::memory_client(b.rpc_service());
+    let client_a = ensembyte_rpc::memory_client(a.rpc_service());
+    let client_b = ensembyte_rpc::memory_client(b.rpc_service());
     client_a
         .call(
             methods::MUTATE,
@@ -427,7 +427,7 @@ async fn projectless_claim_syncs_after_offline_creation_and_survives_viewer_rest
 async fn claim_resolves_a_worktree_cwd_to_the_repo_root_space() {
     let dir = tempfile::tempdir().unwrap();
     let core = assemble(dir.path(), "dev-a");
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
 
     // A checkout with a linked worktree — fs layout only; the claim path
     // reads `.git` without spawning git.
@@ -577,7 +577,7 @@ async fn chat_config_selects_the_run_harness() {
         || {
             handle.doc().read_entries().unwrap_or_default().iter().any(|e| {
                 e.parts.iter().any(
-                    |p| matches!(p, orbit_doc::MessagePart::Text { text, .. } if text == "From cursor"),
+                    |p| matches!(p, ensembyte_doc::MessagePart::Text { text, .. } if text == "From cursor"),
                 )
             })
         },
@@ -592,15 +592,15 @@ async fn chat_config_selects_the_run_harness() {
 /// the TS edge (`wrangler dev` in `edge/` with AUTH_MODE=dev):
 ///
 /// ```sh
-/// ORBIT_EDGE_WS=ws://127.0.0.1:8787 cargo test -p orbit-engine -- --ignored
+/// ENSEMBYTE_EDGE_WS=ws://127.0.0.1:8787 cargo test -p ensembyte-engine -- --ignored
 /// ```
 #[tokio::test]
-#[ignore = "requires a live edge: set ORBIT_EDGE_WS (e.g. ws://127.0.0.1:8787)"]
+#[ignore = "requires a live edge: set ENSEMBYTE_EDGE_WS (e.g. ws://127.0.0.1:8787)"]
 async fn two_engines_converge_through_a_real_workspace_room() {
-    use orbit_engine::doc_host::EdgeConfig;
+    use ensembyte_engine::doc_host::EdgeConfig;
 
-    let base = std::env::var("ORBIT_EDGE_WS")
-        .expect("set ORBIT_EDGE_WS to the edge origin, e.g. ws://127.0.0.1:8787");
+    let base = std::env::var("ENSEMBYTE_EDGE_WS")
+        .expect("set ENSEMBYTE_EDGE_WS to the edge origin, e.g. ws://127.0.0.1:8787");
     let org = format!("org-{}", uuid::Uuid::new_v4().simple());
 
     let assemble_live = |dir: &std::path::Path, device_id: &str, user: &str| {
@@ -662,15 +662,15 @@ async fn two_engines_converge_through_a_real_workspace_room() {
 
 #[tokio::test]
 async fn legacy_workspace_doc_migrates_instantly_on_first_boot() {
-    use orbit_proto::{Chat, Device, Session, Space};
+    use ensembyte_proto::{Chat, Device, Session, Space};
 
     let dir_a = tempfile::tempdir().unwrap();
     // Seed the identity-scoped store with a LEGACY Loro workspace snapshot —
     // what an updated engine finds on its first boot after the registry change.
     let org_dir = dir_a.path().join("orgs").join("dev-org").join("dev-user");
     {
-        let store = orbit_sync::DocsStore::open(&org_dir).expect("open store");
-        let legacy = orbit_doc::WorkspaceDoc::new();
+        let store = ensembyte_sync::DocsStore::open(&org_dir).expect("open store");
+        let legacy = ensembyte_doc::WorkspaceDoc::new();
         let now = chrono::Utc::now();
         legacy
             .upsert_device(&Device {
@@ -787,10 +787,10 @@ async fn legacy_workspace_doc_migrates_instantly_on_first_boot() {
     b.shutdown().await;
 
     // The registry snapshot now exists; the legacy snapshot is kept for rollback.
-    let store = orbit_sync::DocsStore::open(&org_dir).expect("reopen store");
+    let store = ensembyte_sync::DocsStore::open(&org_dir).expect("reopen store");
     assert!(
         store
-            .load_snapshot(orbit_doc::REGISTRY_DOC_ID)
+            .load_snapshot(ensembyte_doc::REGISTRY_DOC_ID)
             .expect("load registry snapshot")
             .is_some(),
         "registry snapshot persisted"

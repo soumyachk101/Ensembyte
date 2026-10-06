@@ -18,7 +18,7 @@
 //!   turn (`cancelled` → Interrupted, `refusal` → Errored, else Completed).
 //! - `session/update` notifications normalize per [`normalize::map_update`].
 //! - Permission requests auto-accept with the agent's preferred allow option
-//!   (orbit sessions run unattended); question-shaped requests block on the
+//!   (ensembyte sessions run unattended); question-shaped requests block on the
 //!   engine's input bridge.
 //! - Steering: agents advertising `_session/steering` get mid-turn injection;
 //!   others queue steers and deliver them as the next `session/prompt` at the
@@ -47,7 +47,7 @@ use serde_json::{Value, json};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
 
-use orbit_proto::{
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ModelOption, ModelOptionChoice, ReasoningLevel,
     RunRequest, SlashCommand, SteeringMode, UserInputAnswer, UserInputQuestion,
 };
@@ -214,7 +214,7 @@ fn grok_spec() -> AcpAgentSpec {
         // the `agent` subcommand and starts a fresh agent even when
         // `[cli] use_leader` is set — leader mode ATTACHES `agent stdio` to a
         // shared process via ~/.grok/leader.sock, so a wedged/stale leader
-        // (the user's TUI) reads as total silent non-response in orbit.
+        // (the user's TUI) reads as total silent non-response in ensembyte.
         args: &["--no-auto-update", "agent", "--no-leader", "stdio"],
         npm_package: Some("@xai-official/grok@1.0.4"),
         archive: None,
@@ -257,7 +257,7 @@ fn grok_spec() -> AcpAgentSpec {
         prompt_complete_extension: true,
         prompt_stall: Some(Duration::from_secs(30)),
         stall_hint: "The agent process is likely wedged — a stale shared leader \
-             process or a hung startup check; orbit launches it with --no-leader \
+             process or a hung startup check; ensembyte launches it with --no-leader \
              and --no-auto-update to avoid both.",
         effort_in_model_id: false,
         auth_method: None,
@@ -517,7 +517,7 @@ const ANTIGRAVITY_ARCHIVE_NAME: &str = "antigravity-acp";
 pub const ANTIGRAVITY_REGISTRY_URL: &str = "https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json";
 
 /// install marker for a release proven by google's code signature, which has
-/// no digest in orbit's source to record instead.
+/// no digest in ensembyte's source to record instead.
 const ANTIGRAVITY_SIGNED_MARKER: &str = "google-code-signature";
 
 fn antigravity_entry() -> &'static str {
@@ -581,7 +581,7 @@ fn newest_antigravity_install() -> Option<(semver::Version, PathBuf)> {
         .max_by(|(left, _), (right, _)| left.cmp(right))
 }
 
-/// whether `executable` is the server orbit installed and may replace.
+/// whether `executable` is the server ensembyte installed and may replace.
 pub fn is_managed_antigravity_server(executable: &Path) -> bool {
     newest_antigravity_install().is_some_and(|(_, entry)| entry == executable)
 }
@@ -595,7 +595,7 @@ pub struct AntigravityRelease {
 }
 
 impl AntigravityRelease {
-    /// whether orbit can prove this release's origin before installing it.
+    /// whether ensembyte can prove this release's origin before installing it.
     pub fn installable(&self) -> bool {
         antigravity_archive().is_some_and(|pin| pin.version == self.version)
             || (crate::code_signature::SUPPORTED && self.archive_url.is_some())
@@ -720,7 +720,7 @@ pub fn antigravity_build_version(output: &str) -> Option<String> {
 }
 
 /// remove trusted installs older than the one launches resolve to. a version
-/// still running (in any process, including another orbit) is kept, and on
+/// still running (in any process, including another ensembyte) is kept, and on
 /// failure to inspect processes nothing is removed.
 pub fn prune_superseded_antigravity_installs() {
     let Some((newest, _)) = newest_antigravity_install() else {
@@ -827,7 +827,7 @@ fn running_command_lines() -> Option<Vec<String>> {
     None
 }
 
-/// how a process may name files under `dir`: as orbit spawned it, and in its
+/// how a process may name files under `dir`: as ensembyte spawned it, and in its
 /// canonical form, which windows reports for images even when the adapters
 /// directory was reached through an 8.3 short name such as `RUNNER~1`.
 fn install_path_prefixes(dir: &Path) -> Vec<String> {
@@ -1195,12 +1195,12 @@ pub fn prewarm_managed_adapters() {
         handle.spawn(async move {
             match crate::adapter_install::ensure_installed(pin, bin_name, display_name).await {
                 Ok(entry) => tracing::info!(
-                    target: "orbit_harness::adapter_install",
+                    target: "ensembyte_harness::adapter_install",
                     adapter = %entry.display(),
                     "prewarmed {display_name} ACP adapter"
                 ),
                 Err(e) => tracing::warn!(
-                    target: "orbit_harness::adapter_install",
+                    target: "ensembyte_harness::adapter_install",
                     "prewarm of the {display_name} ACP adapter failed: {e}"
                 ),
             }
@@ -1415,7 +1415,7 @@ impl AcpHarness {
                 while let Ok(Some(line)) = lines.next_line().await {
                     // Sign-in output carries authorize urls and device codes.
                     tracing::debug!(
-                        target: "orbit_harness::acp",
+                        target: "ensembyte_harness::acp",
                         "sign-in stderr: {}",
                         crate::redact::redact_output(&line)
                     );
@@ -1622,7 +1622,7 @@ impl AcpHarness {
                             .await
                             {
                                 tracing::warn!(
-                                    target: "orbit_harness::adapter_install",
+                                    target: "ensembyte_harness::adapter_install",
                                     "background adapter install failed: {e}"
                                 );
                             }
@@ -1679,7 +1679,7 @@ impl AcpHarness {
         cwd: Option<&str>,
         block_on_install: bool,
         extra_args: &[String],
-        _mcp: Option<&orbit_proto::McpServer>,
+        _mcp: Option<&ensembyte_proto::McpServer>,
     ) -> Result<
         (
             Option<ScratchDir>,
@@ -1737,7 +1737,7 @@ impl AcpHarness {
             tokio::spawn(async move {
                 let mut lines = tokio::io::BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    tracing::debug!(target: "orbit_harness::acp", "stderr: {line}");
+                    tracing::debug!(target: "ensembyte_harness::acp", "stderr: {line}");
                     tail.push(&line);
                     if is_sign_in_prompt(harness, &line) {
                         prompted.cancel();
@@ -1888,7 +1888,7 @@ impl AcpHarness {
     }
 }
 
-/// Map an advertised `thought_level` value id onto orbit's ladder.
+/// Map an advertised `thought_level` value id onto ensembyte's ladder.
 fn reasoning_from_value(value: &str) -> Option<ReasoningLevel> {
     match norm_id(value).as_str() {
         "minimal" => Some(ReasoningLevel::Minimal),
@@ -2063,12 +2063,12 @@ fn models_from_session(session_response: &Value, catalog: &[Model]) -> Vec<Model
 }
 
 /// A session config option surfaced as a Traits-dropdown section. Mode is
-/// orbit's own (forced to the no-prompts choice), model rides the model rows,
+/// ensembyte's own (forced to the no-prompts choice), model rides the model rows,
 /// and thought_level is the Reasoning ladder — everything else the agent
 /// advertises (fast mode, collaboration mode, agent persona, …) passes
 /// through. `currentValue` doubles as the default: it is the state the
 /// session opens in. Booleans render as an off/on select, mirroring the
-/// catalogs (orbit never declares the boolean config capability, so adapters
+/// catalogs (ensembyte never declares the boolean config capability, so adapters
 /// send selects, but handle the shape defensively).
 fn trait_from_config_option(option: &Value) -> Option<ModelOption> {
     if matches!(
@@ -2271,7 +2271,7 @@ impl Harness for AcpHarness {
     async fn skills(
         &self,
         cwd: &std::path::Path,
-    ) -> Result<Option<Vec<orbit_proto::invocation::Skill>>, HarnessError> {
+    ) -> Result<Option<Vec<ensembyte_proto::invocation::Skill>>, HarnessError> {
         let (mut skills, commands) = tokio::try_join!(
             crate::skills::discover(self.id(), cwd),
             self.workspace_commands
@@ -2468,7 +2468,7 @@ fn initialize_params(harness: HarnessId) -> Value {
             "version": env!("CARGO_PKG_VERSION"),
         },
         // Declined: agents fall back to their own fs/terminal access, which
-        // is what orbit wants — the working tree is the source of truth for
+        // is what ensembyte wants — the working tree is the source of truth for
         // the diff pane, and commands belong to the agent's own sandbox.
         "clientCapabilities": capabilities,
     })
@@ -2478,7 +2478,7 @@ fn initialize_params(harness: HarnessId) -> Value {
 /// server as name/command/args plus `[{name, value}]` env pairs. Empty when
 /// the host injected nothing — the user's own servers come from the agent's
 /// config, never from here.
-fn acp_mcp_servers(mcp: Option<&orbit_proto::McpServer>) -> Vec<Value> {
+fn acp_mcp_servers(mcp: Option<&ensembyte_proto::McpServer>) -> Vec<Value> {
     mcp.into_iter()
         .map(|mcp| {
             json!({
@@ -2949,7 +2949,7 @@ fn prompt_turn(
 
 /// Answer a server→client request. Permission requests are auto-accepted with
 /// the agent's preferred allow option — parity with the claude harness's
-/// bypassPermissions and the codex harness's approvalPolicy "never" (orbit
+/// bypassPermissions and the codex harness's approvalPolicy "never" (ensembyte
 /// sessions run unattended). Everything else (fs, terminal, elicitation) was
 /// declined at initialize, so a stray request gets method-not-found rather
 /// than wedging the agent.
@@ -2976,7 +2976,7 @@ fn handle_server_request(
             Vec::new()
         }
         _ => {
-            tracing::debug!(target: "orbit_harness::acp", "unhandled server request: {method}");
+            tracing::debug!(target: "ensembyte_harness::acp", "unhandled server request: {method}");
             client.respond_error(&id, -32601, &format!("unsupported method: {method}"));
             Vec::new()
         }
@@ -3134,7 +3134,7 @@ fn noop_browser() -> Result<String, HarnessError> {
 
 /// python's `webbrowser` splits `BROWSER` on `:` and then shell-splits each
 /// entry. hosts without `true` (nixos, minimal containers) fall back to
-/// orbit's own `--noop-browser` mode.
+/// ensembyte's own `--noop-browser` mode.
 #[cfg(any(not(windows), test))]
 fn unix_noop_browser(
     candidates: &[&Path],
@@ -3536,7 +3536,7 @@ async fn run_session(session: Session) {
                 // A missing/foreign session falls back to a fresh one.
                 Err(e) => {
                     tracing::debug!(
-                        target: "orbit_harness::acp",
+                        target: "ensembyte_harness::acp",
                         "session/load failed (starting fresh): {e}"
                     );
                     let _ = send(&event_tx, AgentEvent::Error {
@@ -3708,7 +3708,7 @@ async fn run_session(session: Session) {
                             )));
                         }
                         tracing::debug!(
-                            target: "orbit_harness::acp",
+                            target: "ensembyte_harness::acp",
                             "session/set_config_option {config_id}={payload} rejected (agent default runs): {e}"
                         );
                     }
@@ -3771,7 +3771,7 @@ async fn run_session(session: Session) {
                             None => e.to_string(),
                         },
                     };
-                    tracing::warn!(target: "orbit_harness::acp", %error, "agent setup failed");
+                    tracing::warn!(target: "ensembyte_harness::acp", %error, "agent setup failed");
                     let _ = event_tx
                         .send(Ok(AgentEvent::Done {
                             status: DoneStatus::Errored,
@@ -3848,10 +3848,10 @@ async fn run_session(session: Session) {
     // settled ids are remembered so a STALE `prompt_complete` (a late replay
     // of an already-settled prompt) can never settle a newer turn.
     let mut prompt_seq: u64 = 1;
-    let mut current_prompt_id = prompt_complete_extension.then(|| format!("orbit-p{prompt_seq}"));
+    let mut current_prompt_id = prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
     let mut completed_prompts: VecDeque<String> = VecDeque::new();
-    // `ORBIT_ACP_PROMPT_STALL_MS` overrides the spec's bound; 0 disables.
-    let prompt_stall: Option<Duration> = match std::env::var("ORBIT_ACP_PROMPT_STALL_MS")
+    // `ENSEMBYTE_ACP_PROMPT_STALL_MS` overrides the spec's bound; 0 disables.
+    let prompt_stall: Option<Duration> = match std::env::var("ENSEMBYTE_ACP_PROMPT_STALL_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
     {
@@ -3918,7 +3918,7 @@ async fn run_session(session: Session) {
     // Silence is not a turn boundary: completed tools, text, and usage may
     // all precede a slow model request. Keep the prompt future alive until
     // its response (or an authoritative completion extension) arrives.
-    // ORBIT_ACP_QUIET_SETTLE_MS is intentionally no longer honored (#296).
+    // ENSEMBYTE_ACP_QUIET_SETTLE_MS is intentionally no longer honored (#296).
     let mut last_update_at = tokio::time::Instant::now();
     let mut open_tools: std::collections::HashSet<String> = std::collections::HashSet::new();
     // PREVENTION, ahead of all the recovery above: never send a
@@ -4145,7 +4145,7 @@ async fn run_session(session: Session) {
                     last_update_at = tokio::time::Instant::now();
                     prompt_seq += 1;
                     current_prompt_id =
-                        prompt_complete_extension.then(|| format!("orbit-p{prompt_seq}"));
+                        prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
                     current_prompt_text = texts.join("\n\n");
@@ -4332,7 +4332,7 @@ async fn run_session(session: Session) {
                         .to_owned(),
                     Err(e) => {
                         tracing::debug!(
-                            target: "orbit_harness::acp",
+                            target: "ensembyte_harness::acp",
                             "_session/steering failed (redelivering): {e}"
                         );
                         // Failed calls redeliver like a lost turn-end race.
@@ -4427,7 +4427,7 @@ async fn run_session(session: Session) {
                         == Some("noRunningTurn")
                     {
                         tracing::warn!(
-                            target: "orbit_harness::acp",
+                            target: "ensembyte_harness::acp",
                             "steering answered noRunningTurn with a prompt \
                              outstanding; arming starved-turn recovery"
                         );
@@ -4456,7 +4456,7 @@ async fn run_session(session: Session) {
                     last_update_at = tokio::time::Instant::now();
                     prompt_seq += 1;
                     current_prompt_id =
-                        prompt_complete_extension.then(|| format!("orbit-p{prompt_seq}"));
+                        prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
                     current_prompt_text = text.clone();
@@ -4506,7 +4506,7 @@ async fn run_session(session: Session) {
                     last_update_at = tokio::time::Instant::now();
                     prompt_seq += 1;
                     current_prompt_id =
-                        prompt_complete_extension.then(|| format!("orbit-p{prompt_seq}"));
+                        prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
                     current_prompt_text = text.clone();
@@ -4531,7 +4531,7 @@ async fn run_session(session: Session) {
             ), if starve_deadline.is_some() && turn.is_some() && !interrupted => {
                 starve_deadline = None;
                 tracing::warn!(
-                    target: "orbit_harness::acp",
+                    target: "ensembyte_harness::acp",
                     "prompt response missing past turn-end evidence; settling \
                      the dead turn (and promoting any queued steer)"
                 );
@@ -4579,7 +4579,7 @@ async fn run_session(session: Session) {
                     last_update_at = tokio::time::Instant::now();
                     prompt_seq += 1;
                     current_prompt_id =
-                        prompt_complete_extension.then(|| format!("orbit-p{prompt_seq}"));
+                        prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
                     current_prompt_text = text.clone();
@@ -4613,7 +4613,7 @@ async fn run_session(session: Session) {
                         // cancel it rather than prompt into the starve.
                         //
                         tracing::info!(
-                            target: "orbit_harness::acp",
+                            target: "ensembyte_harness::acp",
                             "steer into a self-continuing session; cancelling \
                              the unowned turn before prompting"
                         );
@@ -4643,7 +4643,7 @@ async fn run_session(session: Session) {
                         last_update_at = tokio::time::Instant::now();
                         prompt_seq += 1;
                     current_prompt_id =
-                        prompt_complete_extension.then(|| format!("orbit-p{prompt_seq}"));
+                        prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
                     current_prompt_text = text.clone();
@@ -4822,7 +4822,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unix_browser_suppression_falls_back_to_orbits_noop_mode() {
+    fn unix_browser_suppression_falls_back_to_ensembytes_noop_mode() {
         let present = std::env::current_exe().unwrap();
         assert_eq!(
             unix_noop_browser(&[Path::new("/missing/true"), &present], None).unwrap(),
@@ -4833,10 +4833,10 @@ mod tests {
             Path::new("/missing/bin/true"),
         ];
         assert_eq!(
-            unix_noop_browser(&missing, Some(Path::new("/opt/My Apps/orbit"))).unwrap(),
-            "'/opt/My Apps/orbit' --noop-browser %s"
+            unix_noop_browser(&missing, Some(Path::new("/opt/My Apps/ensembyte"))).unwrap(),
+            "'/opt/My Apps/ensembyte' --noop-browser %s"
         );
-        for path in ["/opt/a:b/orbit", "/opt/it's/orbit", "/opt/100%s/orbit"] {
+        for path in ["/opt/a:b/ensembyte", "/opt/it's/ensembyte", "/opt/100%s/ensembyte"] {
             assert!(
                 unix_noop_browser(&missing, Some(Path::new(path))).is_err(),
                 "{path}"
@@ -4886,13 +4886,13 @@ mod tests {
 
     #[test]
     fn windows_browser_suppression_quotes_the_executable_path() {
-        let command = windows_noop_browser(Path::new(r"C:\Program Files\Orbit\orbit.exe"))
+        let command = windows_noop_browser(Path::new(r"C:\Program Files\Orbit\ensembyte.exe"))
             .expect("browser command");
         assert_eq!(
             command,
-            r#""C:\\Program Files\\Orbit\\orbit.exe" --noop-browser %s"#
+            r#""C:\\Program Files\\Orbit\\ensembyte.exe" --noop-browser %s"#
         );
-        for path in [r"C:\semi;colon\orbit.exe", r"C:\percent%s\orbit.exe"] {
+        for path in [r"C:\semi;colon\ensembyte.exe", r"C:\percent%s\ensembyte.exe"] {
             assert!(windows_noop_browser(Path::new(path)).is_err());
         }
     }
@@ -5150,7 +5150,7 @@ mod tests {
     #[test]
     fn antigravity_unknown_named_home_fails_before_auth_selection() {
         let cwd = tempfile::tempdir().unwrap();
-        let path = PathBuf::from(format!("~orbit-missing-{}", uuid::Uuid::new_v4()));
+        let path = PathBuf::from(format!("~ensembyte-missing-{}", uuid::Uuid::new_v4()));
         assert!(
             antigravity_paths::resolve_home(Some(&path), Some(cwd.path()), cwd.path()).is_err()
         );
@@ -5169,11 +5169,11 @@ mod tests {
     }
 
     /// runs in a child process, since installs resolve through the
-    /// process-wide `ORBIT_ADAPTERS_DIR`.
+    /// process-wide `ENSEMBYTE_ADAPTERS_DIR`.
     #[cfg(any(unix, windows))]
     #[test]
     fn antigravity_launches_the_newest_trusted_install_and_prunes_the_rest() {
-        let Ok(adapters) = std::env::var("ORBIT_TEST_AGY_ADAPTERS") else {
+        let Ok(adapters) = std::env::var("ENSEMBYTE_TEST_AGY_ADAPTERS") else {
             let root = tempfile::tempdir().unwrap();
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
@@ -5181,10 +5181,10 @@ mod tests {
                     "acp::tests::antigravity_launches_the_newest_trusted_install_and_prunes_the_rest",
                     "--nocapture",
                 ])
-                .env("ORBIT_ADAPTERS_DIR", root.path())
-                .env("ORBIT_TEST_AGY_ADAPTERS", root.path())
+                .env("ENSEMBYTE_ADAPTERS_DIR", root.path())
+                .env("ENSEMBYTE_TEST_AGY_ADAPTERS", root.path())
                 .env("PATH", root.path().join("bin"))
-                .env("ORBIT_NO_LOGIN_SHELL", "1")
+                .env("ENSEMBYTE_NO_LOGIN_SHELL", "1")
                 .env_remove("ANTIGRAVITY_ACP_EXECUTABLE")
                 .output()
                 .unwrap();
@@ -5288,10 +5288,10 @@ mod tests {
     }
 
     /// downloads google's real archive (~110 MB). run with
-    /// `ORBIT_TEST_AGY_LIVE_SIGNED=1 ORBIT_ADAPTERS_DIR=<empty dir>`.
+    /// `ENSEMBYTE_TEST_AGY_LIVE_SIGNED=1 ENSEMBYTE_ADAPTERS_DIR=<empty dir>`.
     #[tokio::test]
     async fn antigravity_live_release_is_refused_when_it_misreports_its_version() {
-        if std::env::var_os("ORBIT_TEST_AGY_LIVE_SIGNED").is_none() {
+        if std::env::var_os("ENSEMBYTE_TEST_AGY_LIVE_SIGNED").is_none() {
             return;
         }
         let pin = antigravity_archive().unwrap();
@@ -6080,11 +6080,11 @@ mod mcp_injection_tests {
     #[test]
     fn acp_mcp_servers_spell_env_as_name_value_pairs_and_default_empty() {
         assert!(acp_mcp_servers(None).is_empty());
-        let mcp = orbit_proto::McpServer {
-            name: "orbit".into(),
-            command: "/opt/orbit/orbit".into(),
+        let mcp = ensembyte_proto::McpServer {
+            name: "ensembyte".into(),
+            command: "/opt/ensembyte/ensembyte".into(),
             args: vec!["mcp".into()],
-            env: [("ORBIT_IPC_PORT".to_owned(), "27654".to_owned())]
+            env: [("ENSEMBYTE_IPC_PORT".to_owned(), "27654".to_owned())]
                 .into_iter()
                 .collect(),
         };
@@ -6092,10 +6092,10 @@ mod mcp_injection_tests {
         assert_eq!(
             servers,
             vec![json!({
-                "name": "orbit",
-                "command": "/opt/orbit/orbit",
+                "name": "ensembyte",
+                "command": "/opt/ensembyte/ensembyte",
                 "args": ["mcp"],
-                "env": [{ "name": "ORBIT_IPC_PORT", "value": "27654" }],
+                "env": [{ "name": "ENSEMBYTE_IPC_PORT", "value": "27654" }],
             })]
         );
     }

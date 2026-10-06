@@ -47,10 +47,10 @@ The profiling feature and its benchmark dependencies are not enabled in normal
 application builds.
 
 The final completed native replay image is pixel-identical to the baseline.
-With `ORBIT_VERIFY_CACHE=1`, the example also compares the reused scene with a
+With `ENSEMBYTE_VERIFY_CACHE=1`, the example also compares the reused scene with a
 forced fresh render after settling, hiding/restoring the sidebar and scrolling;
 all four comparisons are pixel-identical. With the bundled 80-section fixture,
-`ORBIT_VERIFY_INTERACTIONS=1` also drives a text-selection drag, composer typing,
+`ENSEMBYTE_VERIFY_INTERACTIONS=1` also drives a text-selection drag, composer typing,
 and model-menu open/outside-click dismissal. Selection, typed text and dismissal match a fresh
 render byte for byte. The model menu has no engine catalog in this isolated
 example, so its loading bars keep animating: the comparison excludes the menu
@@ -137,26 +137,26 @@ that window foreground and the display awake for the entire run. Replay uses
 an isolated profile and the bundled sanitized fixture; it makes no model API call.
 
 ```sh
-cargo build --release --locked -p orbit
-ORBIT_FRAME_STATS=0 ORBIT_PROFILE_IDLE_MS=10000 \
+cargo build --release --locked -p ensembyte
+ENSEMBYTE_FRAME_STATS=0 ENSEMBYTE_PROFILE_IDLE_MS=10000 \
   CLAUDE_CODE_EXECUTABLE="$PWD/scripts/replay-claude.py" \
-  ORBIT_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
-  node scripts/resource-profile.mjs target/release/orbit /tmp/orbit-native claude-code
+  ENSEMBYTE_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
+  node scripts/resource-profile.mjs target/release/orbit /tmp/ensembyte-native claude-code
 
 # UI-only offscreen replay of those verified protocol frames:
-cargo build --release --locked -p orbit-ui --features resource-profile \
+cargo build --release --locked -p ensembyte-ui --features resource-profile \
   --example macos-resource-profile
-ORBIT_VERIFY_CACHE=1 ORBIT_VERIFY_INTERACTIONS=1 ORBIT_FRAME_STATS=0 \
+ENSEMBYTE_VERIFY_CACHE=1 ENSEMBYTE_VERIFY_INTERACTIONS=1 ENSEMBYTE_FRAME_STATS=0 \
   target/release/examples/macos-resource-profile \
-  /tmp/orbit-native/frames.json /tmp/orbit-native-ui
+  /tmp/ensembyte-native/frames.json /tmp/ensembyte-native-ui
 
 # Larger/faster reply: use the foreground command above with these added:
-# ORBIT_REPLAY_REPEAT=4 ORBIT_REPLAY_DELAY_MS=10 ORBIT_PROFILE_IDLE_MS=30000
+# ENSEMBYTE_REPLAY_REPEAT=4 ENSEMBYTE_REPLAY_DELAY_MS=10 ENSEMBYTE_PROFILE_IDLE_MS=30000
 # and a fresh output directory.
 
 # Native counter usable with either process (CPU uses 100% per core):
-xcrun clang -O2 scripts/macos-resource-stat.c -o /tmp/orbit-stat
-/tmp/orbit-stat PID
+xcrun clang -O2 scripts/macos-resource-stat.c -o /tmp/ensembyte-stat
+/tmp/ensembyte-stat PID
 ```
 
 Compare fresh release builds in alternating order, with the same trace,

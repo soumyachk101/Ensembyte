@@ -11,7 +11,7 @@ mitigations: engine turn-quiesce watchdog + harness starved-turn recovery.
 Needs an authenticated claude CLI; costs a few small prompts.
 
 Speaks newline-delimited JSON-RPC 2.0 over the adapter's stdio, mirroring
-orbit's harness. Timeline (mirrors the 2026-08-12 incident):
+ensembyte's harness. Timeline (mirrors the 2026-08-12 incident):
 
   1. initialize + session/new
   2. prompt#1: agent starts a background task (sleep) and ends its turn

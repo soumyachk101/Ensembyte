@@ -1,5 +1,5 @@
 //! Terminals — PTY sessions owned by this device (feature-inventory §3.4; port of
-//! orbit's `terminals.ts` over `portable-pty`).
+//! ensembyte's `terminals.ts` over `portable-pty`).
 //!
 //! - `open` spawns the user's login shell in the chat's cwd; `subscribe` replays a
 //!   bounded 1MB window (resumable via `afterSeq`) then tails live output, batched
@@ -9,7 +9,7 @@
 //!   Only EXITED sessions expire (30min TTL on their inert replay buffers), and
 //!   [`MAX_TERMINALS`] bounds leakage from renderers that lost their tab state.
 //! - Ownership: M5 is single-user local — every IPC/relay caller is the device
-//!   owner, so the per-user owner re-checks from orbit's Router land with real
+//!   owner, so the per-user owner re-checks from ensembyte's Router land with real
 //!   multi-account auth in M6.
 
 use std::collections::{HashMap, VecDeque};
@@ -26,8 +26,8 @@ use portable_pty::{CommandBuilder, native_pty_system};
 mod windows;
 use tokio::sync::mpsc;
 
-use orbit_doc::TERMINAL_OUTPUT_BATCH_MS;
-use orbit_proto::{TerminalEvent, TerminalSession};
+use ensembyte_doc::TERMINAL_OUTPUT_BATCH_MS;
+use ensembyte_proto::{TerminalEvent, TerminalSession};
 
 use crate::{EngineError, new_id};
 
@@ -248,11 +248,11 @@ impl Terminals {
         #[cfg(not(windows))]
         let (initial_script, bootstrap) = if let Some(command) = command {
             let (suffix, source) = match shell_name.as_str() {
-                "fish" => (".fish", "source \"$ORBIT_ACTION_SCRIPT\"\r"),
-                _ => (".sh", ". \"$ORBIT_ACTION_SCRIPT\"\r"),
+                "fish" => (".fish", "source \"$ENSEMBYTE_ACTION_SCRIPT\"\r"),
+                _ => (".sh", ". \"$ENSEMBYTE_ACTION_SCRIPT\"\r"),
             };
             let mut script = tempfile::Builder::new()
-                .prefix("orbit-action-")
+                .prefix("ensembyte-action-")
                 .suffix(suffix)
                 .tempfile()?;
             script.write_all(command.as_bytes())?;
@@ -285,7 +285,7 @@ impl Terminals {
             }
             if let Some(script) = initial_script.as_ref() {
                 cmd.env("ENSEMBYTE_ACTION_SCRIPT", script.path());
-                cmd.env("ORBIT_ACTION_SCRIPT", script.path());
+                cmd.env("ENSEMBYTE_ACTION_SCRIPT", script.path());
             }
             let child = pair
                 .slave
@@ -650,7 +650,7 @@ mod windows_tests {
 
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD as BASE64;
-    use orbit_proto::TerminalEvent;
+    use ensembyte_proto::TerminalEvent;
 
     use super::Terminals;
 
@@ -1186,7 +1186,7 @@ mod initial_command_tests {
                     root.path().to_str().unwrap(),
                     80,
                     24,
-                    Some("/nonexistent/orbit-test-shell"),
+                    Some("/nonexistent/ensembyte-test-shell"),
                     &HashMap::new(),
                     Some("echo test"),
                 )

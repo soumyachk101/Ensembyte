@@ -1,6 +1,6 @@
 //! live probe: the installed antigravity acp server's raw model catalog and,
 //! with `--prompt`, the session updates and usage one short turn produces.
-//! run from a directory outside any orbit project so preview discovery never
+//! run from a directory outside any ensembyte project so preview discovery never
 //! probes the server's ports.
 use std::process::Stdio;
 
@@ -9,8 +9,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[tokio::main]
 async fn main() {
-    use orbit_harness::Harness;
-    let harness = orbit_harness::AcpHarness::antigravity();
+    use ensembyte_harness::Harness;
+    let harness = ensembyte_harness::AcpHarness::antigravity();
     println!("installed: {}", harness.installed());
     if std::env::args().any(|arg| arg == "--detect-only") {
         return;
@@ -25,7 +25,7 @@ async fn main() {
         }
         return;
     }
-    let (server, args) = orbit_harness::AcpHarness::antigravity()
+    let (server, args) = ensembyte_harness::AcpHarness::antigravity()
         .resolve_program(true)
         .await
         .expect("install or resolve server");
@@ -83,7 +83,7 @@ async fn main() {
 
     let init = call("initialize", json!({
         "protocolVersion": 1,
-        "clientInfo": { "name": "orbit-probe", "version": "0" },
+        "clientInfo": { "name": "ensembyte-probe", "version": "0" },
         "clientCapabilities": { "fs": { "readTextFile": false, "writeTextFile": false }, "terminal": false },
     }))
     .await;

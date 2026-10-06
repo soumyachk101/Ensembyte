@@ -25,14 +25,14 @@ use tokio_tungstenite::tungstenite::handshake::server::{
     Request as WsRequest, Response as WsResponse,
 };
 
-use orbit_doc::{MessageRole, MessageStatus, SessionCommandPayload};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_doc::{MessageRole, MessageStatus, SessionCommandPayload};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, Device, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
-use orbit_rpc::{
+use ensembyte_rpc::{
     DeviceFrameHeader, LinkCache, LinkCacheConfig, StaticToken, decode_device_frame,
     encode_device_frame, methods,
 };
@@ -225,9 +225,9 @@ async fn rows_dark_command_delivers_over_the_peer_relay_exactly_once() {
         created_at: None,
         version: Some("0.2.12".into()),
         cursor_sdk_version: None,
-        capabilities: orbit_proto::capabilities::current(),
+        capabilities: ensembyte_proto::capabilities::current(),
     });
-    let client_a = orbit_rpc::memory_client(core_a.rpc_service());
+    let client_a = ensembyte_rpc::memory_client(core_a.rpc_service());
     client_a
         .call(
             methods::MUTATE,

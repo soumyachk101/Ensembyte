@@ -11,10 +11,10 @@ use std::time::Duration;
 use futures::StreamExt;
 use tokio::sync::{mpsc, oneshot};
 
-use orbit_harness::{
+use ensembyte_harness::{
     CancellationToken, ClaudeHarness, Harness, HarnessError, RunControls, SteerMessage,
 };
-use orbit_proto::{
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, RunRequest, SandboxLevel, ToolCall, UserInputAnswer,
     UserInputQuestion,
 };
@@ -339,8 +339,8 @@ async fn ask_user_question_round_trips_through_the_control_channel() {
 
 #[tokio::test]
 async fn ultrathink_preserves_selected_commands_on_initial_and_steered_sends() {
-    use orbit_proto::ReasoningLevel;
-    use orbit_proto::invocation::{Invocation, SkillCommand, harness_prompt};
+    use ensembyte_proto::ReasoningLevel;
+    use ensembyte_proto::invocation::{Invocation, SkillCommand, harness_prompt};
 
     let invocations = [
         Invocation::Command {
@@ -648,7 +648,7 @@ async fn captured_live_background_subagent_frames_replay_correctly() {
 
 /// Live smoke against the REAL claude CLI (2.1.x, must be installed + authed):
 /// one trivial turn through the stdio permission channel, ending on the
-/// result frame. `cargo test -p orbit-harness --test claude -- --ignored`.
+/// result frame. `cargo test -p ensembyte-harness --test claude -- --ignored`.
 #[tokio::test]
 #[ignore = "spawns the real claude CLI; needs install + auth + network"]
 async fn live_real_cli_single_turn() {
@@ -716,7 +716,7 @@ async fn commands_come_from_the_initialize_control_request() {
     assert_eq!(again, commands);
 }
 
-/// Live smoke against the real CLI: `cargo test -p orbit-harness --test
+/// Live smoke against the real CLI: `cargo test -p ensembyte-harness --test
 /// claude -- --ignored live_commands`. No model turn, no API cost.
 #[tokio::test]
 #[ignore]
@@ -784,7 +784,7 @@ async fn command_discovery_tracks_project_changes() {
 
 #[tokio::test]
 async fn shared_skill_colliding_with_builtin_keeps_file_delivery() {
-    use orbit_proto::invocation::{Invocation, harness_prompt};
+    use ensembyte_proto::invocation::{Invocation, harness_prompt};
     let cwd = tempfile::tempdir().unwrap();
     std::fs::create_dir(cwd.path().join(".git")).unwrap();
     let directory = cwd.path().join(".agents/skills/compact");
@@ -820,7 +820,7 @@ async fn shared_skill_colliding_with_builtin_keeps_file_delivery() {
 
 #[tokio::test]
 async fn claude_skills_follow_native_availability_and_dollar_selection_keeps_arguments() {
-    use orbit_proto::{
+    use ensembyte_proto::{
         HarnessId,
         invocation::{Invocation, harness_prompt},
     };

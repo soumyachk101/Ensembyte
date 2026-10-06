@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use orbit_syntax::{HighlightKind, HighlightRequest, HighlightedDocument, highlight};
+use ensembyte_syntax::{HighlightKind, HighlightRequest, HighlightedDocument, highlight};
 
 fn document(source: &str, path: &str) -> HighlightedDocument {
     highlight(HighlightRequest {

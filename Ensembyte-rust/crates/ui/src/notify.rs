@@ -19,13 +19,13 @@
 //!   desktop).
 //! - Windows: no-op for now — toasts require a registered AppUserModelID
 //!   (an installer concern); the chime still covers it.
-//! - `ORBIT_DISABLE_NOTIFICATIONS` env kill-switch + the
+//! - `ENSEMBYTE_DISABLE_NOTIFICATIONS` env kill-switch + the
 //!   `notificationsEnabled` ui-setting (checked by the caller);
 //! - failures are logged and swallowed — a missing notifier must never
 //!   bother the session flow.
 
 const DISABLE_ENV: &str = "ENSEMBYTE_DISABLE_NOTIFICATIONS";
-const LEGACY_DISABLE_ENV: &str = "ORBIT_DISABLE_NOTIFICATIONS";
+const LEGACY_DISABLE_ENV: &str = "ENSEMBYTE_DISABLE_NOTIFICATIONS";
 
 /// Reserved notification target routed to Settings → Agents rather than a
 /// conversation. Session ids are generated UUIDs, so this cannot collide

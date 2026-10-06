@@ -1,10 +1,10 @@
 //! Orbit mobile core — the UniFFI surface shared by the iOS and Android apps.
 //!
-//! - [`client_ffi`]: account, workspace and session state (wraps `orbit-client`).
+//! - [`client_ffi`]: account, workspace and session state (wraps `ensembyte-client`).
 //! - [`layout`]: analytic transcript layout — markdown → measured display lists
-//!   (wraps `orbit-markdown` + `orbit-text`).
+//!   (wraps `ensembyte-markdown` + `ensembyte-text`).
 
-uniffi::setup_scaffolding!("orbit_core");
+uniffi::setup_scaffolding!("ensembyte_core");
 
 mod client_ffi;
 pub mod layout;

@@ -1,11 +1,11 @@
 //! Live account catalog and optional ACP run (requires authenticated Devin).
 //!
-//!     cargo run -p orbit-harness --example devin_models_probe
-//!     cargo run -p orbit-harness --example devin_models_probe -- gpt-6-astra-medium
+//!     cargo run -p ensembyte-harness --example devin_models_probe
+//!     cargo run -p ensembyte-harness --example devin_models_probe -- gpt-6-astra-medium
 
 use futures::StreamExt;
-use orbit_harness::{AcpHarness, CancellationToken, Harness, RunControls};
-use orbit_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
+use ensembyte_harness::{AcpHarness, CancellationToken, Harness, RunControls};
+use ensembyte_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -5,7 +5,7 @@ mod common;
 
 use common::*;
 use unicode_segmentation::UnicodeSegmentation;
-use orbit_text::*;
+use ensembyte_text::*;
 
 struct Rng(u64);
 
@@ -132,13 +132,13 @@ fn random_spans(rng: &mut Rng, text: &str, styles: &[StyleId]) -> Vec<Span> {
     spans
 }
 
-/// `ORBIT_TEXT_PROP_CASES` / `ORBIT_TEXT_PROP_SEED` scale a run up for bug hunting.
+/// `ENSEMBYTE_TEXT_PROP_CASES` / `ENSEMBYTE_TEXT_PROP_SEED` scale a run up for bug hunting.
 fn knobs(default_cases: usize, default_seed: u64) -> (usize, u64) {
-    let cases = std::env::var("ORBIT_TEXT_PROP_CASES")
+    let cases = std::env::var("ENSEMBYTE_TEXT_PROP_CASES")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(default_cases);
-    let seed = std::env::var("ORBIT_TEXT_PROP_SEED")
+    let seed = std::env::var("ENSEMBYTE_TEXT_PROP_SEED")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(default_seed);

@@ -3,7 +3,7 @@ use crate::{HarnessError, process::Command, scratch::ScratchDir};
 
 pub(super) fn configure(
     cmd: &mut Command,
-    config: &orbit_proto::McpServer,
+    config: &ensembyte_proto::McpServer,
 ) -> Result<ScratchDir, HarnessError> {
     let scratch = ScratchDir::new("pi-mcp")?;
     let extension = scratch.path().join("ensembyte-mcp.mjs");
@@ -12,6 +12,6 @@ pub(super) fn configure(
     cmd.arg("--extension")
         .arg(extension)
         .env("ENSEMBYTE_PI_MCP", &serialized)
-        .env("ORBIT_PI_MCP", serialized);
+        .env("ENSEMBYTE_PI_MCP", serialized);
     Ok(scratch)
 }

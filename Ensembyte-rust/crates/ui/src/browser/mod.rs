@@ -84,7 +84,7 @@ pub struct BrowserSurface {
     address_edited: bool,
     validation: Option<String>,
     remote: bool,
-    previews: orbit_proto::PreviewSnapshot,
+    previews: ensembyte_proto::PreviewSnapshot,
     previews_loading: bool,
     previews_task: Option<gpui::Task<()>>,
     #[cfg(feature = "browser-fixture")]
@@ -162,7 +162,7 @@ impl BrowserSurface {
             address_edited: false,
             validation: None,
             remote,
-            previews: orbit_proto::PreviewSnapshot::default(),
+            previews: ensembyte_proto::PreviewSnapshot::default(),
             previews_loading: true,
             previews_task: None,
             #[cfg(feature = "browser-fixture")]
@@ -247,7 +247,7 @@ impl BrowserSurface {
     }
 
     #[cfg(feature = "browser-fixture")]
-    pub fn fixture_previews(&self) -> orbit_proto::PreviewSnapshot {
+    pub fn fixture_previews(&self) -> ensembyte_proto::PreviewSnapshot {
         self.previews.clone()
     }
     #[cfg(feature = "browser-fixture")]
@@ -268,14 +268,14 @@ impl BrowserSurface {
                 let subscription = handle
                     .client()
                     .subscribe(
-                        orbit_rpc::methods::WATCH_PREVIEWS,
+                        ensembyte_rpc::methods::WATCH_PREVIEWS,
                         serde_json::json!({"chatId": chat_id}),
                     )
                     .await;
                 if let Ok(mut updates) = subscription {
                     while let Some(value) = updates.recv().await {
                         if let Ok(snapshot) =
-                            serde_json::from_value::<orbit_proto::PreviewSnapshot>(value)
+                            serde_json::from_value::<ensembyte_proto::PreviewSnapshot>(value)
                         {
                             if this
                                 .update(cx, |this, cx| {

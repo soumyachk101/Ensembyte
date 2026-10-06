@@ -5,7 +5,7 @@
 use std::{sync::Arc, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
-use orbit_preview::{
+use ensembyte_preview::{
     mux::{BoxIo, Connector},
     peer::{Peers, Signal},
 };
@@ -27,7 +27,7 @@ impl Connector for Backend {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter("orbit_preview=debug,webrtc=warn")
+        .with_env_filter("ensembyte_preview=debug,webrtc=warn")
         .with_writer(std::io::stderr)
         .init();
     let args: Vec<_> = std::env::args().skip(1).collect();

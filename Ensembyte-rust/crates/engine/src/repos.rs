@@ -1,12 +1,12 @@
 //! Repos — this device's git repositories, branches, worktrees, and the folder
-//! browser (feature-inventory §3.5; port of orbit's `repos.ts` + `folder-lister.ts`).
+//! browser (feature-inventory §3.5; port of ensembyte's `repos.ts` + `folder-lister.ts`).
 //!
 //! Repos are device-local (paths differ per machine), so the known set is a plain
 //! JSON list (`{data_dir}/repos.json`) — no sync. Existing repos can live anywhere
 //! the user points us; cloned/created ones land in `{data_dir}/repos`. Worktrees are
-//! created under `~/.orbit/worktrees/<repoName>/<worktreeName>` (NOT the data
+//! created under `~/.ensembyte/worktrees/<repoName>/<worktreeName>` (NOT the data
 //! dir — worktrees are user-facing working checkouts), with an auto-generated name +
-//! matching `orbit/<name>` branch. `ORBIT_WORKTREES_DIR` overrides the root.
+//! matching `ensembyte/<name>` branch. `ENSEMBYTE_WORKTREES_DIR` overrides the root.
 //!
 //! All git access is via subprocess (`tokio::process`) — never libgit2.
 
@@ -18,7 +18,7 @@ use std::time::Duration;
 use futures::{StreamExt, stream};
 use sha2::{Digest, Sha256};
 
-use orbit_proto::{
+use ensembyte_proto::{
     DriveEntry, FileSearchMatch, FolderEntry, FolderListing, GitHistoryCommit,
     GitHistoryComparison, GitHistoryPage, GitHistoryRef, GitHistoryRefKind, Repo, RepoRef,
     Worktree,
@@ -53,7 +53,7 @@ const ADJECTIVES: &[&str] = &[
     "sharp", "gentle", "vivid", "amber", "cobalt",
 ];
 const NOUNS: &[&str] = &[
-    "otter", "harbor", "falcon", "cedar", "meadow", "orbit", "delta", "ember", "lynx", "maple",
+    "otter", "harbor", "falcon", "cedar", "meadow", "delta", "ember", "lynx", "maple",
     "onyx", "quartz", "raven", "summit", "willow", "aspen",
 ];
 
@@ -120,19 +120,19 @@ fn session_home_dir_with(
 }
 
 /// Where new worktrees live. Deliberately NOT under the backend data dir —
-/// worktrees are user-facing working checkouts. `ENSEMBYTE_WORKTREES_DIR` or `ORBIT_WORKTREES_DIR`
+/// worktrees are user-facing working checkouts. `ENSEMBYTE_WORKTREES_DIR` or `ENSEMBYTE_WORKTREES_DIR`
 /// overrides (test isolation); empty reads as unset.
 fn default_worktrees_root() -> PathBuf {
     std::env::var_os("ENSEMBYTE_WORKTREES_DIR")
-        .or_else(|| std::env::var_os("ORBIT_WORKTREES_DIR"))
+        .or_else(|| std::env::var_os("ENSEMBYTE_WORKTREES_DIR"))
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             let home = home_dir();
             let ensembyte_wt = home.join(".ensembyte").join("worktrees");
-            let orbit_wt = home.join(".orbit").join("worktrees");
-            if !ensembyte_wt.exists() && orbit_wt.exists() {
-                orbit_wt
+            let legacy_wt = home.join(".ensembyte").join("worktrees");
+            if !ensembyte_wt.exists() && legacy_wt.exists() {
+                legacy_wt
             } else {
                 ensembyte_wt
             }
@@ -174,7 +174,7 @@ impl Repos {
     }
 
     /// `data_dir` holds `repos.json` + cloned/created repos; the worktree root
-    /// comes from `$ORBIT_WORKTREES_DIR` or `~/.orbit/worktrees`.
+    /// comes from `$ENSEMBYTE_WORKTREES_DIR` or `~/.ensembyte/worktrees`.
     pub fn new(data_dir: &Path, device_id: &str) -> Self {
         Self::with_worktrees_root(data_dir, device_id, default_worktrees_root())
     }
@@ -1100,7 +1100,7 @@ impl Repos {
     // ── worktrees ───────────────────────────────────────────────────────────
 
     /// `git worktree add` an isolated checkout under
-    /// `{worktrees_root}/<repoName>/<generatedName>`, on a fresh `orbit/<name>`
+    /// `{worktrees_root}/<repoName>/<generatedName>`, on a fresh `ensembyte/<name>`
     /// branch off `branch`.
     pub async fn create_worktree(
         &self,
@@ -1132,7 +1132,7 @@ impl Repos {
                 ADJECTIVES[(seed % ADJECTIVES.len() as u64) as usize],
                 NOUNS[((seed / 31) % NOUNS.len() as u64) as usize]
             );
-            if !base.join(&candidate).exists() && !existing.contains(&format!("orbit/{candidate}"))
+            if !base.join(&candidate).exists() && !existing.contains(&format!("ensembyte/{candidate}"))
             {
                 name = Some(candidate);
                 break;
@@ -1141,7 +1141,7 @@ impl Repos {
         let name =
             name.ok_or_else(|| EngineError::Other("Could not allocate a worktree name".into()))?;
         let path = base.join(&name);
-        let branch_name = format!("orbit/{name}");
+        let branch_name = format!("ensembyte/{name}");
         self.git(
             &[
                 "worktree",
@@ -1178,10 +1178,10 @@ impl Repos {
         .is_ok()
     }
 
-    /// Rename a orbit-created worktree branch after its chat's generated title
-    /// (port of orbit's `renameWorktreeBranch`). Guards:
+    /// Rename a ensembyte-created worktree branch after its chat's generated title
+    /// (port of ensembyte's `renameWorktreeBranch`). Guards:
     /// - respect an external checkout/rename: only act while the worktree is still
-    ///   on `expected_branch` AND that branch is the original `orbit/<folderName>`;
+    ///   on `expected_branch` AND that branch is the original `ensembyte/<folderName>`;
     /// - a title-slug collision gets a stable 6-hex suffix (hash of the worktree
     ///   path); a collision on THAT too fails.
     ///
@@ -1198,7 +1198,7 @@ impl Repos {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
-        if current != expected_branch || expected_branch != format!("orbit/{folder}") {
+        if current != expected_branch || expected_branch != format!("ensembyte/{folder}") {
             return Ok(current);
         }
         let preferred = worktree_branch_from_title(title);
@@ -1227,7 +1227,7 @@ impl Repos {
     }
 
     /// Best-effort worktree removal (if it still exists), then prune stale refs.
-    /// Deletes the worktree's branch ONLY when orbit created it (`orbit/…`) — the
+    /// Deletes the worktree's branch ONLY when ensembyte created it (`ensembyte/…`) — the
     /// user may have checked out their own branch inside the worktree.
     pub async fn delete_worktree(
         &self,
@@ -1257,7 +1257,7 @@ impl Repos {
             }
         }
         let _ = self.git(&["worktree", "prune"], Some(repo_path)).await;
-        if branch.starts_with("orbit/") {
+        if branch.starts_with("ensembyte/") {
             let _ = self.git(&["branch", "-D", &branch], Some(repo_path)).await;
         }
         Ok(())
@@ -1332,7 +1332,7 @@ impl Repos {
     /// The walk runs on a DETACHED OS thread (not the tokio blocking pool): a
     /// readdir wedged in the kernel can't be cancelled, and a poisoned blocking
     /// pool — or a runtime shutdown waiting on it — must never be possible. On
-    /// timeout the thread is simply abandoned (the orbit backend's disposable
+    /// timeout the thread is simply abandoned (the ensembyte backend's disposable
     /// worker, minus the terminate()).
     #[doc(hidden)]
     pub async fn list_folders_with(
@@ -2017,7 +2017,7 @@ fn rank_file_matches(
 }
 
 /// Turn a generated chat title into the semantic portion of a Orbit branch
-/// (port of orbit's `worktreeBranchFromTitle`). Orbit NFKD-normalizes accented
+/// (port of ensembyte's `worktreeBranchFromTitle`). Ensembyte NFKD-normalizes accented
 /// letters first; native keeps it ASCII-only (generated titles are Title Case
 /// English), so non-ASCII characters collapse into the `-` separator.
 pub fn worktree_branch_from_title(title: &str) -> String {
@@ -2034,7 +2034,7 @@ pub fn worktree_branch_from_title(title: &str) -> String {
     }
     slug.truncate(48);
     let slug = slug.trim_matches('-');
-    format!("orbit/{}", if slug.is_empty() { "update" } else { slug })
+    format!("ensembyte/{}", if slug.is_empty() { "update" } else { slug })
 }
 
 fn bounded_field(value: &str, max_chars: usize) -> String {

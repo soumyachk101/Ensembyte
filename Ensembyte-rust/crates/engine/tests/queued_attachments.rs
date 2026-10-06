@@ -14,12 +14,12 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 
-use orbit_doc::{
+use ensembyte_doc::{
     MessageRole, MessageStatus, SessionCommandPayload, SessionCommandStatus, SessionMessageEntry,
 };
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
@@ -150,10 +150,10 @@ async fn run_defers_until_attachment_bytes_land_then_executes_rewritten() {
     )
     .expect("engine core assembles");
 
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
     client
         .call(
-            orbit_rpc::methods::MUTATE,
+            ensembyte_rpc::methods::MUTATE,
             serde_json::json!({ "op": "createChat", "chatId": CHAT, "deviceId": core.device_id }),
         )
         .await
@@ -194,7 +194,7 @@ async fn run_defers_until_attachment_bytes_land_then_executes_rewritten() {
     // The commit handler kicks the drains — no timers involved.
     client
         .call(
-            orbit_rpc::methods::UPLOAD_CHUNK,
+            ensembyte_rpc::methods::UPLOAD_CHUNK,
             serde_json::json!({
                 "uploadId": "att-1", "seq": 0, "data": BASE64.encode(b"png-bytes"),
             }),
@@ -203,7 +203,7 @@ async fn run_defers_until_attachment_bytes_land_then_executes_rewritten() {
         .expect("upload chunk");
     client
         .call(
-            orbit_rpc::methods::UPLOAD_COMMIT,
+            ensembyte_rpc::methods::UPLOAD_COMMIT,
             serde_json::json!({ "uploadId": "att-1", "fileName": "photo one.png" }),
         )
         .await
@@ -222,7 +222,7 @@ async fn run_defers_until_attachment_bytes_land_then_executes_rewritten() {
         .find(|e| e.role == MessageRole::User)
         .and_then(|e| {
             e.parts.iter().find_map(|p| match p {
-                orbit_doc::MessagePart::Text { text, .. } => Some(text.clone()),
+                ensembyte_doc::MessagePart::Text { text, .. } => Some(text.clone()),
                 _ => None,
             })
         })
@@ -256,10 +256,10 @@ async fn queued_row_waits_for_attachment_bytes_then_sends_resolved_paths() {
     )
     .expect("engine core assembles");
 
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
     client
         .call(
-            orbit_rpc::methods::MUTATE,
+            ensembyte_rpc::methods::MUTATE,
             serde_json::json!({ "op": "createChat", "chatId": CHAT, "deviceId": core.device_id }),
         )
         .await
@@ -292,7 +292,7 @@ async fn queued_row_waits_for_attachment_bytes_then_sends_resolved_paths() {
 
     client
         .call(
-            orbit_rpc::methods::UPLOAD_CHUNK,
+            ensembyte_rpc::methods::UPLOAD_CHUNK,
             serde_json::json!({
                 "uploadId": "att-q1", "seq": 0, "data": BASE64.encode(b"png-bytes"),
             }),
@@ -301,7 +301,7 @@ async fn queued_row_waits_for_attachment_bytes_then_sends_resolved_paths() {
         .expect("upload chunk");
     client
         .call(
-            orbit_rpc::methods::UPLOAD_COMMIT,
+            ensembyte_rpc::methods::UPLOAD_COMMIT,
             serde_json::json!({ "uploadId": "att-q1", "fileName": "queued shot.png" }),
         )
         .await
@@ -318,7 +318,7 @@ async fn queued_row_waits_for_attachment_bytes_then_sends_resolved_paths() {
         .find(|e| e.role == MessageRole::User)
         .and_then(|e| {
             e.parts.iter().find_map(|p| match p {
-                orbit_doc::MessagePart::Text { text, .. } => Some(text.clone()),
+                ensembyte_doc::MessagePart::Text { text, .. } => Some(text.clone()),
                 _ => None,
             })
         })

@@ -11,11 +11,11 @@
 
 <!-- Checklist of what you ran and what you didn't. -->
 
-- [ ] `cargo test --locked -p orbit-ui --lib -- --test-threads=1`
-- [ ] `cargo test --locked -p orbit-engine --lib`
-- [ ] `cargo test --locked -p orbit-harness`
-- [ ] `cargo test --locked -p orbit-sync --lib`
-- [ ] `cargo test --locked -p orbit-preview`
+- [ ] `cargo test --locked -p ensembyte-ui --lib -- --test-threads=1`
+- [ ] `cargo test --locked -p ensembyte-engine --lib`
+- [ ] `cargo test --locked -p ensembyte-harness`
+- [ ] `cargo test --locked -p ensembyte-sync --lib`
+- [ ] `cargo test --locked -p ensembyte-preview`
 - [ ] `cargo clippy --all-targets` introduces no new warnings
 - [ ] Manual check: light + dark mode (if UI change)
 - [ ] Manual check: frosted + opaque surfaces (if UI change)

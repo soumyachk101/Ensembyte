@@ -1,7 +1,7 @@
-// orbit cursor shim — a thin, orbit-owned wrapper around the PINNED
+// ensembyte cursor shim — a thin, ensembyte-owned wrapper around the PINNED
 // @cursor/sdk (see CURSOR_SDK_PIN in crates/harness/src/cursor/mod.rs; the
 // SDK is public beta with ~weekly releases — expect churn, revalidate on
-// every bump). Materialized by orbit into the SDK's managed install dir so
+// every bump). Materialized by ensembyte into the SDK's managed install dir so
 // `import("@cursor/sdk")` resolves from the sibling node_modules.
 //
 // Why a shim at all: @cursor/sdk does NOT wrap the cursor-agent binary — it
@@ -111,11 +111,11 @@ const { Agent, Cursor, FileCredentialStore, JsonlLocalAgentStore } = sdk;
 // SDK default store, which is where they live.
 const STATE_BASE =
   process.env.ENSEMBYTE_CURSOR_STATE_DIR ||
-  process.env.ORBIT_CURSOR_STATE_DIR ||
+  process.env.ENSEMBYTE_CURSOR_STATE_DIR ||
   (fs.existsSync(path.join(os.homedir(), ".ensembyte"))
     ? path.join(os.homedir(), ".ensembyte", "cursor-state")
-    : (fs.existsSync(path.join(os.homedir(), ".orbit", "cursor-state"))
-        ? path.join(os.homedir(), ".orbit", "cursor-state")
+    : (fs.existsSync(path.join(os.homedir(), ".ensembyte", "cursor-state"))
+        ? path.join(os.homedir(), ".ensembyte", "cursor-state")
         : path.join(os.homedir(), ".ensembyte", "cursor-state")));
 
 function agentDirMarker(agentId) {
@@ -153,7 +153,7 @@ function rememberAgentDir(agentId, dir) {
 let ownedStore = null;
 let ownerPath = null;
 async function claimStore(local) {
-  const marker = path.join(local.dir, ".orbit-owner.json");
+  const marker = path.join(local.dir, ".ensembyte-owner.json");
   let previous;
   try { previous = JSON.parse(fs.readFileSync(marker, "utf8")); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -464,7 +464,7 @@ let preempting = false;
 // steer's reply.
 let preemptedRun = null;
 // Tests of the native SDK steering path disable preemption.
-const NATIVE_STEER_ONLY = process.env.ORBIT_CURSOR_NATIVE_STEER_ONLY === "1";
+const NATIVE_STEER_ONLY = process.env.ENSEMBYTE_CURSOR_NATIVE_STEER_ONLY === "1";
 function preemptForSteer() {
   if (NATIVE_STEER_ONLY) return false;
   if (!turnActive || !run || activeTools.size || preempting || interrupted || closing) return false;
@@ -628,7 +628,7 @@ function modelSelection(msg) {
 async function start(msg) {
   const model = modelSelection(msg);
   // The SDK loads NO ambient settings unless asked: without settingSources the
-  // user's ~/.cursor/mcp.json and plugins are invisible and the inline orbit
+  // user's ~/.cursor/mcp.json and plugins are invisible and the inline ensembyte
   // server is the only MCP the agent sees. "project" (and so "all") is left
   // out on purpose: the SDK hardcodes ignoreApprovals, so a repo's
   // .cursor/mcp.json and .cursor/hooks.json would spawn their commands at chat
@@ -663,7 +663,7 @@ async function start(msg) {
     } } } : {}),
     // askQuestion has no public answer channel in this SDK (SDKRequestMessage
     // carries only a request id) — a question would block the run forever.
-    // generateImage has nowhere to land in a orbit session (ACP parity).
+    // generateImage has nowhere to land in a ensembyte session (ACP parity).
     disallowedTools: ["askQuestion", "generateImage"],
     local,
   };
@@ -698,7 +698,7 @@ async function start(msg) {
   }
   if (runDir) {
     rememberAgentDir(agent.agentId, runDir);
-    receiptPath = path.join(runDir, ".orbit-user-receipt.json");
+    receiptPath = path.join(runDir, ".ensembyte-user-receipt.json");
   }
   await runTurn(msg.prompt ?? "", () => {
     out({ ev: "ready", agentId: agent.agentId, model: agent.model?.id ?? model.id });

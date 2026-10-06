@@ -6,14 +6,14 @@
 //! OPENCODE_PROBE_AGENT selects an agent, OPENCODE_PROBE_INTERRUPT_MS cancels
 //! after the first text delta. Set TMPDIR to control temporary workspace placement.
 //!
-//!     cargo run -p orbit-harness --example opencode_turn_probe -- \
+//!     cargo run -p ensembyte-harness --example opencode_turn_probe -- \
 //!         ~/.opencode/bin/opencode opencode/muse-spark-1.3-contributor-free \
 //!         "Reply with exactly: PONG"
 
 use futures::StreamExt;
 use tokio::sync::mpsc;
-use orbit_harness::{CancellationToken, Harness, OpencodeHarness, RunControls};
-use orbit_proto::{AgentEvent, RunRequest, SandboxLevel};
+use ensembyte_harness::{CancellationToken, Harness, OpencodeHarness, RunControls};
+use ensembyte_proto::{AgentEvent, RunRequest, SandboxLevel};
 
 #[tokio::main]
 async fn main() {
@@ -73,7 +73,7 @@ async fn main() {
                         .into_iter()
                         .map(|question| {
                             eprintln!("PERMISSION Yes (once): {}", question.question);
-                            orbit_proto::UserInputAnswer {
+                            ensembyte_proto::UserInputAnswer {
                                 question_id: question.id,
                                 labels: vec!["Yes".into()],
                             }
@@ -137,9 +137,9 @@ async fn main() {
     };
     eprintln!("--- done: {status:?} text={text:?} tools={tools}");
     match status {
-        Some(orbit_proto::DoneStatus::Completed)
+        Some(ensembyte_proto::DoneStatus::Completed)
             if !expect_interrupt && !text.trim().is_empty() => {}
-        Some(orbit_proto::DoneStatus::Interrupted) if expect_interrupt => {}
+        Some(ensembyte_proto::DoneStatus::Interrupted) if expect_interrupt => {}
         _ => std::process::exit(1),
     }
 }

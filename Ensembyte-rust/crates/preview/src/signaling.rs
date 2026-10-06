@@ -10,7 +10,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 use tokio_util::sync::CancellationToken;
-use orbit_proto::PreviewService;
+use ensembyte_proto::PreviewService;
 #[async_trait::async_trait]
 pub trait TokenSource: Send + Sync {
     async fn token(&self) -> anyhow::Result<String>;

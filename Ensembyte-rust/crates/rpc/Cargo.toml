@@ -1,13 +1,13 @@
 [package]
-name = "orbit-rpc"
+name = "ensembyte-rpc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
-orbit-proto.workspace = true
-orbit-sync.workspace = true
+ensembyte-proto.workspace = true
+ensembyte-sync.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 futures.workspace = true
@@ -20,7 +20,7 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-orbit-doc.workspace = true
+ensembyte-doc.workspace = true
 
 # Deterministic stalled-transport deadlines.
 tokio = { workspace = true, features = ["test-util"] }

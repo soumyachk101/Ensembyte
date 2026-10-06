@@ -167,11 +167,11 @@ queued sync or persistence trouble without exposing internal limits.
 Relevant checks:
 
 ```
-cargo test --locked -p orbit-engine --test sync_resources -- --nocapture
-cargo test --locked -p orbit-engine --lib --test session_publication --test restart_resume --test local_profiles --test born_chat2_race --test codex_subagents --test message_queue --test transcript_salvage
-cargo test --locked -p orbit-sync --lib
-cargo test --locked -p orbit-rpc --test device_room
-cargo check --locked -p orbit-ui
+cargo test --locked -p ensembyte-engine --test sync_resources -- --nocapture
+cargo test --locked -p ensembyte-engine --lib --test session_publication --test restart_resume --test local_profiles --test born_chat2_race --test codex_subagents --test message_queue --test transcript_salvage
+cargo test --locked -p ensembyte-sync --lib
+cargo test --locked -p ensembyte-rpc --test device_room
+cargo check --locked -p ensembyte-ui
 cd edge
 npm run typecheck
 npm test

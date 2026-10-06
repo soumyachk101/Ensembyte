@@ -20,7 +20,7 @@ function Find-InnoSetupCompiler {
 }
 
 function Get-WindowsPackageArch([string]$Path) {
-    # Match orbit-update's `std::env::consts::ARCH` so the standalone .exe
+    # Match ensembyte-update's `std::env::consts::ARCH` so the standalone .exe
     # name agrees with crates/update/src/windows.rs::artifact. Read the built
     # executable's PE machine type rather than this PowerShell process's
     # architecture: x64 PowerShell under ARM64 emulation reports X64 no matter
@@ -61,7 +61,7 @@ try {
             $process.Kill()
             throw 'Executable version probe timed out'
         }
-        $versionMatch = [regex]::Match($stdout.Result.Trim(), '\A(?:orbit|ensembyte) (\d+\.\d+\.\d+)\z')
+        $versionMatch = [regex]::Match($stdout.Result.Trim(), '\A(?:ensembyte|ensembyte) (\d+\.\d+\.\d+)\z')
         if ($process.ExitCode -ne 0 -or -not $versionMatch.Success) {
             throw "Cannot read executable version: $($stderr.Result)"
         }

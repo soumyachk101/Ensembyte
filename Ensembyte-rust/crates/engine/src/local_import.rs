@@ -26,8 +26,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use orbit_doc::{REGISTRY_DOC_ID, RegistryDoc};
-use orbit_sync::DocsStore;
+use ensembyte_doc::{REGISTRY_DOC_ID, RegistryDoc};
+use ensembyte_sync::DocsStore;
 
 use crate::EngineError;
 use crate::chat2_host::CHAT2_DOC_EPOCH;
@@ -396,7 +396,7 @@ impl LocalImporter {
     fn import_chat(
         &self,
         source_store: &DocsStore,
-        chat: &orbit_proto::Chat,
+        chat: &ensembyte_proto::Chat,
         source_journals: &Path,
     ) -> Result<bool, EngineError> {
         // Doc bytes may be absent (a chat row created but never opened) — the

@@ -1,17 +1,17 @@
 //! Opt-in production engine + Cursor SDK checks. Uses real account quota.
-//! ORBIT_CURSOR_STATE_DIR=$(mktemp -d) cargo test -p orbit-engine --test cursor_live -- --ignored --nocapture --test-threads=1
+//! ENSEMBYTE_CURSOR_STATE_DIR=$(mktemp -d) cargo test -p ensembyte-engine --test cursor_live -- --ignored --nocapture --test-threads=1
 use std::{sync::Arc, time::Duration};
-use orbit_doc::{
+use ensembyte_doc::{
     MessagePart, MessageRole, MessageStatus, SessionCommandPayload, SessionMessageEntry,
 };
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::CursorHarness;
-use orbit_proto::{HarnessId, RunRequest, SandboxLevel};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::CursorHarness;
+use ensembyte_proto::{HarnessId, RunRequest, SandboxLevel};
 
 const CHAT: &str = "cursor-live-audit";
 fn setup(path: &std::path::Path) -> EngineCore {
     assert!(
-        std::env::var_os("ORBIT_CURSOR_STATE_DIR").is_some(),
+        std::env::var_os("ENSEMBYTE_CURSOR_STATE_DIR").is_some(),
         "use isolated Cursor state"
     );
     let registry = HarnessRegistry::new();
@@ -130,11 +130,11 @@ async fn remote_steer_batch_reaches_real_muse_with_every_message() {
         .unwrap()
         .as_millis() as i64;
     for (i, token) in tokens.iter().enumerate().skip(1) {
-        handle.doc().queue_command(&orbit_doc::SessionCommandEntry {
+        handle.doc().queue_command(&ensembyte_doc::SessionCommandEntry {
             id: format!("remote-{i}"),
             payload: SessionCommandPayload::Steer {prompt: format!("Remember {token}. Reply with the immediately previous user token and this token. Do not use tools."), message_id: Some(format!("message-{i}"))},
             issued_by: "remote-viewer".into(), issued_at: now + i as i64,
-            based_on: None, expires_at: None, status: orbit_doc::SessionCommandStatus::Pending, resolution: None,
+            based_on: None, expires_at: None, status: ensembyte_doc::SessionCommandStatus::Pending, resolution: None,
         }).unwrap();
     }
     core.doc_host.drain_commands(&handle).await;
@@ -190,7 +190,7 @@ async fn send_now_keeps_the_interrupted_user_message() {
 #[tokio::test]
 #[ignore = "real authenticated Muse Spark; consumes quota"]
 async fn send_now_during_startup_keeps_the_interrupted_user_message() {
-    let rounds = std::env::var("ORBIT_CURSOR_EARLY_ROUNDS")
+    let rounds = std::env::var("ENSEMBYTE_CURSOR_EARLY_ROUNDS")
         .ok()
         .map(|v| v.parse::<usize>().unwrap())
         .unwrap_or(1);
@@ -251,7 +251,7 @@ async fn send_now_recall(stage: u8) {
                     .ok()
                     .is_some_and(|(events, _)| {
                         events.iter().any(|e| {
-                            matches!(e.event, orbit_proto::AgentEvent::SessionStarted { .. })
+                            matches!(e.event, ensembyte_proto::AgentEvent::SessionStarted { .. })
                         })
                     })
             },
@@ -322,7 +322,7 @@ async fn startup_steering_burst_retains_all_interrupted_messages() {
                     .unwrap()
                     .0
                     .iter()
-                    .filter(|e| matches!(e.event, orbit_proto::AgentEvent::SessionStarted { .. }))
+                    .filter(|e| matches!(e.event, ensembyte_proto::AgentEvent::SessionStarted { .. }))
                     .count()
                     == i + 1
             },

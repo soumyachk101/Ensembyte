@@ -1,7 +1,7 @@
 import UIKit
 
 /// `@file` mentions: the composer shows `@name` tokens; on send they become
-/// the canonical `[name](orbit-file:path)` links the host resolves.
+/// the canonical `[name](ensembyte-file:path)` links the host resolves.
 struct MentionIndex {
     private(set) var tokens: [String: FileMatch] = [:]
 

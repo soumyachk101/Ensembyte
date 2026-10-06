@@ -9,11 +9,11 @@ use std::time::Duration;
 use futures::StreamExt;
 use tokio::sync::{mpsc, oneshot};
 
-use orbit_harness::acp::SignInProgress;
-use orbit_harness::{
+use ensembyte_harness::acp::SignInProgress;
+use ensembyte_harness::{
     AcpHarness, CancellationToken, Harness, HarnessError, RunControls, SteerMessage,
 };
-use orbit_proto::{
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, ReasoningLevel, RunRequest, SandboxLevel, SteeringMode,
     TodoItem, TodoStatus, ToolCall, UserInputAnswer,
 };
@@ -147,7 +147,7 @@ async fn happy_path_maps_chunks_tools_diffs_plans_and_commands() {
     assert!(events.contains(&AgentEvent::ToolCall {
         id: "t1".into(),
         call: ToolCall::Exec {
-            command: "cargo test -p orbit-harness".into()
+            command: "cargo test -p ensembyte-harness".into()
         },
     }));
     let exec_output = events
@@ -162,7 +162,7 @@ async fn happy_path_maps_chunks_tools_diffs_plans_and_commands() {
             _ => None,
         })
         .expect("exec output present");
-    assert!(exec_output.starts_with("   Compiling orbit-harness"));
+    assert!(exec_output.starts_with("   Compiling ensembyte-harness"));
     assert_eq!(exec_output.lines().count(), 6, "{exec_output:?}");
 
     // Edit tool: single-shot completed call carries the inline diff.
@@ -219,7 +219,7 @@ async fn happy_path_maps_chunks_tools_diffs_plans_and_commands() {
 async fn config_options_apply_requested_model_and_effort() {
     let (controls, _steer, _token) = controls();
     let mut req = request("scenario:config");
-    req.reasoning = Some(orbit_proto::ReasoningLevel::Medium);
+    req.reasoning = Some(ensembyte_proto::ReasoningLevel::Medium);
     let events = run_to_end(&harness(), req, controls).await;
     // The fixture answers refusal unless BOTH set_config_option calls
     // (model grok-4.5, effort medium) arrived before the prompt.
@@ -501,9 +501,9 @@ fn descriptor_surface_matches_registry_expectations() {
     assert_eq!(
         harness.reasoning_levels(),
         &[
-            orbit_proto::ReasoningLevel::Low,
-            orbit_proto::ReasoningLevel::Medium,
-            orbit_proto::ReasoningLevel::High,
+            ensembyte_proto::ReasoningLevel::Low,
+            ensembyte_proto::ReasoningLevel::Medium,
+            ensembyte_proto::ReasoningLevel::High,
         ]
     );
 }
@@ -520,9 +520,9 @@ async fn models_are_discovered_from_the_acp_session() {
     assert_eq!(
         models[0].reasoning_levels,
         vec![
-            orbit_proto::ReasoningLevel::Low,
-            orbit_proto::ReasoningLevel::Medium,
-            orbit_proto::ReasoningLevel::High,
+            ensembyte_proto::ReasoningLevel::Low,
+            ensembyte_proto::ReasoningLevel::Medium,
+            ensembyte_proto::ReasoningLevel::High,
         ],
         "{models:?}"
     );
@@ -574,7 +574,7 @@ async fn missing_override_is_not_installed_and_fails_discovery() {
     assert!(!harness.installed());
     let err = harness.models().await.expect_err("missing override");
     assert!(
-        matches!(err, orbit_harness::HarnessError::NotInstalled(_)),
+        matches!(err, ensembyte_harness::HarnessError::NotInstalled(_)),
         "{err:?}"
     );
 }
@@ -624,7 +624,7 @@ fn hermes_and_pi_descriptor_surfaces_match_registry_expectations() {
     assert_eq!(hermes.steering_mode(), SteeringMode::TurnBoundary);
     assert!(hermes.reasoning_levels().is_empty());
 
-    let pi = orbit_harness::PiHarness::new();
+    let pi = ensembyte_harness::PiHarness::new();
     assert_eq!(pi.id(), HarnessId::Pi);
     assert_eq!(pi.display_name(), "Pi");
     assert!(pi.supports_steering());
@@ -700,7 +700,7 @@ async fn devin_sign_in_runs_the_given_method_in_the_given_environment() {
     AcpHarness::devin()
         .with_executable(devin_auth_fixture())
         .sign_in_with(
-            orbit_harness::acp::SignInOptions {
+            ensembyte_harness::acp::SignInOptions {
                 method: Some("devin-browser".into()),
                 env: vec![("XDG_DATA_HOME".into(), data.path().into())],
                 url_filter: Some(|url| url.contains("redirect_uri=")),
@@ -1199,7 +1199,7 @@ async fn grok_subagent_lifecycle_tails_the_disk_transcript_into_tagged_events() 
     let tool = pos(&|e| {
         matches!(
             e,
-            AgentEvent::ToolCall { id, call: orbit_proto::ToolCall::Exec { command } }
+            AgentEvent::ToolCall { id, call: ensembyte_proto::ToolCall::Exec { command } }
                 if id == "call-1-0" && command == "ls"
         )
     })
@@ -1440,7 +1440,7 @@ fn antigravity_sign_in_preserves_relative_home_auth_in_a_separate_process() {
         .current_dir(parent_cwd.path())
         .env("HOME", child_home.path())
         .env("GEMINI_HOME", "relative-gemini-home")
-        .env("ORBIT_TEST_EXPECTED_GEMINI_HOME", &gemini_home)
+        .env("ENSEMBYTE_TEST_EXPECTED_GEMINI_HOME", &gemini_home)
         .output()
         .unwrap();
     assert!(
@@ -1453,7 +1453,7 @@ fn antigravity_sign_in_preserves_relative_home_auth_in_a_separate_process() {
 
 #[tokio::test]
 async fn antigravity_auth_path_subprocess() {
-    if std::env::var_os("ORBIT_TEST_EXPECTED_GEMINI_HOME").is_none() {
+    if std::env::var_os("ENSEMBYTE_TEST_EXPECTED_GEMINI_HOME").is_none() {
         return;
     }
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -2006,7 +2006,7 @@ async fn acp_boundary_steer(scenario: &str, trigger_on_done: bool) {
             };
             if trigger && let Some(sender) = steer.take() {
                 sender
-                    .send(orbit_harness::SteerMessage {
+                    .send(ensembyte_harness::SteerMessage {
                         prompt: "second".into(),
                         message_id: None,
                     })
@@ -2096,8 +2096,8 @@ fn antigravity_detection_and_missing_server_never_install() {
             .env("HOME", dir.path())
             .env("PATH", &bin)
             .env("SHELL", "/nonexistent-shell")
-            .env("ORBIT_ADAPTERS_DIR", &adapters)
-            .env("ORBIT_TEST_DETECTION", scenario)
+            .env("ENSEMBYTE_ADAPTERS_DIR", &adapters)
+            .env("ENSEMBYTE_TEST_DETECTION", scenario)
             .env_remove("ANTIGRAVITY_ACP_EXECUTABLE");
         if scenario == "override" {
             child.env("ANTIGRAVITY_ACP_EXECUTABLE", &exe);
@@ -2118,7 +2118,7 @@ fn antigravity_detection_and_missing_server_never_install() {
 
 #[tokio::test]
 async fn antigravity_detection_subprocess() {
-    let Ok(scenario) = std::env::var("ORBIT_TEST_DETECTION") else {
+    let Ok(scenario) = std::env::var("ENSEMBYTE_TEST_DETECTION") else {
         return;
     };
     let harness = AcpHarness::antigravity();
@@ -2153,7 +2153,7 @@ async fn antigravity_detection_subprocess() {
         harness.run(request("hello"), ctl).await,
         Err(HarnessError::NotInstalled(_))
     ));
-    let adapters = PathBuf::from(std::env::var_os("ORBIT_ADAPTERS_DIR").unwrap());
+    let adapters = PathBuf::from(std::env::var_os("ENSEMBYTE_ADAPTERS_DIR").unwrap());
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(
         std::fs::read_dir(adapters)
@@ -2177,13 +2177,13 @@ async fn mcp_injection_all_acp_harnesses_new_resume_and_fallback() {
             let mut req = request("scenario:mcp");
             req.model = None;
             req.resume = resume.map(str::to_owned);
-            req.mcp = Some(orbit_proto::McpServer {
-                name: "orbit".into(),
-                command: "/path with spaces/orbit".into(),
+            req.mcp = Some(ensembyte_proto::McpServer {
+                name: "ensembyte".into(),
+                command: "/path with spaces/ensembyte".into(),
                 args: vec!["mcp".into()],
                 env: [
-                    ("ORBIT_CHAT_ID".into(), "origin-chat".into()),
-                    ("ORBIT_IPC_PORT".into(), "27699".into()),
+                    ("ENSEMBYTE_CHAT_ID".into(), "origin-chat".into()),
+                    ("ENSEMBYTE_IPC_PORT".into(), "27699".into()),
                 ]
                 .into(),
             });
@@ -2239,7 +2239,7 @@ async fn all_acp_harnesses_use_project_scoped_session_command_updates() {
 
 #[tokio::test]
 async fn shared_acp_skills_require_explicit_native_command_classification() {
-    use orbit_proto::invocation::{Invocation, harness_prompt};
+    use ensembyte_proto::invocation::{Invocation, harness_prompt};
     for h in [
         AcpHarness::devin(),
         AcpHarness::grok(),
@@ -2248,10 +2248,10 @@ async fn shared_acp_skills_require_explicit_native_command_classification() {
     ] {
         let h = h.with_executable(fixture_path());
         let cwd = tempfile::tempdir().unwrap();
-        let skill_dir = cwd.path().join(".agents/skills/orbit-fixture-review");
+        let skill_dir = cwd.path().join(".agents/skills/ensembyte-fixture-review");
         std::fs::create_dir_all(&skill_dir).unwrap();
-        std::fs::write(skill_dir.join("SKILL.md"), "---\nname: orbit-fixture-review\ndescription: Review changes\n---\nReview the changes.").unwrap();
-        let command_name = "orbit-fixture-review";
+        std::fs::write(skill_dir.join("SKILL.md"), "---\nname: ensembyte-fixture-review\ndescription: Review changes\n---\nReview the changes.").unwrap();
+        let command_name = "ensembyte-fixture-review";
         std::fs::write(cwd.path().join(".command-fixture"), command_name).unwrap();
         let skills = h
             .skills(&cwd.path().canonicalize().unwrap())
@@ -2260,7 +2260,7 @@ async fn shared_acp_skills_require_explicit_native_command_classification() {
             .unwrap();
         let skill = skills
             .into_iter()
-            .find(|s| s.name == "orbit-fixture-review")
+            .find(|s| s.name == "ensembyte-fixture-review")
             .unwrap();
         assert!(skill.command.is_none());
         let invocation = Invocation::Skill {

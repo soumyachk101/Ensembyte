@@ -10,8 +10,8 @@ use gpui::{
     Context, Entity, IntoElement, Render, SharedString, Subscription, Task, Window, div,
     prelude::*, px,
 };
-use orbit_proto::{AgentAccount, AgentAccountsSnapshot, HarnessId};
-use orbit_rpc::methods;
+use ensembyte_proto::{AgentAccount, AgentAccountsSnapshot, HarnessId};
+use ensembyte_rpc::methods;
 
 use crate::popover;
 use crate::settings::accounts::{
@@ -460,7 +460,7 @@ impl Render for AccountUsage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orbit_proto::AgentUsageWindow;
+    use ensembyte_proto::AgentUsageWindow;
 
     fn account(harness: HarnessId, active: bool, used: &[f32]) -> AgentAccount {
         serde_json::from_value(serde_json::json!({

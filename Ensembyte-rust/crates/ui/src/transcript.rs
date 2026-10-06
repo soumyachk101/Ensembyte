@@ -39,8 +39,8 @@ use gpui::{
     TextAlign, TextRun, Window, canvas, div, img, list, point, prelude::*, px, quad, size,
 };
 
-use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, SubagentStatus};
-use orbit_proto::ToolCall;
+use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, SubagentStatus};
+use ensembyte_proto::ToolCall;
 
 use crate::markdown::parser::{
     Block, BlockTree, IncrementalParser, InlineRun, InlineStyle, parse_full,
@@ -52,7 +52,7 @@ use crate::notice::{NoticeChipIcon::Tile, notice_chip};
 use crate::state::AppState;
 use crate::syntax_cache::{DocumentHighlightKey, SyntaxHighlightCache};
 use crate::theme::Theme;
-use orbit_syntax::LanguageId as Lang;
+use ensembyte_syntax::LanguageId as Lang;
 
 // ---------------------------------------------------------------------------
 // Constants (mugen ports)
@@ -774,7 +774,7 @@ pub enum ToolDetail {
     /// (chat2-sync A1). The full diff upgrades this to [`ToolDetail::Diff`]
     /// via the sidecar fetch.
     Stats {
-        stats: Arc<Vec<orbit_doc::ToolDiffStat>>,
+        stats: Arc<Vec<ensembyte_doc::ToolDiffStat>>,
     },
 }
 
@@ -801,8 +801,8 @@ const DETAIL_SEPARATOR: f32 = 1.0;
 /// STATS instead of inline diff text, which win the same way.
 pub fn tool_detail(
     output: Option<&str>,
-    diff: Option<&orbit_proto::ToolDiff>,
-    diff_stats: Option<&[orbit_doc::ToolDiffStat]>,
+    diff: Option<&ensembyte_proto::ToolDiff>,
+    diff_stats: Option<&[ensembyte_doc::ToolDiffStat]>,
 ) -> Option<ToolDetail> {
     if let Some(diff) = diff {
         let mut file = diff_to_file(diff);
@@ -891,9 +891,9 @@ pub fn call_block(call: &ToolCall) -> Option<ToolDetail> {
             .iter()
             .map(|i| {
                 let mark = match i.status() {
-                    orbit_proto::TodoStatus::Completed => "[x]",
-                    orbit_proto::TodoStatus::InProgress => "[~]",
-                    orbit_proto::TodoStatus::Pending => "[ ]",
+                    ensembyte_proto::TodoStatus::Completed => "[x]",
+                    ensembyte_proto::TodoStatus::InProgress => "[~]",
+                    ensembyte_proto::TodoStatus::Pending => "[ ]",
                 };
                 format!("{mark} {}", i.text)
             })
@@ -936,10 +936,10 @@ pub fn call_block(call: &ToolCall) -> Option<ToolDetail> {
     })
 }
 
-/// Reduce an inline [`orbit_proto::ToolDiff`] to the changes pane's
+/// Reduce an inline [`ensembyte_proto::ToolDiff`] to the changes pane's
 /// [`crate::changes::FileDiff`]: hunks grouped with 3 context lines, dual
 /// 1-based line numbers, unified-diff hunk headers, and add/del counts.
-pub fn diff_to_file(diff: &orbit_proto::ToolDiff) -> crate::changes::FileDiff {
+pub fn diff_to_file(diff: &ensembyte_proto::ToolDiff) -> crate::changes::FileDiff {
     use crate::changes::{DiffLine, FileDiff, FileStatus, Hunk, LineKind};
     let old = diff.old_text.as_deref().unwrap_or("");
     let text_diff = similar::TextDiff::from_lines(old, &diff.new_text);
@@ -1090,7 +1090,7 @@ pub struct Row {
     pub turn_start: bool,
     pub kind: RowKind,
     /// The owning message entry — hover anywhere on the entry's rows reveals
-    /// its timestamp strip (orbit chat-view.tsx `group`/`group-hover`).
+    /// its timestamp strip (ensembyte chat-view.tsx `group`/`group-hover`).
     pub entry_id: SharedString,
     /// Epoch-ms for the 16px hover-timestamp strip UNDER this row: set on the
     /// LAST row of a completed entry (user rows always; assistant rows only
@@ -1755,13 +1755,13 @@ fn is_compact_work_part(ix: usize, part: &MessagePart, reply_start: Option<usize
     }
 }
 
-/// `ORBIT_FRAME_STATS=1` logs live-row render-cost percentiles (p50/p95 µs
+/// `ENSEMBYTE_FRAME_STATS=1` logs live-row render-cost percentiles (p50/p95 µs
 /// over rolling windows of [`FRAME_STATS_WINDOW`] samples) at `warn` level —
 /// the smoothness measurement knob. Off by default; zero cost when off.
 fn frame_stats_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ENABLED
-        .get_or_init(|| std::env::var("ORBIT_FRAME_STATS").is_ok_and(|v| !v.is_empty() && v != "0"))
+        .get_or_init(|| std::env::var("ENSEMBYTE_FRAME_STATS").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 
 const FRAME_STATS_WINDOW: usize = 240;
@@ -1794,12 +1794,12 @@ pub(crate) fn record_view_frame(view: &'static str) -> bool {
     })
 }
 
-/// `ORBIT_NO_RENDER_CACHE=1` bypasses the cross-frame flatten cache — the
+/// `ENSEMBYTE_NO_RENDER_CACHE=1` bypasses the cross-frame flatten cache — the
 /// A/B knob for the frame-cost measurement above.
 fn render_cache_disabled() -> bool {
     static DISABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *DISABLED.get_or_init(|| {
-        std::env::var("ORBIT_NO_RENDER_CACHE").is_ok_and(|v| !v.is_empty() && v != "0")
+        std::env::var("ENSEMBYTE_NO_RENDER_CACHE").is_ok_and(|v| !v.is_empty() && v != "0")
     })
 }
 
@@ -1949,7 +1949,7 @@ pub fn diff_rows(old: &[Row], new: &[Row]) -> Option<(Range<usize>, usize)> {
 
 /// The ToolGroup summary line — "Ran 3 commands · edited 2 files".
 ///
-/// The rule lives in `orbit_proto::view` so the terminal viewport reports the
+/// The rule lives in `ensembyte_proto::view` so the terminal viewport reports the
 /// same summary; this only adapts the row model's [`ToolItem`] to it.
 pub fn tool_group_summary(tools: &[ToolItem]) -> String {
     #[cfg(test)]
@@ -1973,7 +1973,7 @@ pub fn tool_group_summary(tools: &[ToolItem]) -> String {
     let base = if pairs.is_empty() {
         String::new()
     } else {
-        orbit_proto::view::tool_group_summary(&pairs)
+        ensembyte_proto::view::tool_group_summary(&pairs)
     };
     // Thought and note chips ride the group (they are UI-synthesized, so the
     // shared view summary never sees them): name them on the collapsed line.
@@ -2094,11 +2094,11 @@ fn tool_group_title(text: SharedString, shimmer_phase: Option<f32>, theme: &Them
 }
 
 // `single_line` and the per-kind chip label/detail are shared with the terminal
-// viewport (`orbit_proto::view`): a tool must be named identically on every
+// viewport (`ensembyte_proto::view`): a tool must be named identically on every
 // surface, and the one-line collapse is needed for the same reason in both (a
 // literal newline breaks gpui's ellipsis logic and would be a cursor move in a
 // cell grid).
-pub use orbit_proto::view::{single_line, tool_chip_content};
+pub use ensembyte_proto::view::{single_line, tool_chip_content};
 
 /// Analytic expanded-chips height — no measurement needed for the fold tween.
 pub fn chips_height(count: usize) -> f32 {
@@ -2156,7 +2156,7 @@ const FULL_OUTPUT_MAX_LINES: usize = 400;
 /// blobs render (near-)uncapped — fetching past the summary was the point.
 fn blob_detail(text: &str, is_diff: bool) -> Option<ToolDetail> {
     if is_diff {
-        let diff: orbit_proto::ToolDiff = serde_json::from_str(text).ok()?;
+        let diff: ensembyte_proto::ToolDiff = serde_json::from_str(text).ok()?;
         return tool_detail(None, Some(&diff), None);
     }
     let mut lines: Vec<SharedString> = text
@@ -2313,7 +2313,7 @@ fn compact_work_title(
 
 struct HighlightEntry {
     key: DocumentHighlightKey,
-    document: Option<Weak<orbit_syntax::HighlightedDocument>>,
+    document: Option<Weak<ensembyte_syntax::HighlightedDocument>>,
     _task: Option<Task<()>>,
 }
 
@@ -2335,7 +2335,7 @@ impl HighlightStore {
         lang: Lang,
         code: &str,
         cx: &mut Context<Transcript>,
-    ) -> Option<Arc<orbit_syntax::HighlightedDocument>> {
+    ) -> Option<Arc<ensembyte_syntax::HighlightedDocument>> {
         let slot_key = (row_id.clone(), block_ix);
         let document_key = DocumentHighlightKey::new(lang, code);
         if let Some(entry) = self.entries.get(&slot_key)
@@ -2364,7 +2364,7 @@ impl HighlightStore {
             let document = cx
                 .background_executor()
                 .spawn(async move {
-                    orbit_syntax::highlight(orbit_syntax::HighlightRequest {
+                    ensembyte_syntax::highlight(ensembyte_syntax::HighlightRequest {
                         source: &code,
                         path: None,
                         fence_tag: Some(match lang {
@@ -2449,29 +2449,29 @@ pub(crate) struct TranscriptPreparation {
     cache: HashMap<String, Arc<Vec<Row>>>,
     live_parsers: HashMap<String, IncrementalParser>,
     tree_cache: HashMap<String, (usize, Arc<BlockTree>)>,
-    baseline: Option<orbit_doc::TranscriptBaseline>,
+    baseline: Option<ensembyte_doc::TranscriptBaseline>,
 }
 
 pub(crate) struct PreparedTranscript {
     pub(crate) rows: HashMap<String, Arc<Vec<Row>>>,
     pub(crate) historical: HashMap<String, Vec<Row>>,
     fully_historical: HashSet<String>,
-    pub(crate) navigation_baseline: Arc<orbit_doc::TranscriptBaseline>,
+    pub(crate) navigation_baseline: Arc<ensembyte_doc::TranscriptBaseline>,
     pub(crate) bytes: usize,
 }
 
 impl TranscriptPreparation {
     pub(crate) fn prepare(
         &mut self,
-        update: &orbit_doc::TranscriptUpdate,
-    ) -> Result<Arc<PreparedTranscript>, orbit_doc::TranscriptDesync> {
+        update: &ensembyte_doc::TranscriptUpdate,
+    ) -> Result<Arc<PreparedTranscript>, ensembyte_doc::TranscriptDesync> {
         match &update.frame {
-            orbit_doc::TranscriptFrame::Reset { .. } => {
+            ensembyte_doc::TranscriptFrame::Reset { .. } => {
                 self.cache.clear();
                 self.tree_cache.clear();
                 self.live_parsers.clear();
             }
-            orbit_doc::TranscriptFrame::Delta {
+            ensembyte_doc::TranscriptFrame::Delta {
                 upsert,
                 append,
                 remove,
@@ -2490,7 +2490,7 @@ impl TranscriptPreparation {
                 }
             }
         }
-        orbit_doc::apply_transcript_frame(&mut self.entries, update.frame.clone())?;
+        ensembyte_doc::apply_transcript_frame(&mut self.entries, update.frame.clone())?;
         if let Some(baseline) = &update.replay_baseline {
             self.baseline = Some(baseline.clone());
         }
@@ -2545,7 +2545,7 @@ impl TranscriptPreparation {
             historical,
             fully_historical,
             bytes,
-            navigation_baseline: Arc::new(orbit_doc::TranscriptBaseline::capture(&self.entries)),
+            navigation_baseline: Arc::new(ensembyte_doc::TranscriptBaseline::capture(&self.entries)),
         }))
     }
 }
@@ -3104,7 +3104,7 @@ pub struct Transcript {
     /// Entrance state follows stable groups through completion so fast calls
     /// finish revealing. Replay rows have no entrance timestamps.
     tool_group_reveals: HashMap<SharedString, ToolGroupReveal>,
-    last_replay_baseline: Option<Arc<orbit_doc::TranscriptBaseline>>,
+    last_replay_baseline: Option<Arc<ensembyte_doc::TranscriptBaseline>>,
     /// Parsed historical prefixes, used to seed text before a coalesced live
     /// suffix is painted. The wire watermark contains lengths, not text.
     historical_markdown: HashMap<SharedString, Row>,
@@ -3238,7 +3238,7 @@ pub struct Transcript {
     /// Hovered rail tick (grows + shows the preview card).
     rail_hover: Option<usize>,
     /// `(row id, entry id)` under the pointer — reveals the entry's timestamp
-    /// strip (orbit chat-view.tsx `group-hover`; the rows report hover
+    /// strip (ensembyte chat-view.tsx `group-hover`; the rows report hover
     /// themselves). Keyed by ROW so a row→row move within one entry can't
     /// clear the reveal when the old row's leave event arrives after the new
     /// row's enter (enter/leave order across rows is not guaranteed).
@@ -5165,7 +5165,7 @@ impl Transcript {
             let reply = crate::attachments::call_with_timeout(
                 &engine,
                 cx.background_executor(),
-                orbit_rpc::methods::FETCH_TOOL_BLOB,
+                ensembyte_rpc::methods::FETCH_TOOL_BLOB,
                 serde_json::json!({ "blobRef": ref_key.as_ref() }),
                 Duration::from_secs(20),
             )
@@ -5454,7 +5454,7 @@ impl Transcript {
     }
 
     /// Devices that may own a user message's attachment files: the chat's host
-    /// device (uploads targeted it) plus this device (orbit's
+    /// device (uploads targeted it) plus this device (ensembyte's
     /// `uniqueIds([attachmentDeviceId, m.device_id])`).
     fn attachment_device_ids(&self, cx: &Context<Self>) -> Vec<String> {
         // `selected_chat_row` belongs to the PRIMARY transcript's chat — an
@@ -6137,7 +6137,7 @@ impl Transcript {
                             // so the overlay stays live even once the trailer's
                             // 30s pending-send bridge has lapsed.
                             let pulse = motion::pulse_wave(motion::pulse_delta(
-                                &motion::ORBIT_PULSE,
+                                &motion::ENSEMBYTE_PULSE,
                                 cx.entity_id(),
                                 cx,
                             ));
@@ -6181,7 +6181,7 @@ impl Transcript {
                     .opacity(
                         0.35 + 0.4
                             * motion::pulse_wave(motion::pulse_delta(
-                                &motion::ORBIT_PULSE,
+                                &motion::ENSEMBYTE_PULSE,
                                 cx.entity_id(),
                                 cx,
                             )),
@@ -6218,7 +6218,7 @@ impl Transcript {
                 let params = serde_json::json!({ "chatId": chat_id });
                 if let Err(err) = engine
                     .client()
-                    .call(orbit_rpc::methods::RETRY_DELIVERY, params)
+                    .call(ensembyte_rpc::methods::RETRY_DELIVERY, params)
                     .await
                 {
                     tracing::warn!(error = %err, "delivery retry RPC failed");
@@ -6937,7 +6937,7 @@ impl Transcript {
         tree: &Arc<BlockTree>,
         only: Option<usize>,
         cx: &mut Context<Self>,
-    ) -> HashMap<usize, Option<Arc<orbit_syntax::HighlightedDocument>>> {
+    ) -> HashMap<usize, Option<Arc<ensembyte_syntax::HighlightedDocument>>> {
         let mut out = HashMap::new();
         for (ix, top) in tree.blocks.iter().enumerate() {
             if only.is_some_and(|o| o != ix) {
@@ -6946,7 +6946,7 @@ impl Transcript {
             if let Block::CodeBlock { language, code } = &top.block
                 && let Some(lang) = language
                     .as_deref()
-                    .and_then(orbit_syntax::language_for_alias)
+                    .and_then(ensembyte_syntax::language_for_alias)
             {
                 out.insert(
                     ix,
@@ -6976,7 +6976,7 @@ impl Transcript {
         let old = match old_text {
             Some(source) => {
                 let path = file.old_path.as_deref().unwrap_or(&file.path);
-                let lang = orbit_syntax::language_for_path(path)?;
+                let lang = ensembyte_syntax::language_for_path(path)?;
                 Some(
                     self.highlights
                         .request(cache_row.clone(), 0, lang, source, cx)?,
@@ -6986,7 +6986,7 @@ impl Transcript {
         };
         let new = match new_text {
             Some(source) => {
-                let lang = orbit_syntax::language_for_path(&file.path)?;
+                let lang = ensembyte_syntax::language_for_path(&file.path)?;
                 Some(self.highlights.request(cache_row, 1, lang, source, cx)?)
             }
             None => None,
@@ -7331,7 +7331,7 @@ impl Transcript {
             // Quiet even when children failed: agents routinely have failed
             // probes mid-work, and a red HEADER read as "this whole step
             // broke" (user report). Failures still show on the individual
-            // chips (destructive tint, orbit tool-chip.tsx) and in the
+            // chips (destructive tint, ensembyte tool-chip.tsx) and in the
             // summary's "· N failed" count.
             .text_color(theme.text_muted)
             .hover(|s| s.text_color(theme.text))
@@ -7838,12 +7838,12 @@ fn user_bubble_text(
 }
 
 /// The transcript ErrorChip — the shared [`notice_chip`] in its tile
-/// treatment (a port of orbit chat-view.tsx `ErrorChip`, restacked for long
+/// treatment (a port of ensembyte chat-view.tsx `ErrorChip`, restacked for long
 /// payloads: header row with the red-washed tile and the medium "Error"
 /// label, then the human message below). Unlike the web port, the message
 /// WRAPS instead of truncating: startup-crash errors carry the agent's exit
 /// status and stderr, and a one-line ellipsis was exactly what made
-/// orbit upstream#95 undiagnosable from the screenshot.
+/// ensembyte upstream#95 undiagnosable from the screenshot.
 fn error_chip(message: SharedString, theme: &Theme) -> AnyElement {
     div()
         .py(px(4.0))
@@ -7963,9 +7963,9 @@ fn input_chip(header: SharedString, resolved: bool, theme: &Theme) -> AnyElement
         .into_any_element()
 }
 
-/// A small glyph standing in for the tool's icon (orbit uses an icon set; a
+/// A small glyph standing in for the tool's icon (ensembyte uses an icon set; a
 /// quiet monochrome character keeps the tile without shipping SVGs).
-/// The glyph for a tool call (orbit tool-chip.tsx `toolIcon`, Solar set).
+/// The glyph for a tool call (ensembyte tool-chip.tsx `toolIcon`, Solar set).
 fn tool_icon_path(call: &ToolCall) -> &'static str {
     match call {
         ToolCall::Exec { .. } => crate::icons::TERMINAL,
@@ -9113,7 +9113,7 @@ mod tests {
             });
         });
     }
-    use orbit_doc::MessagePart;
+    use ensembyte_doc::MessagePart;
 
     fn with_tool_group_navigation(
         cx: &mut gpui::TestAppContext,
@@ -9241,14 +9241,14 @@ mod tests {
     fn tool_group_revisit_skips_batched_history_but_animates_live_arrivals(
         cx: &mut gpui::TestAppContext,
     ) {
-        use orbit_doc::transcript_delta::{TranscriptFrame, diff_transcript};
+        use ensembyte_doc::transcript_delta::{TranscriptFrame, diff_transcript};
 
         with_tool_group_navigation(cx, |state, transcript, cx| {
             let apply_frame = |frame, replay_baseline, cx: &mut gpui::App| {
                 state.update(cx, |state, cx| {
                     state
                         .receive_transcript_update(
-                            orbit_doc::TranscriptUpdate {
+                            ensembyte_doc::TranscriptUpdate {
                                 frame,
                                 replay_baseline,
                                 context_usage: None,
@@ -9266,7 +9266,7 @@ mod tests {
             )];
             apply_frame(
                 TranscriptFrame::reset(&cached),
-                Some(orbit_doc::TranscriptBaseline::capture(&cached)),
+                Some(ensembyte_doc::TranscriptBaseline::capture(&cached)),
                 cx,
             );
             state.update(cx, |state, cx| state.select_chat(Some("chat-b".into()), cx));
@@ -9295,7 +9295,7 @@ mod tests {
             );
             apply_frame(
                 TranscriptFrame::reset(&cached),
-                Some(orbit_doc::TranscriptBaseline::capture(&cached)),
+                Some(ensembyte_doc::TranscriptBaseline::capture(&cached)),
                 cx,
             );
             let row_id: SharedString = "tools#g0".into();
@@ -9316,7 +9316,7 @@ mod tests {
                 assert!(matches!(&frame, TranscriptFrame::Delta { .. }));
                 apply_frame(
                     frame,
-                    Some(orbit_doc::TranscriptBaseline::capture(next)),
+                    Some(ensembyte_doc::TranscriptBaseline::capture(next)),
                     cx,
                 );
                 let reveal = &transcript.read(cx).tool_group_reveals[&row_id];
@@ -9361,10 +9361,10 @@ mod tests {
             assistant("b", MessageStatus::Complete, vec![tool_part("t", "pwd")]),
         ];
         let first = worker
-            .prepare(&orbit_doc::TranscriptUpdate {
-                frame: orbit_doc::TranscriptFrame::reset(&original),
+            .prepare(&ensembyte_doc::TranscriptUpdate {
+                frame: ensembyte_doc::TranscriptFrame::reset(&original),
                 context_usage: None,
-                replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(&original)),
+                replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(&original)),
             })
             .unwrap();
         let mut changed = original.clone();
@@ -9373,8 +9373,8 @@ mod tests {
             text: "omega".into(),
         }];
         let next = worker
-            .prepare(&orbit_doc::TranscriptUpdate {
-                frame: orbit_doc::diff_transcript(&original, &changed),
+            .prepare(&ensembyte_doc::TranscriptUpdate {
+                frame: ensembyte_doc::diff_transcript(&original, &changed),
                 context_usage: None,
                 replay_baseline: None,
             })
@@ -9387,18 +9387,18 @@ mod tests {
     #[gpui::test]
     fn prepared_whale_open_and_revisit_do_not_build_rows_on_ui(cx: &mut gpui::TestAppContext) {
         let (update, prepared, preparation_ms) = std::thread::spawn(|| {
-            let entries = if let Ok(path) = std::env::var("ORBIT_WHALE_SNAPSHOT") {
-                let doc = orbit_doc::SessionDoc::init("fixture").unwrap();
+            let entries = if let Ok(path) = std::env::var("ENSEMBYTE_WHALE_SNAPSHOT") {
+                let doc = ensembyte_doc::SessionDoc::init("fixture").unwrap();
                 doc.doc().import(&std::fs::read(path).unwrap()).unwrap();
-                orbit_doc::join_continuation_entries(doc.read_entries().unwrap())
+                ensembyte_doc::join_continuation_entries(doc.read_entries().unwrap())
             } else {
                 vec![assistant("whale-turn", MessageStatus::Complete, (0..5000).map(|i| {
                     MessagePart::Text { id: format!("part-{i}"), text: format!("## Result {i}\n\n**Markdown** with `code` and [links](https://example.com).\n") }
                 }).collect())]
             };
-            let update = orbit_doc::TranscriptUpdate {
-                replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(&entries)),
-                frame: orbit_doc::TranscriptFrame::Reset { reset: entries },
+            let update = ensembyte_doc::TranscriptUpdate {
+                replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(&entries)),
+                frame: ensembyte_doc::TranscriptFrame::Reset { reset: entries },
                 context_usage: None,
             };
             let start = Instant::now();
@@ -9480,9 +9480,9 @@ mod tests {
                 state.update(cx, |state, cx| {
                     state
                         .receive_opening_transcript_update(
-                            orbit_doc::TranscriptUpdate {
-                                frame: orbit_doc::TranscriptFrame::reset(entries),
-                                replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(
+                            ensembyte_doc::TranscriptUpdate {
+                                frame: ensembyte_doc::TranscriptFrame::reset(entries),
+                                replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(
                                     entries,
                                 )),
                                 context_usage: None,
@@ -9536,8 +9536,8 @@ mod tests {
             state.update(cx, |state, cx| {
                 state
                     .receive_transcript_update(
-                        orbit_doc::TranscriptUpdate {
-                            frame: orbit_doc::diff_transcript(&full, &live),
+                        ensembyte_doc::TranscriptUpdate {
+                            frame: ensembyte_doc::diff_transcript(&full, &live),
                             replay_baseline: None,
                             context_usage: None,
                         },
@@ -9573,13 +9573,13 @@ mod tests {
                 vec![tool_part("new", "git status")],
             ));
             state.update(cx, |state, cx| {
-                let frame = orbit_doc::diff_transcript(&state.transcript, &history);
+                let frame = ensembyte_doc::diff_transcript(&state.transcript, &history);
                 state
                     .receive_transcript_update(
-                        orbit_doc::TranscriptUpdate {
+                        ensembyte_doc::TranscriptUpdate {
                             frame,
                             context_usage: None,
-                            replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(&history)),
+                            replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(&history)),
                         },
                         cx,
                     )
@@ -9587,8 +9587,8 @@ mod tests {
                 // Both updates land before the transcript observes/render them.
                 state
                     .receive_transcript_update(
-                        orbit_doc::TranscriptUpdate {
-                            frame: orbit_doc::diff_transcript(&history, &live),
+                        ensembyte_doc::TranscriptUpdate {
+                            frame: ensembyte_doc::diff_transcript(&history, &live),
                             context_usage: None,
                             replay_baseline: None,
                         },
@@ -9619,10 +9619,10 @@ mod tests {
         with_tool_group_navigation(cx, |state, transcript, cx| {
             let apply = |entries: &[SessionMessageEntry], baseline, cx: &mut gpui::App| {
                 state.update(cx, |state, cx| {
-                    let frame = orbit_doc::diff_transcript(&state.transcript, entries);
+                    let frame = ensembyte_doc::diff_transcript(&state.transcript, entries);
                     state
                         .receive_transcript_update(
-                            orbit_doc::TranscriptUpdate {
+                            ensembyte_doc::TranscriptUpdate {
                                 frame,
                                 replay_baseline: baseline,
                                 context_usage: None,
@@ -9651,7 +9651,7 @@ mod tests {
             historical[0].parts.retain(|p| p.id().starts_with("old"));
             apply(
                 &entries,
-                Some(orbit_doc::TranscriptBaseline::capture(&historical)),
+                Some(ensembyte_doc::TranscriptBaseline::capture(&historical)),
                 cx,
             );
             let reveal = &transcript.read(cx).tool_group_reveals[&row];
@@ -9663,7 +9663,7 @@ mod tests {
             entries[0].parts.push(tool_part("live-c", "pwd"));
             apply(
                 &entries,
-                Some(orbit_doc::TranscriptBaseline::capture(&historical)),
+                Some(ensembyte_doc::TranscriptBaseline::capture(&historical)),
                 cx,
             );
             let reveal = &transcript.read(cx).tool_group_reveals[&row];
@@ -9679,8 +9679,8 @@ mod tests {
                 state.select_chat(Some("new-chat".into()), cx);
                 state
                     .receive_transcript_update(
-                        orbit_doc::TranscriptUpdate {
-                            frame: orbit_doc::TranscriptFrame::reset(&[]),
+                        ensembyte_doc::TranscriptUpdate {
+                            frame: ensembyte_doc::TranscriptFrame::reset(&[]),
                             context_usage: None,
                             replay_baseline: Some(Default::default()),
                         },
@@ -9697,8 +9697,8 @@ mod tests {
             state.update(cx, |state, cx| {
                 state
                     .receive_transcript_update(
-                        orbit_doc::TranscriptUpdate {
-                            frame: orbit_doc::diff_transcript(&[], &live),
+                        ensembyte_doc::TranscriptUpdate {
+                            frame: ensembyte_doc::diff_transcript(&[], &live),
                             context_usage: None,
                             replay_baseline: None,
                         },
@@ -9727,11 +9727,11 @@ mod tests {
                 ));
             }
             state.update(cx, |state, cx| {
-                let frame = orbit_doc::diff_transcript(&state.transcript, &live);
-                assert!(matches!(&frame, orbit_doc::TranscriptFrame::Reset { .. }));
+                let frame = ensembyte_doc::diff_transcript(&state.transcript, &live);
+                assert!(matches!(&frame, ensembyte_doc::TranscriptFrame::Reset { .. }));
                 state
                     .receive_transcript_update(
-                        orbit_doc::TranscriptUpdate {
+                        ensembyte_doc::TranscriptUpdate {
                             frame,
                             context_usage: None,
                             replay_baseline: None,
@@ -9887,7 +9887,7 @@ mod tests {
             (Theme::dark(), crate::theme::grey(48)),
             (Theme::light(), crate::theme::grey(230)),
         ] {
-            theme.surface_treatment = orbit_theme::SurfaceTreatment::Opaque;
+            theme.surface_treatment = ensembyte_theme::SurfaceTreatment::Opaque;
             let badge = crate::theme::flatten(theme.ink(0.06), base);
             let icon_well = crate::theme::flatten(crate::file_icons::well_bg(&theme), badge);
             let contrast = crate::theme::contrast_ratio(icon_well, badge);
@@ -9908,9 +9908,9 @@ mod tests {
     #[test]
     fn file_badge_icon_well_uses_more_coverage_on_frost() {
         for mut theme in [Theme::dark(), Theme::light()] {
-            theme.surface_treatment = orbit_theme::SurfaceTreatment::Opaque;
+            theme.surface_treatment = ensembyte_theme::SurfaceTreatment::Opaque;
             let opaque_alpha = crate::file_icons::well_bg(&theme).a;
-            theme.surface_treatment = orbit_theme::SurfaceTreatment::Frosted;
+            theme.surface_treatment = ensembyte_theme::SurfaceTreatment::Frosted;
             let frosted = crate::file_icons::well_bg(&theme);
             let badge = crate::theme::flatten(theme.ink(0.06), theme.bg);
             let icon_well = crate::theme::flatten(frosted, badge);
@@ -11856,10 +11856,10 @@ mod tests {
                         state.select_chat(Some("chat".into()), cx);
                         state
                             .receive_transcript_update(
-                                orbit_doc::TranscriptUpdate {
-                                    frame: orbit_doc::TranscriptFrame::reset(&history),
+                                ensembyte_doc::TranscriptUpdate {
+                                    frame: ensembyte_doc::TranscriptFrame::reset(&history),
                                     context_usage: None,
-                                    replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(
+                                    replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(
                                         &history,
                                     )),
                                 },
@@ -11884,12 +11884,12 @@ mod tests {
                     this.state.update(cx, |state, cx| {
                         state
                             .receive_transcript_update(
-                                orbit_doc::TranscriptUpdate {
-                                    frame: orbit_doc::diff_transcript(&history, &next),
+                                ensembyte_doc::TranscriptUpdate {
+                                    frame: ensembyte_doc::diff_transcript(&history, &next),
                                     context_usage: None,
                                     // The RPC must retain its opening cutoff when
                                     // publishing subsequent changed-part history.
-                                    replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(
+                                    replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(
                                         &cutoff,
                                     )),
                                 },
@@ -11939,10 +11939,10 @@ mod tests {
                         state.select_chat(Some("chat".into()), cx);
                         state
                             .receive_transcript_update(
-                                orbit_doc::TranscriptUpdate {
-                                    frame: orbit_doc::TranscriptFrame::reset(&history),
+                                ensembyte_doc::TranscriptUpdate {
+                                    frame: ensembyte_doc::TranscriptFrame::reset(&history),
                                     context_usage: None,
-                                    replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(
+                                    replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(
                                         &history,
                                     )),
                                 },
@@ -11951,8 +11951,8 @@ mod tests {
                             .unwrap();
                         state
                             .receive_transcript_update(
-                                orbit_doc::TranscriptUpdate {
-                                    frame: orbit_doc::diff_transcript(&history, &live),
+                                ensembyte_doc::TranscriptUpdate {
+                                    frame: ensembyte_doc::diff_transcript(&history, &live),
                                     context_usage: None,
                                     replay_baseline: None,
                                 },
@@ -12001,10 +12001,10 @@ mod tests {
                     this.state.update(cx, |state, cx| {
                         state
                             .receive_transcript_update(
-                                orbit_doc::TranscriptUpdate {
-                                    frame: orbit_doc::diff_transcript(&live, &next),
+                                ensembyte_doc::TranscriptUpdate {
+                                    frame: ensembyte_doc::diff_transcript(&live, &next),
                                     context_usage: None,
-                                    replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(
+                                    replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(
                                         &next_history,
                                     )),
                                 },
@@ -12105,14 +12105,14 @@ mod tests {
                         this.spring_kick = true;
                         updated.push(prompt(&format!("history-{}", updated.len())));
                         this.state.update(cx, |state, cx| {
-                            let frame = orbit_doc::diff_transcript(&state.transcript, &updated);
+                            let frame = ensembyte_doc::diff_transcript(&state.transcript, &updated);
                             state
                                 .receive_transcript_update(
-                                    orbit_doc::TranscriptUpdate {
+                                    ensembyte_doc::TranscriptUpdate {
                                         frame,
                                         context_usage: None,
                                         replay_baseline: Some(
-                                            orbit_doc::TranscriptBaseline::capture(&updated),
+                                            ensembyte_doc::TranscriptBaseline::capture(&updated),
                                         ),
                                     },
                                     cx,
@@ -12349,11 +12349,11 @@ mod tests {
                     feed(this, vec![prompt("prompt")], cx);
                     this.rail_enabled = false;
                     this.state.update(cx, |state, _| {
-                        state.sessions.push(orbit_proto::Session {
+                        state.sessions.push(ensembyte_proto::Session {
                             last_completed_turn: None,
                             chat_id: "chat".into(),
                             device_id: "test".into(),
-                            status: orbit_proto::SessionStatus::Working,
+                            status: ensembyte_proto::SessionStatus::Working,
                             started_at: Some(chrono::Utc::now()),
                             updated_at: chrono::Utc::now(),
                         })
@@ -13499,7 +13499,7 @@ mod tests {
     /// the RAW text either way, so projection never perturbs the diff key.
     #[test]
     fn user_rows_project_file_mentions_into_chips() {
-        let raw = "look at [composer.rs](orbit-file:crates/ui/src/composer.rs) please";
+        let raw = "look at [composer.rs](ensembyte-file:crates/ui/src/composer.rs) please";
         let mut entry = assistant("u3", MessageStatus::Complete, vec![]);
         entry.role = MessageRole::User;
         entry.status = None;
@@ -13509,7 +13509,7 @@ mod tests {
             panic!("expected a user row");
         };
         assert!(
-            !text.contains("orbit-file:"),
+            !text.contains("ensembyte-file:"),
             "raw link left visible: {text}"
         );
         assert!(text.contains("composer.rs"));
@@ -13577,7 +13577,7 @@ mod tests {
         let old = (1..=20).map(|i| format!("line {i}")).collect::<Vec<_>>();
         let mut new = old.clone();
         new[9] = "LINE 10".into();
-        let diff = orbit_proto::ToolDiff {
+        let diff = ensembyte_proto::ToolDiff {
             path: "/w/a.rs".into(),
             old_text: Some(old.join("\n") + "\n"),
             new_text: new.join("\n") + "\n",
@@ -13614,7 +13614,7 @@ mod tests {
         assert_eq!(old_text.as_deref(), diff.old_text.as_deref());
         assert_eq!(new_text.as_deref(), Some(diff.new_text.as_str()));
         // New files carry Added status (and no old numbers).
-        let created = orbit_proto::ToolDiff {
+        let created = ensembyte_proto::ToolDiff {
             path: "/w/new.txt".into(),
             old_text: None,
             new_text: "only\n".into(),
@@ -13838,8 +13838,8 @@ mod tests {
         );
         let todo = ToolCall::Todo {
             items: vec![
-                orbit_proto::TodoItem::new("a", orbit_proto::TodoStatus::Completed),
-                orbit_proto::TodoItem::new("b", orbit_proto::TodoStatus::Pending),
+                ensembyte_proto::TodoItem::new("a", ensembyte_proto::TodoStatus::Completed),
+                ensembyte_proto::TodoItem::new("b", ensembyte_proto::TodoStatus::Pending),
             ],
         };
         assert_eq!(tool_chip_content(&todo), ("Todo", "1/2 done".to_string()));
@@ -13909,19 +13909,19 @@ mod tests {
         let Some(ToolDetail::Output { lines, .. }) = call_block(&ToolCall::Mcp {
             server: "gh".into(),
             tool: "issues".into(),
-            input: Some(serde_json::json!({"repo": "orbit"})),
+            input: Some(serde_json::json!({"repo": "ensembyte"})),
         }) else {
             panic!("expected an output block")
         };
         assert_eq!(lines[0].as_ref(), "gh · issues");
-        assert!(lines.iter().any(|l| l.contains("\"repo\": \"orbit\"")));
+        assert!(lines.iter().any(|l| l.contains("\"repo\": \"ensembyte\"")));
 
         // Todos list one item per line with checkbox state.
         let Some(ToolDetail::Output { lines, .. }) = call_block(&ToolCall::Todo {
             items: vec![
-                orbit_proto::TodoItem::new("a", orbit_proto::TodoStatus::Completed),
-                orbit_proto::TodoItem::new("b", orbit_proto::TodoStatus::InProgress),
-                orbit_proto::TodoItem::new("c", orbit_proto::TodoStatus::Pending),
+                ensembyte_proto::TodoItem::new("a", ensembyte_proto::TodoStatus::Completed),
+                ensembyte_proto::TodoItem::new("b", ensembyte_proto::TodoStatus::InProgress),
+                ensembyte_proto::TodoItem::new("c", ensembyte_proto::TodoStatus::Pending),
             ],
         }) else {
             panic!("expected an output block")

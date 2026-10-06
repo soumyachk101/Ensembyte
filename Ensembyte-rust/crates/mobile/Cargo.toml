@@ -1,5 +1,5 @@
 [package]
-name = "orbit-mobile"
+name = "ensembyte-mobile"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ publish.workspace = true
 # link. Platform code paints, scrolls and handles gestures; everything that
 # decides *what* to paint and *where* lives here.
 [lib]
-name = "orbit_mobile"
+name = "ensembyte_mobile"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [[bin]]
@@ -22,13 +22,13 @@ bindgen = ["uniffi/cli"]
 
 [dependencies]
 uniffi = "0.32"
-orbit-markdown.workspace = true
-orbit-text.workspace = true
-orbit-doc.workspace = true
-orbit-proto.workspace = true
-orbit-client.workspace = true
+ensembyte-markdown.workspace = true
+ensembyte-text.workspace = true
+ensembyte-doc.workspace = true
+ensembyte-proto.workspace = true
+ensembyte-client.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 similar.workspace = true
-orbit-syntax.workspace = true
+ensembyte-syntax.workspace = true
 thiserror.workspace = true

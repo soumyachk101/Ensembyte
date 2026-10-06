@@ -1,7 +1,7 @@
 //! The workspace registry replica and its derived [`WorkspaceSnapshot`].
 //!
 //! The replica is a [`RegistryDoc`] shared (`Arc<Mutex<_>>`) with the
-//! `orbit_sync::RegistryClient` in live mode; Demo mode settles local writes
+//! `ensembyte_sync::RegistryClient` in live mode; Demo mode settles local writes
 //! through an in-process stand-in for the registry room. Reads materialize
 //! the rows once per registry *generation* (cached), so the 1 Hz time-driven
 //! re-derivation (staleness, presence expiry, send grace) never re-decodes.
@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
-use orbit_doc::{RegistryDoc, WorkspaceState};
-use orbit_proto::{CheckoutChangeRequestStatus, SidebarPreferences};
+use ensembyte_doc::{RegistryDoc, WorkspaceState};
+use ensembyte_proto::{CheckoutChangeRequestStatus, SidebarPreferences};
 
 pub(crate) use view::{DeriveContext, device_online};
 pub use view::{
@@ -92,7 +92,7 @@ impl WorkspaceStore {
         (state, prefs)
     }
 
-    pub(crate) fn chat(&self, chat_id: &str) -> Option<orbit_proto::Chat> {
+    pub(crate) fn chat(&self, chat_id: &str) -> Option<ensembyte_proto::Chat> {
         self.state()
             .0
             .chats

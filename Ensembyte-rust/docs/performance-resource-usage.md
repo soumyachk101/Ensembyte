@@ -17,7 +17,7 @@ The six runs were sequential: old, previous, final, final, previous, old. Each
 cell averages two runs. [Raw results](performance/resource-four-workers.json)
 include every executable hash, reply hash, phase and individual measurement.
 
-| Metric | Old Orbit | Previous optimized | Final |
+| Metric | Old Ensembyte | Previous optimized | Final |
 | --- | ---: | ---: | ---: |
 | Idle CPU | 27.41% | 15.75% | 7.49% |
 | Streaming CPU | 265.57% | 237.60% | 158.57% |
@@ -43,7 +43,7 @@ The one-worker short comparison also averages two runs per build:
 [baseline](performance/resource-baseline.json),
 [final](performance/resource-candidate.json). It uses the same captured output.
 
-| Metric | Old Orbit | Final |
+| Metric | Old Ensembyte | Final |
 | --- | ---: | ---: |
 | Idle CPU | 25.45% | 6.93% |
 | Streaming CPU | 113.51% | 100.64% |
@@ -56,7 +56,7 @@ producing a 526,258-byte combined reply. Each build ran it once with one worker:
 [baseline](performance/resource-long-baseline.json),
 [final](performance/resource-long-candidate.json).
 
-| Metric | Old Orbit | Final |
+| Metric | Old Ensembyte | Final |
 | --- | ---: | ---: |
 | Streaming CPU | 112.30% | 103.13% |
 | Post-completion CPU, last 10 s | 92.77% | 8.30% |
@@ -183,22 +183,22 @@ integration target ran, or that native Metal performance was measured.
 Requires Node 22+, Rust, Python 3 and Xvfb/xdotool for Linux desktop profiling.
 The [sanitized fixture](../scripts/fixtures/README.md) reproduces the measured
 replay without an API call. Use a dedicated display and fresh output directories;
-the driver requires exactly one Orbit window.
+the driver requires exactly one Ensembyte window.
 
 ```sh
-cargo build --release -p orbit
+cargo build --release -p ensembyte
 Xvfb :98 -screen 0 1440x900x24 -nolisten tcp
 # In another terminal:
-DISPLAY=:98 WAYLAND_DISPLAY= LP_NUM_THREADS=4 ORBIT_FRAME_STATS=0 \
-  ORBIT_PROFILE_PSS=1 ORBIT_PROFILE_IDLE_MS=45000 \
+DISPLAY=:98 WAYLAND_DISPLAY= LP_NUM_THREADS=4 ENSEMBYTE_FRAME_STATS=0 \
+  ENSEMBYTE_PROFILE_PSS=1 ENSEMBYTE_PROFILE_IDLE_MS=45000 \
   CLAUDE_CODE_EXECUTABLE="$PWD/scripts/replay-claude.py" \
-  ORBIT_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
-  node scripts/resource-profile.mjs target/release/orbit /tmp/orbit-short claude-code
+  ENSEMBYTE_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
+  node scripts/resource-profile.mjs target/release/ensembyte /tmp/ensembyte-short claude-code
 
 # Use LP_NUM_THREADS=1 for the one-worker check.
-# Add ORBIT_REPLAY_REPEAT=10 ORBIT_REPLAY_DELAY_MS=8 for the long workload.
+# Add ENSEMBYTE_REPLAY_REPEAT=10 ENSEMBYTE_REPLAY_DELAY_MS=8 for the long workload.
 # For a live turn, omit replay variables and point CLAUDE_CODE_EXECUTABLE to
-# the authenticated CLI; ORBIT_PROFILE_SUBMIT_UI=1 submits through the composer.
+# the authenticated CLI; ENSEMBYTE_PROFILE_SUBMIT_UI=1 submits through the composer.
 
 # In the zui checkout, on a host with Vulkan (software Vulkan works):
 LP_NUM_THREADS=4 cargo test --release -p gpui_wgpu --lib -- --include-ignored

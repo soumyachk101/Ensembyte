@@ -1,6 +1,6 @@
 //! Durable command ledger — port of `packages/session-doc/src/commands.ts`.
 //!
-//! Rules (verbatim from orbit's design):
+//! Rules (verbatim from ensembyte's design):
 //! 1. Each device inserts only its own entries; entries are append-only and immutable.
 //! 2. The chat's HOST is the sole writer of command outcomes; a composer may only set
 //!    `cancelled` on its own still-pending entries.
@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use orbit_proto::{RunRequest, UserInputAnswer};
+use ensembyte_proto::{RunRequest, UserInputAnswer};
 
 use crate::constants::COMMAND_DEFAULT_TTL_MS;
 
@@ -356,7 +356,7 @@ mod tests {
             reasoning: None,
             model_options: Default::default(),
             cwd: "/tmp".into(),
-            sandbox: orbit_proto::SandboxLevel::WorkspaceWrite,
+            sandbox: ensembyte_proto::SandboxLevel::WorkspaceWrite,
             auto_approve: false,
             attachments: Vec::new(),
             worktree: None,

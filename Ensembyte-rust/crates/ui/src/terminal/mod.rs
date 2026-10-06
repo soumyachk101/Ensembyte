@@ -7,8 +7,8 @@
 //! - [`panel`] — session-scoped tabs, subscriptions with reconnect backoff,
 //!   drag-reorder, and the Cmd/Ctrl+J toggle action.
 //!
-//! Method names come from `orbit_rpc::methods` and wire types from
-//! `orbit_proto` (`TerminalSession`, `TerminalEvent`) — the same contract the
+//! Method names come from `ensembyte_rpc::methods` and wire types from
+//! `ensembyte_proto` (`TerminalSession`, `TerminalEvent`) — the same contract the
 //! engine serves (feature-inventory §2.1).
 
 pub(crate) mod dock;

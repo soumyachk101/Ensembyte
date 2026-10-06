@@ -1,13 +1,13 @@
 //! Real Pi RPC + model regression for #296. Requires an authenticated Pi and
 //! fixtures/pi-slow-model.ts loaded as a Pi extension (35s delay by default).
 //! PI_EXECUTABLE can select an isolated Pi installation.
-//! cargo test -p orbit-harness --test real_acp_lifecycle -- --ignored --nocapture
+//! cargo test -p ensembyte-harness --test real_acp_lifecycle -- --ignored --nocapture
 
 use futures::StreamExt;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
-use orbit_harness::{CancellationToken, Harness, RunControls, SteerMessage};
-use orbit_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
+use ensembyte_harness::{CancellationToken, Harness, RunControls, SteerMessage};
+use ensembyte_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
 
 async fn live_run(cancel: bool) {
     let cwd = tempfile::tempdir().unwrap();
@@ -31,7 +31,7 @@ async fn live_run(cancel: bool) {
         sandbox: SandboxLevel::WorkspaceWrite, auto_approve: true,
         attachments: Vec::new(), worktree: None, resume: None,
     };
-    let mut stream = orbit_harness::PiHarness::new()
+    let mut stream = ensembyte_harness::PiHarness::new()
         .run(request, controls)
         .await
         .expect("real Pi must start");

@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
-use orbit_proto::{AgentEvent, DoneStatus, ToolCall};
+use ensembyte_proto::{AgentEvent, DoneStatus, ToolCall};
 
 use crate::HarnessError;
 
@@ -682,7 +682,7 @@ mod tests {
         let result = json!({
             "type": "tool_result",
             "tool_call_id": "call-1-0",
-            "content": "1→# orbit — Architecture",
+            "content": "1→# ensembyte — Architecture",
         });
         assert!(matches!(
             entry_events(&result).as_slice(),

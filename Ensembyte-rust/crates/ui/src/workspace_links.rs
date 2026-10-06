@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-const FILE_MENTION_SCHEME: &str = "orbit-file:";
+const FILE_MENTION_SCHEME: &str = "ensembyte-file:";
 
 /// Where a classified file link sits relative to a surface's ordered roots.
 #[derive(Debug, PartialEq, Eq)]
@@ -261,7 +261,7 @@ struct ClassifiedLink {
 }
 
 enum ClassifiedKind {
-    /// `orbit-file:` mention — resolution stays inside-or-unresolved.
+    /// `ensembyte-file:` mention — resolution stays inside-or-unresolved.
     Mention,
     /// Root-relative path.
     Relative,
@@ -317,7 +317,7 @@ fn classify_file_link(target: &str) -> Option<ClassifiedLink> {
         return None;
     }
 
-    // `orbit-file:` mentions keep their strict canonical spelling: the whole
+    // `ensembyte-file:` mentions keep their strict canonical spelling: the whole
     // path decodes once and must re-encode to the identical string.
     if let Some(encoded) = target.strip_prefix(FILE_MENTION_SCHEME) {
         let decoded = percent_decode_path(encoded)?;
@@ -1083,22 +1083,22 @@ mod tests {
     #[test]
     fn resolves_canonical_file_mentions() {
         assert_eq!(
-            resolve_workspace_file_link("orbit-file:src/a%20file.rs", "/work/comet"),
+            resolve_workspace_file_link("ensembyte-file:src/a%20file.rs", "/work/comet"),
             Some(link("src/a file.rs", None, None))
         );
-        assert!(resolve_workspace_file_link("orbit-file:src/%61.rs", "/work/comet").is_none());
-        assert!(resolve_workspace_file_link("orbit-file:src/", "/work/comet").is_none());
+        assert!(resolve_workspace_file_link("ensembyte-file:src/%61.rs", "/work/comet").is_none());
+        assert!(resolve_workspace_file_link("ensembyte-file:src/", "/work/comet").is_none());
         // Mentions with dotted-less names keep resolving like before.
         assert_eq!(
-            resolve_workspace_file_link("orbit-file:Makefile", "/work/comet"),
+            resolve_workspace_file_link("ensembyte-file:Makefile", "/work/comet"),
             Some(link("Makefile", None, None))
         );
         // An absolute mention resolves inside its root or not at all — it is
         // never an outside link.
         assert_eq!(
-            resolve_workspace_file_link("orbit-file:/work/comet/a.md", "/work/comet"),
+            resolve_workspace_file_link("ensembyte-file:/work/comet/a.md", "/work/comet"),
             Some(link("a.md", None, None))
         );
-        assert!(resolve_workspace_file_link("orbit-file:/tmp/a.md", "/work/comet").is_none());
+        assert!(resolve_workspace_file_link("ensembyte-file:/tmp/a.md", "/work/comet").is_none());
     }
 }

@@ -2,8 +2,8 @@
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
-use orbit_harness::{CancellationToken, Harness, PiHarness, RunControls, SteerMessage};
-use orbit_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
+use ensembyte_harness::{CancellationToken, Harness, PiHarness, RunControls, SteerMessage};
+use ensembyte_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
 fn harness() -> PiHarness {
     PiHarness::new()
         .with_executable(env!("CARGO_BIN_EXE_harness-pi-fixture"))
@@ -326,9 +326,9 @@ async fn discovers_model_specific_thinking_and_extension_commands() {
     assert_eq!(
         models[0].reasoning_levels,
         vec![
-            orbit_proto::ReasoningLevel::Low,
-            orbit_proto::ReasoningLevel::Medium,
-            orbit_proto::ReasoningLevel::High
+            ensembyte_proto::ReasoningLevel::Low,
+            ensembyte_proto::ReasoningLevel::Medium,
+            ensembyte_proto::ReasoningLevel::High
         ]
     );
     assert_eq!(models[0].options[0].id, "pi_thinking");
@@ -403,7 +403,7 @@ async fn extension_dialogs_roundtrip_without_autoaccepting_and_preserve_editor_t
             let _ = tx.send(
                 label
                     .map(|l| {
-                        vec![orbit_proto::UserInputAnswer {
+                        vec![ensembyte_proto::UserInputAnswer {
                             question_id: questions[0].id.clone(),
                             labels: vec![l.into()],
                         }]

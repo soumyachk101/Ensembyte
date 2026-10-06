@@ -18,11 +18,11 @@ use gpui::{
 };
 use std::time::Duration;
 
-use orbit_proto::{
+use ensembyte_proto::{
     AgentAccount, AgentAccountsSnapshot, AgentLoginMode, AgentLoginPoll, AgentLoginStart,
     AgentLoginStatus, HarnessId,
 };
-use orbit_rpc::methods;
+use ensembyte_rpc::methods;
 
 use crate::composer::{ComposerInput, ComposerInputEvent};
 use crate::popover::{self, Loadable};
@@ -142,7 +142,7 @@ fn open_login_url(url: &str, cx: &mut gpui::App) {
     }
 }
 
-/// Compact absolute reset moment (orbit settings.agents.tsx `formatReset`):
+/// Compact absolute reset moment (ensembyte settings.agents.tsx `formatReset`):
 /// a local clock time ("3:45 PM") when it lands within ~22h, a short weekday
 /// ("Mon") within a week, else month + day ("Sep 14") — a weekday is noise
 /// when the window is a Codex free-tier MONTHLY reset weeks out. The caller
@@ -160,8 +160,8 @@ pub fn format_reset(resets_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Opt
     })
 }
 
-/// The providers orbit can sign into, in display order: (harness, name, CLI
-/// command — named in the empty-state copy, orbit settings.agents.tsx
+/// The providers ensembyte can sign into, in display order: (harness, name, CLI
+/// command — named in the empty-state copy, ensembyte settings.agents.tsx
 /// `PROVIDERS`). Every agent with a login of its own is here; what each one
 /// supports is documented engine-side (`agent_accounts` module docs).
 pub const PROVIDERS: [(HarnessId, &str, &str); 9] = [
@@ -202,14 +202,14 @@ pub fn keeps_one_login(harness: HarnessId) -> bool {
     harness == HarnessId::Antigravity
 }
 
-/// Whether orbit switches this agent's logins. Hermes rotates through its
+/// Whether ensembyte switches this agent's logins. Hermes rotates through its
 /// own credential pool (listed, never reordered); Antigravity keeps one.
 pub fn switches_accounts(harness: HarnessId) -> bool {
     !matches!(harness, HarnessId::Hermes | HarnessId::Antigravity)
 }
 
 /// A standing note under a provider's Accounts label, for an agent whose
-/// accounts work differently. Hermes owns its credential pool: orbit lists
+/// accounts work differently. Hermes owns its credential pool: ensembyte lists
 /// it and adds to it through Hermes' own CLI, but never switches or removes
 /// its entries. Pure.
 pub fn provider_note(harness: HarnessId) -> Option<&'static str> {
@@ -232,7 +232,7 @@ pub struct LoginOption {
     pub label: &'static str,
 }
 
-/// The sign-ins orbit offers for `harness`, in button order. Pure.
+/// The sign-ins ensembyte offers for `harness`, in button order. Pure.
 pub fn login_options(harness: HarnessId) -> Vec<LoginOption> {
     let option = |provider, label| LoginOption {
         provider: Some(provider),
@@ -287,7 +287,7 @@ fn login_copy(harness: HarnessId, provider: Option<&str>) -> &'static str {
              your current one — nothing changes until you switch."
         }
         (HarnessId::Cursor, _) => {
-            "Finish signing in to Cursor in your browser. This mints a orbit-named API key \
+            "Finish signing in to Cursor in your browser. This mints an ensembyte-named API key \
              you can revoke any time from Cursor's dashboard."
         }
         (HarnessId::Antigravity, _) => {
@@ -347,7 +347,7 @@ pub fn mark_switched(snapshot: &mut AgentAccountsSnapshot, account: &AgentAccoun
 /// One mini meter line of the usage column: label, a short bar, percent.
 /// The reset moment rides the row's tooltip instead of taking a column.
 pub(crate) fn render_usage_meter(
-    window: &orbit_proto::AgentUsageWindow,
+    window: &ensembyte_proto::AgentUsageWindow,
     theme: &Theme,
 ) -> AnyElement {
     let fraction = window.used_fraction.clamp(0.0, 1.0);
@@ -384,7 +384,7 @@ pub(crate) fn render_usage_meter(
                         div()
                             .h_full()
                             // A 1.5% floor keeps tiny non-zero usage
-                            // visible (orbit `max(used, 1.5)%`).
+                            // visible (ensembyte `max(used, 1.5)%`).
                             .w(gpui::relative(fraction.max(0.015)))
                             .rounded_full()
                             .bg(fill),
@@ -485,7 +485,7 @@ pub struct AccountsPage {
     embedded_harness: Option<HarnessId>,
     scroll: widgets::PageScroll,
     /// Which device's logins are shown; `None` = this device (no passthrough).
-    /// Retargeted by the page-header device switcher (orbit parity: the
+    /// Retargeted by the page-header device switcher (ensembyte parity: the
     /// accounts RPCs are relay-forwardable, CLI logins are per-device).
     target_device: Option<String>,
     device_select: widgets::SelectState,
@@ -611,7 +611,7 @@ impl AccountsPage {
         }
     }
 
-    /// The page-header device switcher (orbit device-switcher.tsx): a quiet
+    /// The page-header device switcher (ensembyte device-switcher.tsx): a quiet
     /// trigger — platform glyph · name · presence dot · sort glyph — opening a
     /// dropdown of every registered device. Selecting one retargets the page.
     fn render_device_switcher(&mut self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
@@ -620,7 +620,7 @@ impl AccountsPage {
             let s = self.state.read(cx);
             (s.devices.clone(), s.local_device_id.clone())
         };
-        // Stable row order (registration time, then id) — orbit's switcher
+        // Stable row order (registration time, then id) — ensembyte's switcher
         // sorts the same way so rows never reshuffle on heartbeats.
         devices.sort_by(|a, b| {
             a.created_at
@@ -1401,7 +1401,7 @@ impl AccountsPage {
     /// same geometry, so loaded rows land without a layout jump.
     fn render_embedded_skeleton(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
         use crate::motion;
-        let delta = motion::pulse_delta(&motion::ORBIT_PULSE, cx.entity_id(), cx);
+        let delta = motion::pulse_delta(&motion::ENSEMBYTE_PULSE, cx.entity_id(), cx);
         let ghost = |w: f32, h: f32| {
             div()
                 .flex_none()
@@ -1493,7 +1493,7 @@ impl AccountsPage {
             }
             _ => login_copy(login.harness, login.provider),
         };
-        // "Reopen the sign-in page" (orbit: `text-[12px]
+        // "Reopen the sign-in page" (ensembyte: `text-[12px]
         // text-muted-foreground/60 hover:underline`), once there is a page.
         let reopen = login.url.clone().filter(|_| !failed).map(|url| {
             div()
@@ -1615,7 +1615,7 @@ impl AccountsPage {
         Some(popover::modal("add-account-dialog", viewport, card))
     }
 
-    /// A ghost account row (orbit settings.agents.tsx `SkeletonRow`): avatar,
+    /// A ghost account row (ensembyte settings.agents.tsx `SkeletonRow`): avatar,
     /// email line, two usage-meter ghosts, a badge — same geometry as the real
     /// row so loaded data lands without a layout jump. `dim` fades row two.
     fn render_skeleton_row(
@@ -1627,7 +1627,7 @@ impl AccountsPage {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use crate::motion;
-        let delta = motion::pulse_delta(&motion::ORBIT_PULSE, cx.entity_id(), cx);
+        let delta = motion::pulse_delta(&motion::ENSEMBYTE_PULSE, cx.entity_id(), cx);
         let ghost = |w: gpui::Length, h: f32, round_full: bool| {
             div()
                 .w(w)
@@ -1907,7 +1907,7 @@ impl Render for AccountsPage {
                 Some(crate::icons::claude_brand()),
             ),
         };
-        // Brand mark inside a 24px centered box (orbit: `grid size-6
+        // Brand mark inside a 24px centered box (ensembyte: `grid size-6
         // place-items-center [&_svg]:size-4`).
         let provider_mark = |harness: HarnessId, theme: &Theme| {
             let (mark, tint) = provider_icon(harness);
@@ -1924,7 +1924,7 @@ impl Render for AccountsPage {
                 )
         };
 
-        // One section per provider (orbit settings.agents.tsx `ProviderSection`):
+        // One section per provider (ensembyte settings.agents.tsx `ProviderSection`):
         // brand header + Add account, then the account rows card.
         let sections: Vec<AnyElement> = match &self.snapshot {
             Loadable::Idle | Loadable::Loading => PROVIDERS
@@ -2012,7 +2012,7 @@ impl Render for AccountsPage {
                     .into_iter()
                     .map(|(harness, name, cli)| {
                         let accounts = provider_accounts(&snapshot, harness);
-                        // EVERY warning renders its own strip (orbit maps them).
+                        // EVERY warning renders its own strip (ensembyte maps them).
                         let warnings: Vec<String> = snapshot
                             .warnings
                             .iter()
@@ -2161,7 +2161,7 @@ impl Render for AccountsPage {
                                     .child(div().flex_1())
                                     .child(
                                         // `text-[12.5px]` + leading 16px Refresh icon,
-                                        // dimmed while a refresh is in flight (orbit
+                                        // dimmed while a refresh is in flight (ensembyte
                                         // `disabled:opacity-50`).
                                         widgets::ghost_action(&theme)
                                             .id("accounts-refresh")
@@ -2201,7 +2201,7 @@ impl Render for AccountsPage {
                                 )
                             })
                             .children(sections)
-                            // Footer note (orbit: `mt-6 text-[12px] leading-relaxed
+                            // Footer note (ensembyte: `mt-6 text-[12px] leading-relaxed
                             // text-muted-foreground/60`).
                             .child(
                                 div()
@@ -2258,7 +2258,7 @@ mod tests {
     }
 
     #[test]
-    fn usage_thresholds_match_orbit() {
+    fn usage_thresholds_match_ensembyte() {
         assert_eq!(usage_level(0.0), UsageLevel::Normal);
         assert_eq!(usage_level(0.79), UsageLevel::Normal);
         assert_eq!(usage_level(0.80), UsageLevel::Warn);
@@ -2347,7 +2347,7 @@ mod tests {
         // Antigravity has no quota to show and keeps a single login.
         assert!(!reports_usage(HarnessId::Antigravity) && reports_usage(HarnessId::Codex));
         assert!(keeps_one_login(HarnessId::Antigravity) && !keeps_one_login(HarnessId::Cursor));
-        // Hermes rotates its own pool; orbit never switches it, and says so.
+        // Hermes rotates its own pool; ensembyte never switches it, and says so.
         assert!(!switches_accounts(HarnessId::Hermes) && switches_accounts(HarnessId::Grok));
         assert!(provider_note(HarnessId::Hermes).is_some_and(|n| n.contains("hermes auth add")));
         assert!(provider_note(HarnessId::Grok).is_none());
@@ -2535,7 +2535,7 @@ mod tests {
             email: Some(email.into()),
             plan_label: Some("ChatGPT Plus".into()),
             active,
-            usage_windows: vec![orbit_proto::AgentUsageWindow {
+            usage_windows: vec![ensembyte_proto::AgentUsageWindow {
                 label: "Session".into(),
                 used_fraction: 0.4,
                 resets_at: None,

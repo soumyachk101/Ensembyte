@@ -144,23 +144,23 @@ foreground focus and was discarded, rather than counted as a resource result.
 
 ## Reproduction
 
-Build with `cargo build --release --locked -p orbit`, and copy each binary to an
+Build with `cargo build --release --locked -p ensembyte`, and copy each binary to an
 immutable path before profiling. Use an unlocked, awake display with no concurrent
 build or test workload. The native helper sizes the foreground window to 1320×880
 points and rejects focus loss. Default dark appearance and animations are enabled.
 
 ```sh
 CLAUDE_CODE_EXECUTABLE="$PWD/scripts/replay-claude.py" \
-ORBIT_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
-ORBIT_PROFILE_BACKGROUND_CHATS=50 ORBIT_PROFILE_SUBMIT_UI=1 \
-ORBIT_PROFILE_PROMPT='Replay fixture.' \
-node scripts/resource-profile.mjs /path/to/orbit /tmp/fresh-profile claude-code
+ENSEMBYTE_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
+ENSEMBYTE_PROFILE_BACKGROUND_CHATS=50 ENSEMBYTE_PROFILE_SUBMIT_UI=1 \
+ENSEMBYTE_PROFILE_PROMPT='Replay fixture.' \
+node scripts/resource-profile.mjs /path/to/ensembyte /tmp/fresh-profile claude-code
 ```
 
 The fixture emits 52,624 combined text/reasoning bytes with a 40 ms delta delay.
-For faster streaming, set `ORBIT_REPLAY_REPEAT=4 ORBIT_REPLAY_DELAY_MS=10`.
+For faster streaming, set `ENSEMBYTE_REPLAY_REPEAT=4 ENSEMBYTE_REPLAY_DELAY_MS=10`.
 For the crash regression, select `runway-short-stream.jsonl`, set the delay to
-400 ms and `ORBIT_PROFILE_TURNS=8`. Submission uses actual native composer key
+400 ms and `ENSEMBYTE_PROFILE_TURNS=8`. Submission uses actual native composer key
 events and verifies the exact prompt and successful completion of every turn.
 
 The profiler measures UI and engine separately, sampling native CPU time and

@@ -400,8 +400,8 @@ pub struct ThemeSelection {
 impl Default for ThemeSelection {
     fn default() -> Self {
         Self {
-            light: "orbit-light".into(),
-            dark: "orbit-dark".into(),
+            light: "ensembyte-light".into(),
+            dark: "ensembyte-dark".into(),
         }
     }
 }
@@ -554,9 +554,9 @@ impl ThemeRegistry {
         self.variant(selection.variant_id(appearance))
             .or_else(|| {
                 self.variant(if appearance.is_dark() {
-                    "orbit-dark"
+                    "ensembyte-dark"
                 } else {
-                    "orbit-light"
+                    "ensembyte-light"
                 })
             })
             .expect("the built-in registry always contains both Orbit variants")
@@ -812,8 +812,8 @@ mod tests {
     fn builtins_have_complete_provenance_and_no_validation_errors() {
         let registry = ThemeRegistry::builtin();
         assert_eq!(registry.families.len(), 19);
-        assert!(registry.variant("orbit-light").is_some());
-        assert!(registry.variant("orbit-dark").is_some());
+        assert!(registry.variant("ensembyte-light").is_some());
+        assert!(registry.variant("ensembyte-dark").is_some());
         let errors: Vec<_> = registry
             .validate()
             .into_iter()

@@ -10,22 +10,22 @@ if (process.argv[2] === 'server') {
     else if (msg.method === 'tools/call') {
       if (msg.params.arguments.mode === 'hang') return;
       if (msg.params.arguments.mode === 'crash') process.exit(1);
-      result = {content:[{type:'text',text:process.env.ORBIT_CHAT_ID}], isError:msg.params.arguments.mode === 'error'};
+      result = {content:[{type:'text',text:process.env.ENSEMBYTE_CHAT_ID}], isError:msg.params.arguments.mode === 'error'};
     } else return;
     process.stdout.write(JSON.stringify({jsonrpc:'2.0', id:msg.id, result})+'\n');
   });
 } else {
   const {default: extension} = await import(process.argv[2]);
   for (const chat of ['first', 'second']) {
-    process.env.ORBIT_PI_MCP = JSON.stringify({name:'orbit',command:process.execPath,args:[process.argv[1],'server'],env:{ORBIT_CHAT_ID:chat}});
+    process.env.ENSEMBYTE_PI_MCP = JSON.stringify({name:'ensembyte',command:process.execPath,args:[process.argv[1],'server'],env:{ENSEMBYTE_CHAT_ID:chat}});
     const handlers = {}, tools = {};
     extension({on:(event,fn)=>handlers[event]=fn,registerTool:tool=>tools[tool.name]=tool});
     try {
       await handlers.session_start();
       for (const name of ['create_chat','create_chats','read_chat','send_message','wait_for_turn']) {
-        assert.equal((await tools[`orbit_${name}`].execute('delegation',{})).content[0].text, chat);
+        assert.equal((await tools[`ensembyte_${name}`].execute('delegation',{})).content[0].text, chat);
       }
-      const tool = tools.orbit_whoami;
+      const tool = tools.ensembyte_whoami;
       assert.equal(tool.parameters.type,'object');
       const result = await tool.execute('call',{});
       assert.equal(result.content[0].text,chat);
@@ -38,8 +38,8 @@ if (process.argv[2] === 'server') {
       assert.equal(handlers.message_end, undefined, "native RPC reports provider failures directly");
       // Restarting the session must not let an old child's exit fail new RPCs.
       await handlers.session_start();
-      assert.equal((await tools.orbit_whoami.execute('call',{})).content[0].text,chat);
+      assert.equal((await tools.ensembyte_whoami.execute('call',{})).content[0].text,chat);
     } finally { handlers.session_shutdown(); }
-    await assert.rejects(tools.orbit_whoami.execute('call',{}),/not connected/);
+    await assert.rejects(tools.ensembyte_whoami.execute('call',{}),/not connected/);
   }
 }

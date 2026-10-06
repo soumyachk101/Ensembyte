@@ -38,14 +38,14 @@ pub(crate) trait Transcriber {
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    fn orbit_microphone_permission() -> i32;
-    fn orbit_request_microphone();
-    fn orbit_microphone_window() -> usize;
+    fn ensembyte_microphone_permission() -> i32;
+    fn ensembyte_request_microphone();
+    fn ensembyte_microphone_window() -> usize;
 }
 fn permission() -> i32 {
     #[cfg(target_os = "macos")]
     {
-        unsafe { orbit_microphone_permission() }
+        unsafe { ensembyte_microphone_permission() }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -58,7 +58,7 @@ pub(crate) fn permission_pending() -> bool {
 fn origin_window() -> usize {
     #[cfg(target_os = "macos")]
     {
-        unsafe { orbit_microphone_window() }
+        unsafe { ensembyte_microphone_window() }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -70,7 +70,7 @@ struct Native {
     origin_window: usize,
     dir: std::path::PathBuf,
     device: Option<String>,
-    session: Option<orbit_voice::Session>,
+    session: Option<ensembyte_voice::Session>,
     finished: bool,
 }
 impl Transcriber for Native {
@@ -98,7 +98,7 @@ impl Transcriber for Native {
                     self.finished = true;
                     return Some(Event::Cancelled);
                 }
-                _ => match orbit_voice::Session::start(self.dir.clone(), self.device.clone()) {
+                _ => match ensembyte_voice::Session::start(self.dir.clone(), self.device.clone()) {
                     Ok(s) => self.session = Some(s),
                     Err(e) => {
                         self.finished = true;
@@ -108,10 +108,10 @@ impl Transcriber for Native {
             }
         }
         self.session.as_mut()?.poll().map(|event| match event {
-            orbit_voice::Event::Listening => Event::Listening,
-            orbit_voice::Event::Finalizing => Event::Finalizing,
-            orbit_voice::Event::Final(t) => Event::Final(t),
-            orbit_voice::Event::Failed(e) => Event::Failed(e),
+            ensembyte_voice::Event::Listening => Event::Listening,
+            ensembyte_voice::Event::Finalizing => Event::Finalizing,
+            ensembyte_voice::Event::Final(t) => Event::Final(t),
+            ensembyte_voice::Event::Failed(e) => Event::Failed(e),
         })
     }
     fn level(&mut self) -> f32 {
@@ -134,7 +134,7 @@ pub(crate) fn start(cx: &gpui::App) -> Option<Box<dyn Transcriber>> {
     #[cfg(target_os = "macos")]
     if permission() == 0 {
         unsafe {
-            orbit_request_microphone();
+            ensembyte_request_microphone();
         }
     }
     Some(Box::new(Native {

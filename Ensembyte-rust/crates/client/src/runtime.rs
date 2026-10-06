@@ -25,10 +25,10 @@ pub fn shared() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
-            .thread_name("orbit-client")
+            .thread_name("ensembyte-client")
             .enable_all()
             .build()
-            .expect("orbit-client runtime")
+            .expect("ensembyte-client runtime")
     })
 }
 

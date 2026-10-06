@@ -20,16 +20,16 @@ use gpui::{
     Render, SharedString, StyledText, TextRun, UnderlineStyle, Window, canvas, div, font, point,
     prelude::*, px, quad, size,
 };
-use orbit_syntax::{HighlightKind, HighlightSpan, HighlightedDocument};
+use ensembyte_syntax::{HighlightKind, HighlightSpan, HighlightedDocument};
 
 use crate::theme::Theme;
 
 use super::parser::{Block, BlockTree, InlineRun, TableAlign};
 use super::veil::{RowVeil, apply_veil, slice_spans};
 
-/// Gap between markdown blocks inside one message (orbit mdBlockGap).
+/// Gap between markdown blocks inside one message (ensembyte mdBlockGap).
 pub const MD_BLOCK_GAP: f32 = 12.0;
-/// Body text size / line height (orbit: 14px / 22px).
+/// Body text size / line height (ensembyte: 14px / 22px).
 pub const MD_TEXT_SIZE: f32 = 14.0;
 pub const MD_LINE_HEIGHT: f32 = 22.0;
 /// Default code block metrics; the rendered size comes from the theme.
@@ -44,26 +44,26 @@ const CODE_HEADER_HEIGHT: f32 = 28.0;
 const CODE_ACTION_SIZE: f32 = 22.0;
 const CODE_SCROLLBAR_HIT_HEIGHT: f32 = 10.0;
 
-// Table metrics — a port of mugen-markdown 0.6.2's `TableBlock` under orbit's
+// Table metrics — a port of mugen-markdown 0.6.2's `TableBlock` under ensembyte's
 // resolved md theme. The design is frameless ("flat hairline"): 1px horizontal
 // rules under the header and between rows are the only chrome — no outer box,
 // no header fill, no corner radius (theme: headerBackground transparent,
 // radius 0). Cells use the body scale (14/22) with a uniform 12px padding;
 // the header row is weight-700 per `table.headerWeight`.
-/// Uniform cell padding in px (orbit `table.cellPadding`).
+/// Uniform cell padding in px (ensembyte `table.cellPadding`).
 pub const TABLE_CELL_PADDING: f32 = 12.0;
-/// Hairline between rows in px (orbit `table.gap`).
+/// Hairline between rows in px (ensembyte `table.gap`).
 pub const TABLE_DIVIDER: f32 = 1.0;
-/// Header row font weight (orbit `table.headerWeight` = 700).
+/// Header row font weight (ensembyte `table.headerWeight` = 700).
 pub const TABLE_HEADER_WEIGHT: FontWeight = FontWeight::BOLD;
 /// Floor for a column's max-content share, so a short column ("1k") beside a
 /// prose column keeps a readable width (mugen `MIN_COLUMN_CONTENT`).
 pub const TABLE_MIN_COLUMN_CONTENT: f32 = 48.0;
-/// Minimum rendered column width in px, padding included (orbit
+/// Minimum rendered column width in px, padding included (ensembyte
 /// `table.minColumnWidth`). Naturally narrower columns keep their content
 /// width; wider ones wrap down to this floor, then the table scrolls.
 pub const TABLE_MIN_COLUMN_WIDTH: f32 = 96.0;
-/// Hairline tone (orbit md theme `table.borderColor`: rgba(255,255,255,0.1)).
+/// Hairline tone (ensembyte md theme `table.borderColor`: rgba(255,255,255,0.1)).
 pub fn table_hairline() -> Hsla {
     crate::theme::hairline(0.10)
 }
@@ -753,7 +753,7 @@ pub fn render_block(
     }
 }
 
-/// Tight monochrome heading scale (orbit: h2 ≈ 16px semibold; headings step
+/// Tight monochrome heading scale (ensembyte: h2 ≈ 16px semibold; headings step
 /// down quickly toward body size).
 fn heading_metrics(level: u8) -> (f32, f32) {
     match level {
@@ -798,7 +798,7 @@ fn table_cell_ix(ix: usize, r: usize, c: usize) -> usize {
     ix * 100_000 + r * 100 + c
 }
 
-/// A GFM table — a port of mugen-markdown's `TableBlock` under orbit's md
+/// A GFM table — a port of mugen-markdown's `TableBlock` under ensembyte's md
 /// theme (see the `TABLE_*` constants).
 ///
 /// Column widths resolve exactly the way the source's CSS does: each cell is
@@ -999,7 +999,7 @@ pub fn flatten_runs(runs: &[InlineRun], theme: &Theme, bold_default: bool) -> Fl
 }
 
 /// [`flatten_runs`] with an explicit base weight (table headers are 700 per
-/// orbit's `table.headerWeight`; strong runs never drop below semibold).
+/// ensembyte's `table.headerWeight`; strong runs never drop below semibold).
 fn flatten_runs_weighted(runs: &[InlineRun], theme: &Theme, base_weight: FontWeight) -> FlatText {
     let mut text = String::new();
     let mut out: Vec<TextRun> = Vec::with_capacity(runs.len());
@@ -1039,7 +1039,7 @@ fn flatten_runs_weighted(runs: &[InlineRun], theme: &Theme, base_weight: FontWei
         } else {
             FontStyle::Normal
         };
-        // Links stay monochrome — foreground with an underline (orbit's md
+        // Links stay monochrome — foreground with an underline (ensembyte's md
         // theme underlines in the text color; indigo is reserved for primary
         // actions).
         let is_link = run.style.link.is_some();
@@ -3413,7 +3413,7 @@ mod tests {
         let theme = Theme::dark();
         let mono = font(theme.font_mono.clone());
         let line = r#"let x = "hi"; // done"#;
-        let document = orbit_syntax::highlight(orbit_syntax::HighlightRequest {
+        let document = ensembyte_syntax::highlight(ensembyte_syntax::HighlightRequest {
             source: line,
             path: None,
             fence_tag: Some("rust"),
@@ -3435,7 +3435,7 @@ mod tests {
         let theme = Theme::dark();
         let mono = font(theme.font_mono.clone());
         let line = "let widget = build!(42);";
-        let document = orbit_syntax::highlight(orbit_syntax::HighlightRequest {
+        let document = ensembyte_syntax::highlight(ensembyte_syntax::HighlightRequest {
             source: line,
             path: None,
             fence_tag: Some("rust"),
@@ -3493,7 +3493,7 @@ mod tests {
             ),
         ];
         for &(fence_tag, line, required) in cases {
-            let document = orbit_syntax::highlight(orbit_syntax::HighlightRequest {
+            let document = ensembyte_syntax::highlight(ensembyte_syntax::HighlightRequest {
                 source: line,
                 path: None,
                 fence_tag: Some(fence_tag),

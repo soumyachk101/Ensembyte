@@ -1,5 +1,5 @@
 //! Live mode against an in-process edge (tests/support/mock_edge.rs): the
-//! registry through orbit-sync's mock server (the production merge fn) and a
+//! registry through ensembyte-sync's mock server (the production merge fn) and a
 //! chat2 room speaking the real frame protocol. The test plays the host
 //! engine: it seeds registry rows through its own `RegistryClient` and
 //! answers commands by injecting Loro updates into the room.
@@ -12,17 +12,17 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use loro::{ExportMode, LoroDoc};
 use support::mock_edge::MockEdge;
-use orbit_client::events::NullListener;
-use orbit_client::{
+use ensembyte_client::events::NullListener;
+use ensembyte_client::{
     ChatIndicator, Client, ClientConfig, ConnectivityState, Credentials, MessageRole, SendOutcome,
     SendRequest,
 };
-use orbit_doc::{
+use ensembyte_doc::{
     MessagePart, RegistryDoc, SessionCommandPayload, SessionCommandStatus, SessionDoc,
     SessionMessageEntry,
 };
-use orbit_proto::{Chat, ChatConfig, Device, HarnessId, SandboxLevel, Space};
-use orbit_sync::RegistryClient;
+use ensembyte_proto::{Chat, ChatConfig, Device, HarnessId, SandboxLevel, Space};
+use ensembyte_sync::RegistryClient;
 
 const HOST: &str = "dev-mac";
 const CHAT: &str = "chat-live";
@@ -45,7 +45,7 @@ fn host_rows(now: chrono::DateTime<Utc>) -> (Device, Space, Chat) {
         created_at: Some(now),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         cursor_sdk_version: None,
-        capabilities: orbit_client::rpc::capability::ALL_QUEUE
+        capabilities: ensembyte_client::rpc::capability::ALL_QUEUE
             .iter()
             .map(|c| (*c).to_owned())
             .collect(),
@@ -68,7 +68,7 @@ fn host_rows(now: chrono::DateTime<Utc>) -> (Device, Space, Chat) {
         cwd: Some("/Users/dev/live".into()),
         branch: Some("main".into()),
         checkout_id: None,
-        source_context: Some(orbit_proto::ConversationSourceContext {
+        source_context: Some(ensembyte_proto::ConversationSourceContext {
             checkout_id: "co-live".into(),
             repo_root: "/Users/dev/live".into(),
             cwd: "/Users/dev/live".into(),
@@ -116,12 +116,12 @@ impl HostRegistry {
             .await
             .unwrap();
         client.nudge();
-        client.set_presence(orbit_client_now());
+        client.set_presence(ensembyte_client_now());
         Self { doc, client }
     }
 }
 
-fn orbit_client_now() -> i64 {
+fn ensembyte_client_now() -> i64 {
     Utc::now().timestamp_millis()
 }
 
@@ -259,7 +259,7 @@ fn host_answers(edge: &MockEdge, host_doc: &LoroDoc) -> Option<String> {
     session
         .set_command_status(&command_id, SessionCommandStatus::Applied, None)
         .unwrap();
-    let now = orbit_client_now();
+    let now = ensembyte_client_now();
     let entry = |id: &str, role, device: &str, text: &str| SessionMessageEntry {
         id: id.into(),
         role,
@@ -269,7 +269,7 @@ fn host_answers(edge: &MockEdge, host_doc: &LoroDoc) -> Option<String> {
         }],
         created_at: now,
         device_id: device.into(),
-        status: Some(orbit_doc::MessageStatus::Complete),
+        status: Some(ensembyte_doc::MessageStatus::Complete),
         continuation_of: None,
         duration_ms: None,
     };
@@ -506,21 +506,21 @@ struct HostService {
     spaces: Mutex<Vec<String>>,
 }
 
-const HOST_IMAGE: &str = "/Users/dev/.orbit/uploads/host.png";
+const HOST_IMAGE: &str = "/Users/dev/.ensembyte/uploads/host.png";
 
 fn host_image() -> Vec<u8> {
     (0..100_000u32).map(|i| (i * 7 % 251) as u8).collect()
 }
 
 #[async_trait::async_trait]
-impl orbit_rpc::RpcService for HostService {
+impl ensembyte_rpc::RpcService for HostService {
     async fn handle(
         &self,
         method: &str,
         params: serde_json::Value,
-    ) -> Result<orbit_rpc::RpcReply, orbit_rpc::RpcError> {
+    ) -> Result<ensembyte_rpc::RpcReply, ensembyte_rpc::RpcError> {
         use serde_json::json;
-        use orbit_rpc::{RpcReply, methods as m};
+        use ensembyte_rpc::{RpcReply, methods as m};
         let value = match method {
             m::LIST_HARNESSES => json!([
                 {"id": "claude-code", "name": "Claude Code", "supportsSteering": true,
@@ -561,7 +561,7 @@ impl orbit_rpc::RpcService for HostService {
                     .lock()
                     .unwrap()
                     .push((id.clone(), name.clone(), unb64(&data)));
-                json!({ "path": format!("/Users/dev/.orbit/uploads/{}-{name}", &id[..8]) })
+                json!({ "path": format!("/Users/dev/.ensembyte/uploads/{}-{name}", &id[..8]) })
             }
             m::READ_ATTACHMENT_CHUNK => {
                 let offset = params["offset"].as_u64().unwrap_or(0) as usize;
@@ -591,7 +591,7 @@ impl orbit_rpc::RpcService for HostService {
                 );
                 return Ok(RpcReply::Stream(Box::pin(stream)));
             }
-            other => return Err(orbit_rpc::RpcError::UnknownMethod(other.to_owned())),
+            other => return Err(ensembyte_rpc::RpcError::UnknownMethod(other.to_owned())),
         };
         Ok(RpcReply::Value(value))
     }
@@ -602,11 +602,11 @@ async fn host_rpcs_ride_the_device_relay() {
     let edge = MockEdge::start().await;
     let _host = HostRegistry::start(&edge).await;
     let service = Arc::new(HostService::default());
-    let _relay = orbit_rpc::HostRelay::spawn(
-        orbit_rpc::HostRelayConfig::new(
+    let _relay = ensembyte_rpc::HostRelay::spawn(
+        ensembyte_rpc::HostRelayConfig::new(
             edge.edge_url(),
             HOST,
-            Arc::new(orbit_rpc::StaticToken("t".into())),
+            Arc::new(ensembyte_rpc::StaticToken("t".into())),
         ),
         service.clone(),
         Arc::new(|_| true),
@@ -624,7 +624,7 @@ async fn host_rpcs_ride_the_device_relay() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
-    let harnesses = orbit_client::runtime::run({
+    let harnesses = ensembyte_client::runtime::run({
         let client = client.clone();
         async move { Ok(client.list_harnesses(HOST).await) }
     })
@@ -638,7 +638,7 @@ async fn host_rpcs_ride_the_device_relay() {
 
     let c = client.clone();
     let models =
-        orbit_client::runtime::run(async move { Ok(c.list_models(HOST, "claude-code").await) })
+        ensembyte_client::runtime::run(async move { Ok(c.list_models(HOST, "claude-code").await) })
             .await
             .unwrap();
     assert_eq!(models.len(), 1, "[1m] variant folded: {models:?}");
@@ -646,13 +646,13 @@ async fn host_rpcs_ride_the_device_relay() {
 
     let c = client.clone();
     let refs =
-        orbit_client::runtime::run(async move { c.list_refs(HOST, "/Users/dev/live").await })
+        ensembyte_client::runtime::run(async move { c.list_refs(HOST, "/Users/dev/live").await })
             .await
             .unwrap();
     assert_eq!(refs[1].worktree_path.as_deref(), Some("/wt/live"));
 
     let c = client.clone();
-    let folders = orbit_client::runtime::run(async move { c.list_folders(HOST, None).await })
+    let folders = ensembyte_client::runtime::run(async move { c.list_folders(HOST, None).await })
         .await
         .unwrap();
     assert!(folders.entries[0].is_repo);
@@ -663,7 +663,7 @@ async fn host_rpcs_ride_the_device_relay() {
     let seen = progress.clone();
     let c = client.clone();
     let upload = data.clone();
-    let path = orbit_client::runtime::run(async move {
+    let path = ensembyte_client::runtime::run(async move {
         c.upload_attachment(
             HOST,
             "photo 1.png",
@@ -683,7 +683,7 @@ async fn host_rpcs_ride_the_device_relay() {
     // Chunked attachment read.
     let c = client.clone();
     let image =
-        orbit_client::runtime::run(async move { c.read_attachment(HOST, HOST_IMAGE).await })
+        ensembyte_client::runtime::run(async move { c.read_attachment(HOST, HOST_IMAGE).await })
             .await
             .unwrap();
     assert_eq!(*image, host_image());
@@ -718,7 +718,7 @@ async fn host_rpcs_ride_the_device_relay() {
     session
         .send(SendRequest {
             text: "look at this".into(),
-            attachments: vec![orbit_client::OutgoingAttachment {
+            attachments: vec![ensembyte_client::OutgoingAttachment {
                 name: "shot.png".into(),
                 mime_type: "image/png".into(),
                 data: vec![1, 2, 3, 4, 5],
@@ -730,7 +730,7 @@ async fn host_rpcs_ride_the_device_relay() {
     let pending = session.snapshot().pending[0].clone();
     assert_eq!(pending.visible_text, "look at this");
     let reference = pending.images[0].clone();
-    let (upload_id, name) = orbit_client::attachments::parse_pending_ref(&reference).unwrap();
+    let (upload_id, name) = ensembyte_client::attachments::parse_pending_ref(&reference).unwrap();
     let (upload_id, name) = (upload_id.to_owned(), name.to_owned());
     let start = Instant::now();
     loop {
@@ -753,7 +753,7 @@ async fn host_rpcs_ride_the_device_relay() {
     // New project: asked of the owning host (Mutate createSpace).
     let c = client.clone();
     let space_id =
-        orbit_client::runtime::run(
+        ensembyte_client::runtime::run(
             async move { c.create_project(HOST, "/Users/dev/new", true).await },
         )
         .await
@@ -774,8 +774,8 @@ async fn phone_born_sessions_reach_the_host_before_their_first_command() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     let chat_id = client
-        .create_session(orbit_client::NewSession {
-            target: orbit_client::SessionTarget::Project {
+        .create_session(ensembyte_client::NewSession {
+            target: ensembyte_client::SessionTarget::Project {
                 space_id: SPACE.into(),
             },
             config: None,

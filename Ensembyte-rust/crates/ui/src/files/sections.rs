@@ -21,8 +21,8 @@ use gpui::{
     Animation, AnimationExt as _, AnyElement, Context, Entity, EntityId, MouseButton, ScrollHandle,
     SharedString, div, prelude::*, px,
 };
-use orbit_doc::{MessagePart, SubagentStatus};
-use orbit_proto::{Chat, ChatIndicator};
+use ensembyte_doc::{MessagePart, SubagentStatus};
+use ensembyte_proto::{Chat, ChatIndicator};
 
 use crate::composer::ComposerInput;
 use crate::icons::{self, icon};
@@ -312,7 +312,7 @@ pub(super) struct ChildChatRow {
     pub status: ChatIndicator,
     pub time_ago: SharedString,
     /// The chat's linked pull request, drawn as the sidebar's badge.
-    pub change_request: Option<orbit_proto::ChangeRequestSummary>,
+    pub change_request: Option<ensembyte_proto::ChangeRequestSummary>,
     activity: DateTime<Utc>,
 }
 
@@ -333,7 +333,7 @@ pub(super) fn child_chat_rows(
                 chat_id: chat.id.clone(),
                 title: child_chat_title(chat).into(),
                 status: state.display_status_for(chat, now),
-                time_ago: orbit_proto::view::format_time_ago(activity, now).into(),
+                time_ago: ensembyte_proto::view::format_time_ago(activity, now).into(),
                 change_request: state.change_request_for_chat(chat).cloned(),
                 activity,
             }
@@ -806,7 +806,7 @@ impl FilesSurface {
                         row.title.clone(),
                     ))
                     .child(time_ago_label(
-                        orbit_proto::view::format_time_ago(row.spawned_at, now).into(),
+                        ensembyte_proto::view::format_time_ago(row.spawned_at, now).into(),
                         theme,
                     )),
             );
@@ -1137,8 +1137,8 @@ fn status_glyph(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orbit_doc::{MessageRole, MessageStatus, SessionMessageEntry};
-    use orbit_proto::ToolCall;
+    use ensembyte_doc::{MessageRole, MessageStatus, SessionMessageEntry};
+    use ensembyte_proto::ToolCall;
 
     fn chat(id: &str, parent: Option<&str>, minutes_ago: i64) -> Chat {
         serde_json::from_value(serde_json::json!({

@@ -85,19 +85,19 @@ These live checks require a logged-in Cursor account with Muse Spark access and
 consume provider quota. Always set a fresh isolated state directory.
 
 ```sh
-cargo test -p orbit-doc
-cargo test -p orbit-engine --test message_queue
-cargo test -p orbit-harness
+cargo test -p ensembyte-doc
+cargo test -p ensembyte-engine --test message_queue
+cargo test -p ensembyte-harness
 
-ORBIT_CURSOR_STATE_DIR=$(mktemp -d) ORBIT_CURSOR_EARLY_ROUNDS=10 \
-  cargo test -p orbit-engine --test cursor_live -- --ignored --nocapture --test-threads=1
+ENSEMBYTE_CURSOR_STATE_DIR=$(mktemp -d) ENSEMBYTE_CURSOR_EARLY_ROUNDS=10 \
+  cargo test -p ensembyte-engine --test cursor_live -- --ignored --nocapture --test-threads=1
 
-ORBIT_CURSOR_STATE_DIR=$(mktemp -d) ORBIT_CURSOR_TEST_MODEL=muse-spark-1.3 \
-  cargo run -p orbit-harness --example cursor_stability_probe -- history 40
-ORBIT_CURSOR_STATE_DIR=$(mktemp -d) ORBIT_CURSOR_TEST_MODEL=muse-spark-1.3 \
-  cargo run -p orbit-harness --example cursor_stability_probe -- sessions 12
-ORBIT_CURSOR_STATE_DIR=$(mktemp -d) ORBIT_CURSOR_TEST_MODEL=muse-spark-1.3 \
-  cargo run -p orbit-harness --example cursor_stability_probe -- cancel-burst 40
+ENSEMBYTE_CURSOR_STATE_DIR=$(mktemp -d) ENSEMBYTE_CURSOR_TEST_MODEL=muse-spark-1.3 \
+  cargo run -p ensembyte-harness --example cursor_stability_probe -- history 40
+ENSEMBYTE_CURSOR_STATE_DIR=$(mktemp -d) ENSEMBYTE_CURSOR_TEST_MODEL=muse-spark-1.3 \
+  cargo run -p ensembyte-harness --example cursor_stability_probe -- sessions 12
+ENSEMBYTE_CURSOR_STATE_DIR=$(mktemp -d) ENSEMBYTE_CURSOR_TEST_MODEL=muse-spark-1.3 \
+  cargo run -p ensembyte-harness --example cursor_stability_probe -- cancel-burst 40
 
 cursor-agent update
 python3 scripts/cursor-cli-history-probe.py
@@ -105,7 +105,7 @@ python3 scripts/cursor-cli-history-probe.py
 
 For accelerated auth expiry, use the clock-preload command in the
 [auth investigation](../cursor-auth-incident/README.md), with
-`ORBIT_CURSOR_TEST_MODEL=muse-spark-1.3` and `parked 8`.
+`ENSEMBYTE_CURSOR_TEST_MODEL=muse-spark-1.3` and `parked 8`.
 
 ## Limits
 

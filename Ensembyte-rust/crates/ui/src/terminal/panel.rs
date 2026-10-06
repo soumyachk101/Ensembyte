@@ -24,8 +24,8 @@ use gpui::{
     Subscription, Task, Window, actions, div, prelude::*, px,
 };
 
-use orbit_proto::{TerminalEvent, TerminalSession};
-use orbit_rpc::methods;
+use ensembyte_proto::{TerminalEvent, TerminalSession};
+use ensembyte_rpc::methods;
 
 use crate::motion::{self, AnimationExt as _, TAB_SLIDE};
 use crate::popover::{MenuScrollbarMetrics, MenuScrollbarState, ScrollRailHost};
@@ -1556,7 +1556,7 @@ impl TerminalPanel {
                             .pl(px(8.0))
                             .pr(px(4.0))
                             .rounded(px(8.0))
-                            // orbit terminal-panel.tsx tab: `transition-colors`.
+                            // ensembyte terminal-panel.tsx tab: `transition-colors`.
                             .bg(motion::hover_blend(
                                 &format!("term-tab-{key}"),
                                 bg,
@@ -1635,7 +1635,7 @@ impl TerminalPanel {
                     .justify_center()
                     .rounded(px(8.0))
                     .cursor_pointer()
-                    // orbit terminal-panel.tsx icon buttons: `transition-colors`.
+                    // ensembyte terminal-panel.tsx icon buttons: `transition-colors`.
                     .bg(motion::hover_blend(
                         "term-new-tab",
                         gpui::transparent_black(),
@@ -1654,7 +1654,7 @@ impl TerminalPanel {
                             .text_color(theme.text_muted.opacity(0.6)),
                     ),
             )
-            // Collapse chevron pinned right (orbit "Hide terminal" ⌘J).
+            // Collapse chevron pinned right (ensembyte "Hide terminal" ⌘J).
             .child(div().flex_1())
             .child(
                 div()

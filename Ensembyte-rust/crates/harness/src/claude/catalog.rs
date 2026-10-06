@@ -1,4 +1,4 @@
-//! Model catalog + effort mapping for Claude Code, ported from orbit's
+//! Model catalog + effort mapping for Claude Code, ported from ensembyte's
 //! `packages/harness/src/claude.ts` (which itself mirrors Claude Code's own
 //! picker via t3code's catalog).
 //!
@@ -7,7 +7,7 @@
 //! CLI can under-report supported modes. The shared initialize probe also supplies
 //! slash commands and is cached by credential and binary context.
 
-use orbit_proto::{Model, ModelOption, ModelOptionChoice, ReasoningLevel};
+use ensembyte_proto::{Model, ModelOption, ModelOptionChoice, ReasoningLevel};
 
 /// The ultrathink directive rides every user message as a prompt prefix — that
 /// is how the mode actually works in Claude Code (a prompt convention, not an
@@ -16,7 +16,7 @@ pub(crate) const ULTRATHINK_PREFIX: &str = "Ultrathink:\n";
 
 pub(crate) fn apply_ultrathink(reasoning: Option<ReasoningLevel>, text: &str) -> String {
     if reasoning == Some(ReasoningLevel::Ultrathink)
-        && orbit_proto::invocation::leading_command(text).is_none()
+        && ensembyte_proto::invocation::leading_command(text).is_none()
     {
         format!("{ULTRATHINK_PREFIX}{text}")
     } else {

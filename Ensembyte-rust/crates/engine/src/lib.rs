@@ -1,4 +1,4 @@
-//! orbit-engine — the headless backend: sessions engine, doc host + command executor,
+//! ensembyte-engine — the headless backend: sessions engine, doc host + command executor,
 //! run journal + crash recovery, and the IPC RPC server.
 //!
 //! Spec: ARCHITECTURE.md §5 and docs/research/feature-inventory.md §3. M2 surface:
@@ -10,10 +10,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-pub use orbit_proto::{EngineInfo, HarnessId, WorkspaceScope};
-use orbit_rpc::{RpcError, RpcReply, RpcService, methods};
+pub use ensembyte_proto::{EngineInfo, HarnessId, WorkspaceScope};
+use ensembyte_rpc::{RpcError, RpcReply, RpcService, methods};
 
-use orbit_sync::DocsStore;
+use ensembyte_sync::DocsStore;
 
 pub mod agent_accounts;
 pub mod auth;
@@ -79,15 +79,15 @@ pub(crate) const LEGACY_UNKNOWN_DEVICE_NAME: &str = "unknown-device";
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error(transparent)]
-    Token(#[from] orbit_rpc::TokenError),
+    Token(#[from] ensembyte_rpc::TokenError),
     #[error("doc: {0}")]
-    Doc(#[from] orbit_doc::DocError),
+    Doc(#[from] ensembyte_doc::DocError),
     #[error("journal: {0}")]
     Journal(#[from] run_journal::JournalError),
     #[error("store: {0}")]
-    Store(#[from] orbit_sync::StoreError),
+    Store(#[from] ensembyte_sync::StoreError),
     #[error("harness: {0}")]
-    Harness(#[from] orbit_harness::HarnessError),
+    Harness(#[from] ensembyte_harness::HarnessError),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("{0}")]
@@ -105,7 +105,7 @@ pub(crate) fn new_id() -> String {
 
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
-    /// Data directory (default `~/.orbit`, dev `~/.orbit-dev`).
+    /// Data directory (default `~/.ensembyte`, dev `~/.ensembyte-dev`).
     pub data_dir: PathBuf,
     /// Edge base URL.
     pub edge_url: String,
@@ -116,7 +116,7 @@ pub struct EngineConfig {
     pub ipc_port: u16,
     /// Harness for doc-command runs on chats without a workspace `config` row.
     pub default_harness: HarnessId,
-    /// Workspace-doc org (`ws/{orgId}` room). `None` = `$ORBIT_ORG_ID` or the dev default.
+    /// Workspace-doc org (`ws/{orgId}` room). `None` = `$ENSEMBYTE_ORG_ID` or the dev default.
     /// In WorkOS mode the signed-in session's org wins.
     pub org_id: Option<String>,
     /// WorkOS client id — enables real auth; `None` = dev mode (bearer = `edge_token`).
@@ -134,7 +134,7 @@ pub struct EngineCore {
     pub workspace_files: WorkspaceFiles,
     pub terminals: Terminals,
     pub project_actions: ProjectActionsStore,
-    pub previews: orbit_preview::PreviewService,
+    pub previews: ensembyte_preview::PreviewService,
     pub change_requests: CheckoutChangeRequests,
     pub diff_sync: CheckoutDiffSync,
     pub spaces_sync: SpacesSync,
@@ -148,10 +148,10 @@ pub struct EngineCore {
     /// Auth service (attached by [`Engine::run`]; a lazy dev-mode instance otherwise).
     auth: std::sync::Mutex<Option<Auth>>,
     /// Peer link cache for `targetDeviceId` routing (attached when edge+auth are ready).
-    links: std::sync::Mutex<Option<Arc<orbit_rpc::LinkCache>>>,
+    links: std::sync::Mutex<Option<Arc<ensembyte_rpc::LinkCache>>>,
     /// Release checker (attached by [`Engine::assemble_runtime`]) — the
     /// UpdateStatus stream + ApplyUpdate.
-    updater: std::sync::Mutex<Option<orbit_update::Updater>>,
+    updater: std::sync::Mutex<Option<ensembyte_update::Updater>>,
     /// The updater's token-change wake forwarder — owned so shutdown can end it.
     updater_wake: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Exclusive data-dir lock — held for the engine's lifetime (single-instance).
@@ -161,7 +161,7 @@ pub struct EngineCore {
 impl EngineCore {
     /// Open stores under `data_dir`, wire sessions ⇄ doc host ⇄ workspace host, and
     /// recover stale journals from a previous crash. Identity comes from
-    /// `$ORBIT_ORG_ID` / `$ORBIT_USER_ID` (dev defaults `dev-org` / `dev-user`);
+    /// `$ENSEMBYTE_ORG_ID` / `$ENSEMBYTE_USER_ID` (dev defaults `dev-org` / `dev-user`);
     /// use [`Self::assemble_with_identity`] to pass one explicitly.
     pub fn assemble(
         data_dir: &Path,
@@ -169,8 +169,8 @@ impl EngineCore {
         default_harness: HarnessId,
         edge: Option<EdgeConfig>,
     ) -> Result<Self, EngineError> {
-        let org_id = env_or("ORBIT_ORG_ID", DEFAULT_ORG_ID);
-        let user_id = env_or("ORBIT_USER_ID", DEFAULT_USER_ID);
+        let org_id = env_or("ENSEMBYTE_ORG_ID", DEFAULT_ORG_ID);
+        let user_id = env_or("ENSEMBYTE_USER_ID", DEFAULT_USER_ID);
         let profile = EngineProfile::development(data_dir, &org_id, &user_id);
         Self::assemble_with_profile(profile, registry, default_harness, edge)
     }
@@ -260,7 +260,7 @@ impl EngineCore {
         let terminals = Terminals::new();
         let project_actions = ProjectActionsStore::open(profile.store_root())?;
         doc_host.set_project_action_runtime(project_actions.clone(), terminals.clone());
-        let previews = orbit_preview::PreviewService::new(
+        let previews = ensembyte_preview::PreviewService::new(
             profile.store_root().join("previews.json"),
             device_id.clone(),
             local_device_name(&device_id),
@@ -365,7 +365,7 @@ impl EngineCore {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         slot.get_or_insert_with(|| {
-            let dev_user = std::env::var("ORBIT_EDGE_TOKEN")
+            let dev_user = std::env::var("ENSEMBYTE_EDGE_TOKEN")
                 .ok()
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_else(|| "dev-user".into());
@@ -378,7 +378,7 @@ impl EngineCore {
 
     /// Attach the peer link cache — enables `targetDeviceId` routing,
     /// [`Self::dial_device`], and the doc host's queued-attachment transfers.
-    pub fn set_links(&self, links: Arc<orbit_rpc::LinkCache>) {
+    pub fn set_links(&self, links: Arc<ensembyte_rpc::LinkCache>) {
         self.doc_host.set_links(links.clone());
         *self
             .links
@@ -386,7 +386,7 @@ impl EngineCore {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(links);
     }
 
-    pub fn links(&self) -> Option<Arc<orbit_rpc::LinkCache>> {
+    pub fn links(&self) -> Option<Arc<ensembyte_rpc::LinkCache>> {
         self.links
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -401,14 +401,14 @@ impl EngineCore {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
     }
 
-    pub fn set_updater(&self, updater: orbit_update::Updater) {
+    pub fn set_updater(&self, updater: ensembyte_update::Updater) {
         *self
             .updater
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(updater);
     }
 
-    pub fn updater(&self) -> Option<orbit_update::Updater> {
+    pub fn updater(&self) -> Option<ensembyte_update::Updater> {
         self.updater
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -420,7 +420,7 @@ impl EngineCore {
     pub async fn dial_device(
         &self,
         device_id: &str,
-    ) -> Result<Arc<orbit_rpc::RpcClient>, EngineError> {
+    ) -> Result<Arc<ensembyte_rpc::RpcClient>, EngineError> {
         let links = self
             .links()
             .ok_or_else(|| EngineError::Other("peer links unavailable (offline)".into()))?;
@@ -433,12 +433,12 @@ impl EngineCore {
     /// Start hosting our device room: serve the full RPC surface to relay clients and
     /// warm-open chat docs on nudges (§7 cold-chat command delivery). The token source
     /// re-reads auth on every (re)dial, so token refreshes take effect at reconnect.
-    pub fn start_host_relay(&self, edge_url: &str) -> orbit_rpc::HostRelay {
+    pub fn start_host_relay(&self, edge_url: &str) -> ensembyte_rpc::HostRelay {
         let auth = self.auth();
         let config =
-            orbit_rpc::HostRelayConfig::new(edge_url, self.device_id.clone(), Arc::new(auth));
+            ensembyte_rpc::HostRelayConfig::new(edge_url, self.device_id.clone(), Arc::new(auth));
         let doc_host = self.doc_host.clone();
-        let on_nudge: orbit_rpc::NudgeHandler = Arc::new(move |chat_id: String| {
+        let on_nudge: ensembyte_rpc::NudgeHandler = Arc::new(move |chat_id: String| {
             match doc_host.enqueue_wakeup(&chat_id) {
                 Ok(()) => true,
                 Err(err) => {
@@ -447,7 +447,7 @@ impl EngineCore {
                 }
             }
         });
-        orbit_rpc::HostRelay::spawn(config, self.rpc_service(), on_nudge)
+        ensembyte_rpc::HostRelay::spawn(config, self.rpc_service(), on_nudge)
     }
 
     pub fn rpc_service(&self) -> Arc<EngineRpc> {
@@ -548,10 +548,10 @@ pub struct Engine {
 /// in-process engine so their production authentication paths cannot diverge.
 pub struct EngineRuntime {
     core: EngineCore,
-    host_relay: std::sync::Mutex<Option<orbit_rpc::HostRelay>>,
+    host_relay: std::sync::Mutex<Option<ensembyte_rpc::HostRelay>>,
 }
 
-/// IPC-only lifecycle control owned by `orbit headless`. The regular
+/// IPC-only lifecycle control owned by `ensembyte headless`. The regular
 /// [`EngineRpc`] deliberately does not expose this method, so a viewport
 /// attached to another headed process cannot shut down that process's engine.
 struct HeadlessRpc {
@@ -624,7 +624,7 @@ impl Engine {
         let mut auth_config = AuthConfig::new(config.edge_url.clone(), config.data_dir.clone());
         auth_config.workos_client_id = config.workos_client_id.clone();
         let workos_api_base = std::env::var("ENSEMBYTE_WORKOS_API_BASE")
-            .or_else(|_| std::env::var("ORBIT_WORKOS_API_BASE"));
+            .or_else(|_| std::env::var("ENSEMBYTE_WORKOS_API_BASE"));
         if let Ok(base) = workos_api_base
             && !base.trim().is_empty()
         {
@@ -632,7 +632,7 @@ impl Engine {
         }
         auth_config.callback_port = Some(
             std::env::var("ENSEMBYTE_CALLBACK_PORT")
-                .or_else(|_| std::env::var("ORBIT_CALLBACK_PORT"))
+                .or_else(|_| std::env::var("ENSEMBYTE_CALLBACK_PORT"))
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(27641),
@@ -673,10 +673,10 @@ impl Engine {
                     .filter(|org| !org.is_empty());
                 let org_id = dev_token_org
                     .or(config.org_id.clone())
-                    .unwrap_or_else(|| env_or("ORBIT_ORG_ID", DEFAULT_ORG_ID));
+                    .unwrap_or_else(|| env_or("ENSEMBYTE_ORG_ID", DEFAULT_ORG_ID));
                 let user_id = auth
                     .user_id()
-                    .unwrap_or_else(|| env_or("ORBIT_USER_ID", DEFAULT_USER_ID));
+                    .unwrap_or_else(|| env_or("ENSEMBYTE_USER_ID", DEFAULT_USER_ID));
                 Ok(Some(EngineProfile::development(
                     &config.data_dir,
                     &org_id,
@@ -711,8 +711,8 @@ impl Engine {
         Ok(EngineInfo {
             device_id: load_or_create_device_id(&config.data_dir)?,
             workspace_scope,
-            cursor_sdk_version: Some(orbit_harness::CursorHarness::sdk_version().into()),
-            capabilities: orbit_proto::capabilities::current(),
+            cursor_sdk_version: Some(ensembyte_harness::CursorHarness::sdk_version().into()),
+            capabilities: ensembyte_proto::capabilities::current(),
         })
     }
 
@@ -762,7 +762,7 @@ impl Engine {
             }
             // Dev Auth always exposes `dev_user_id` as its synthetic access
             // token, including when WorkOS was merely disabled with
-            // ORBIT_WORKOS_CLIENT_ID="". Only an explicitly configured,
+            // ENSEMBYTE_WORKOS_CLIENT_ID="". Only an explicitly configured,
             // non-empty bearer opts this runtime into Edge rooms and relays.
             WorkspaceScope::Development => config
                 .edge_token
@@ -774,7 +774,7 @@ impl Engine {
             // path returns every parked reconnect backoff redials, and while
             // the OS says there is no path the dial loops park instead of
             // burning attempts. No-op on platforms without a monitor.
-            orbit_sync::net_path::spawn_path_monitor();
+            ensembyte_sync::net_path::spawn_path_monitor();
         }
         let device_id = load_or_create_device_id(profile.device_root())?;
         let edge = edge_enabled.then(|| {
@@ -809,24 +809,24 @@ impl Engine {
                 .filter_map(|chat| chat.cwd.map(std::path::PathBuf::from))
                 .collect()
         });
-        let preview_signaling = edge_enabled.then(|| orbit_preview::signaling::Config {
+        let preview_signaling = edge_enabled.then(|| ensembyte_preview::signaling::Config {
             edge_url: config.edge_url.clone(),
             org_id: preview_org,
             tokens: Arc::new(auth.clone()),
         });
         core.previews.start(projects, preview_signaling).await;
         // Release checker: polls {edge}/releases hourly (wall clock); headless
-        // installs with ORBIT_AUTO_UPDATE=1 apply + restart themselves — gated
+        // installs with ENSEMBYTE_AUTO_UPDATE=1 apply + restart themselves — gated
         // on quiescence so a restart never lands under a live run or open PTY.
         // Spawned for every install: application updates must not depend on
         // workspace sync being enabled — the feed is the public release feed
         // (served without authentication), not an edge feature.
-        let quiescent: orbit_update::QuiescentCheck = {
+        let quiescent: ensembyte_update::QuiescentCheck = {
             let sessions = core.sessions.clone();
             let terminals = core.terminals.clone();
             Arc::new(move || !sessions.any_active() && !terminals.any_open())
         };
-        let updater = orbit_update::Updater::spawn(config.edge_url.clone(), Some(quiescent));
+        let updater = ensembyte_update::Updater::spawn(config.edge_url.clone(), Some(quiescent));
         if let Some(mut token_changes) = edge.as_ref().and_then(EdgeConfig::token_changes) {
             let updater_for_tokens = updater.clone();
             let wake = tokio::spawn(async move {
@@ -841,11 +841,11 @@ impl Engine {
         // Managed ACP adapters install in the background at boot (agents
         // whose CLI is present but whose adapter isn't yet), so a first chat
         // never waits on — or dies inside — an npm run.
-        orbit_harness::acp::prewarm_managed_adapters();
+        ensembyte_harness::acp::prewarm_managed_adapters();
 
         let host_relay = edge.as_ref().map(|edge| {
             let mut link_config =
-                orbit_rpc::LinkCacheConfig::new(edge.url.clone(), Arc::new(auth.clone()));
+                ensembyte_rpc::LinkCacheConfig::new(edge.url.clone(), Arc::new(auth.clone()));
             // Registry-dark dial gate: devices with no recent presence fail
             // fast with zero dials; presence returning un-parks them (the
             // peer-alive hook below clears any cooldown at the same moment).
@@ -853,7 +853,7 @@ impl Engine {
             link_config.liveness = Some(Arc::new(move |device_id: &str| {
                 workspace_for_liveness.peer_liveness(device_id)
             }));
-            let links = orbit_rpc::LinkCache::new(link_config);
+            let links = ensembyte_rpc::LinkCache::new(link_config);
             let links_for_presence = links.clone();
             core.workspace
                 .set_peer_alive_hook(Arc::new(move |device_id: &str| {
@@ -894,7 +894,7 @@ impl Engine {
             .ok_or_else(|| EngineError::Other("synced workspace profile is not ready".into()))?;
 
         let runtime = Self::assemble_runtime(&config, auth, profile).await?;
-        // The desktop app or `orbit update` may install a newer binary under
+        // The desktop app or `ensembyte update` may install a newer binary under
         // a running service; restart into it once no run or terminal is live.
         if let Some(updater) = runtime.core().updater() {
             updater.restart_when_superseded();
@@ -978,11 +978,11 @@ async fn shutdown_signal() -> std::io::Result<()> {
 /// port, not who can reach it.
 pub async fn serve_ipc(
     port: u16,
-    service: std::sync::Arc<dyn orbit_rpc::RpcService>,
+    service: std::sync::Arc<dyn ensembyte_rpc::RpcService>,
 ) -> std::io::Result<tokio::task::JoinHandle<()>> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     tracing::info!(port, "IPC server listening");
-    Ok(tokio::spawn(orbit_rpc::serve_ws_listener(
+    Ok(tokio::spawn(ensembyte_rpc::serve_ws_listener(
         listener, service,
     )))
 }
@@ -991,7 +991,7 @@ pub async fn serve_ipc(
 /// headless (paste-code) sign-in URL, read the pasted `state.code` from stdin, and
 /// run workspace onboarding (create / auto-join / numbered picker). Off a TTY this
 /// errors immediately — a daemon under systemd/launchd must load the session that
-/// `orbit login` persisted, never wait on a prompt nobody can see.
+/// `ensembyte login` persisted, never wait on a prompt nobody can see.
 pub async fn terminal_sign_in(auth: &Auth) -> Result<(), EngineError> {
     use std::io::IsTerminal;
     let interactive = std::io::stdin().is_terminal();
@@ -1149,7 +1149,7 @@ async fn run_org_onboarding(auth: Auth) {
 fn local_device_name(device_id: &str) -> String {
     select_local_device_name(
         [
-            std::env::var("ORBIT_DEVICE_NAME").ok(),
+            std::env::var("ENSEMBYTE_DEVICE_NAME").ok(),
             native_friendly_device_name(),
             std::env::var("HOSTNAME").ok(),
             gethostname::gethostname().into_string().ok(),
@@ -1319,9 +1319,9 @@ mod device_name_tests {
     }
 }
 
-/// Trimmed env var or the given default. Checks ENSEMBYTE_* before ORBIT_*.
+/// Trimmed env var or the given default. Checks ENSEMBYTE_* before ENSEMBYTE_*.
 fn env_or(key: &str, default: &str) -> String {
-    let ensembyte_key = key.strip_prefix("ORBIT_").map(|rest| format!("ENSEMBYTE_{rest}"));
+    let ensembyte_key = key.strip_prefix("ENSEMBYTE_").map(|rest| format!("ENSEMBYTE_{rest}"));
     if let Some(ref ek) = ensembyte_key {
         if let Ok(s) = std::env::var(ek) {
             let trimmed = s.trim().to_string();

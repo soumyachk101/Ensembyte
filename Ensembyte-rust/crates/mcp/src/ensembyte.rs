@@ -1,4 +1,4 @@
-//! The engine client: a thin, reconnecting wrapper over `orbit_rpc` with the
+//! The engine client: a thin, reconnecting wrapper over `ensembyte_rpc` with the
 //! snapshot/resolve helpers the tools share.
 //!
 //! Watch streams are the engine's only read surface for chats, devices,
@@ -13,13 +13,13 @@ use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
-use orbit_doc::{
+use ensembyte_doc::{
     SessionCommandPayload, SessionMessageEntry, TranscriptFrame, apply_transcript_frame,
 };
-use orbit_proto::{
+use ensembyte_proto::{
     Chat, Device, HarnessId, Model, ReasoningLevel, Session, SessionStatus, Space, SteeringMode,
 };
-use orbit_rpc::{RpcClient, RpcError, RpcSubscription, connect_ws, methods};
+use ensembyte_rpc::{RpcClient, RpcError, RpcSubscription, connect_ws, methods};
 
 /// First-item wait for a watch snapshot. Localhost; the engine answers
 /// watch attaches in milliseconds unless it is still assembling stores.
@@ -29,7 +29,7 @@ const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(15);
 const RESUBSCRIBE_DELAY: Duration = Duration::from_millis(300);
 
 /// Which chat this server speaks for, when the engine injected it into a
-/// harness. Unset when a human runs `orbit mcp` from a terminal.
+/// harness. Unset when a human runs `ensembyte mcp` from a terminal.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Origin {
     pub chat_id: Option<String>,
@@ -45,8 +45,8 @@ impl Origin {
                 .filter(|v| !v.is_empty())
         };
         Self {
-            chat_id: read("ORBIT_CHAT_ID"),
-            device_id: read("ORBIT_DEVICE_ID"),
+            chat_id: read("ENSEMBYTE_CHAT_ID"),
+            device_id: read("ENSEMBYTE_DEVICE_ID"),
         }
     }
 }
@@ -104,14 +104,14 @@ pub enum TurnOutcome {
     TimedOut,
 }
 
-pub struct Orbit {
+pub struct EngineClient {
     url: String,
     origin: Origin,
     rpc: Mutex<Option<Arc<RpcClient>>>,
 }
 
-impl Orbit {
-    /// Lazy dialer: nothing connects until the first tool call, so `orbit
+impl EngineClient {
+    /// Lazy dialer: nothing connects until the first tool call, so `ensembyte
     /// mcp` starts (and answers `initialize`) even before the engine is up.
     pub fn new(url: String, origin: Origin) -> Self {
         Self {
@@ -670,19 +670,19 @@ mod tests {
         use futures::StreamExt;
         struct Service(tokio::sync::watch::Sender<()>);
         #[async_trait::async_trait]
-        impl orbit_rpc::RpcService for Service {
+        impl ensembyte_rpc::RpcService for Service {
             async fn handle(
                 &self,
                 method: &str,
                 _: Value,
-            ) -> Result<orbit_rpc::RpcReply, RpcError> {
+            ) -> Result<ensembyte_rpc::RpcReply, RpcError> {
                 let first = if method == methods::WATCH_DOC_MESSAGES {
                     json!({"reset":[]})
                 } else {
                     json!([])
                 };
                 let rx = self.0.subscribe();
-                Ok(orbit_rpc::RpcReply::Stream(
+                Ok(ensembyte_rpc::RpcReply::Stream(
                     futures::stream::unfold((Some(first), rx), |(first, mut rx)| async move {
                         if let Some(item) = first {
                             return Some((item, (None, rx)));
@@ -695,8 +695,8 @@ mod tests {
             }
         }
         let (watched, _) = tokio::sync::watch::channel(());
-        let rpc = orbit_rpc::memory_client(Arc::new(Service(watched.clone())));
-        let client = Orbit::with_client(rpc, Origin::default());
+        let rpc = ensembyte_rpc::memory_client(Arc::new(Service(watched.clone())));
+        let client = EngineClient::with_client(rpc, Origin::default());
         for _ in 0..16 {
             assert!(client.transcript("quiet").await.unwrap().is_empty());
             client

@@ -5,7 +5,7 @@ use std::sync::{Arc, Barrier, Mutex};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use orbit_engine::{
+use ensembyte_engine::{
     AuthState, Engine, EngineConfig, EngineCore, EngineProfile, HarnessId, WorkspaceScope,
     default_registry,
 };

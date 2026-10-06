@@ -2,7 +2,7 @@
 
 ## Workspace commands
 
-Every harness gets Orbit actions in the `/` picker. Selecting one runs the action
+Every harness gets Ensembyte actions in the `/` picker. Selecting one runs the action
 immediately; it does not create a model turn. Actions that require a conversation
 are shown only in an existing chat.
 
@@ -11,7 +11,7 @@ are shown only in an existing chat.
 | `/model` | Choose agent, model, and reasoning |
 | `/new` | Start a new conversation |
 | `/resume` | Search and open conversations |
-| `/settings` | Open Orbit settings |
+| `/settings` | Open Ensembyte settings |
 | `/diff` | Open a changes tab |
 | `/files` | Open project files |
 | `/terminal` | Open a terminal tab |
@@ -19,8 +19,8 @@ are shown only in an existing chat.
 | `/stop` | Interrupt the current run |
 
 Provider commands remain available alongside these actions. When a provider owns
-the same name, its command keeps the name and the Orbit action gets a `orbit:`
-prefix, for example `/orbit:model`. A provider command and a workspace action are
+the same name, its command keeps the name and the Ensembyte action gets a `ensembyte:`
+prefix, for example `/ensembyte:model`. A provider command and a workspace action are
 distinct entries, even when they have the same purpose. `/` completion works at
 any word boundary in the draft, including later lines, just like `@` and `$`.
 Code, URLs and paths remain literal.
@@ -42,7 +42,7 @@ Typing an unselected inline `/word` does not execute a local action.
 
 This does not imply that every command in a provider's terminal UI can execute
 through its SDK. Provider-only operations without a corresponding protocol or
-Orbit action are not advertised as executable commands.
+Ensembyte action are not advertised as executable commands.
 
 ## Skill preferences
 

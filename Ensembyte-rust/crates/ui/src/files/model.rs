@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use orbit_proto::{
+use ensembyte_proto::{
     WorkspaceDirectoryPage, WorkspaceEntry, WorkspaceEntryKind, WorkspaceFileSearchMatch,
 };
 

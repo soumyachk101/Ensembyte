@@ -209,7 +209,7 @@ The resolver is bound to the row, never the globally selected harness:
 
 ```text
 ConversationLinks
-  orbit: required internal deeplink
+  ensembyte: required internal deeplink
   external: optional { label, url }
 ```
 
@@ -226,7 +226,7 @@ the durable chat id so local, synced, and development profiles cannot collide.
 Proposed shape:
 
 ```text
-orbit://open/chat/<percent-encoded-chat-id>?workspace=<opaque-locator>
+ensembyte://open/chat/<percent-encoded-chat-id>?workspace=<opaque-locator>
 ```
 
 “Copy Orbit deeplink” is complete only when the URI round-trips into the correct
@@ -239,8 +239,8 @@ copies an unhandled URI.
 
 ### Slice A — conversation source truth
 
-1. Add the optional source-context wire/doc model in `orbit-proto` and
-   `orbit-doc`; keep old rows readable.
+1. Add the optional source-context wire/doc model in `ensembyte-proto` and
+   `ensembyte-doc`; keep old rows readable.
 2. Capture the actual git context in the host command drain after worktree
    creation and before dispatch.
 3. Remove branch fan-out from `diff_sync::sync_entry`; retain checkout diff and
@@ -263,7 +263,7 @@ copies an unhandled URI.
 
 1. Define a pure session-action/link model with exact clipboard payload tests.
 2. Add a workspace-scoped Orbit URI builder/parser and inbound route intent.
-3. Register and handle `orbit://` in macOS packaging first; add Linux desktop
+3. Register and handle `ensembyte://` in macOS packaging first; add Linux desktop
    entry and Windows registration with their packaging work rather than
    claiming unsupported platforms.
 4. Add harness conversation-link capability, beginning with verified Codex.
@@ -304,14 +304,14 @@ Run the narrow checks first:
 
 ```bash
 cargo fmt --all -- --check
-cargo test -p orbit-proto
-cargo test -p orbit-doc
-cargo test -p orbit-engine change_request
-cargo test -p orbit-ui change_request
-cargo test -p orbit-ui shell
+cargo test -p ensembyte-proto
+cargo test -p ensembyte-doc
+cargo test -p ensembyte-engine change_request
+cargo test -p ensembyte-ui change_request
+cargo test -p ensembyte-ui shell
 ```
 
-Broaden to `cargo test -p orbit-engine`, `cargo test -p orbit-ui`, and finally
+Broaden to `cargo test -p ensembyte-engine`, `cargo test -p ensembyte-ui`, and finally
 `cargo test --workspace` in proportion to the implemented slice.
 
 ## Coordination

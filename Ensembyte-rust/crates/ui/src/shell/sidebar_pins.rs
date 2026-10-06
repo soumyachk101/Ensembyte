@@ -4,7 +4,7 @@
 use super::*;
 use crate::state::EngineHandle;
 use std::collections::VecDeque;
-use orbit_proto::{SidebarPinChange, SidebarPreferencesState};
+use ensembyte_proto::{SidebarPinChange, SidebarPreferencesState};
 
 pub(super) struct PendingSidebarPins {
     pub id: u64,
@@ -167,7 +167,7 @@ impl Shell {
                 matches!(
                     pending.queue.front(),
                     Some(SidebarPinChange::Section {
-                        change: orbit_proto::SidebarSectionChange::Import { .. }
+                        change: ensembyte_proto::SidebarSectionChange::Import { .. }
                     })
                 )
                 .then(|| pending.profile_key.clone())

@@ -1,4 +1,4 @@
-//! Animation kit — the orbit motion catalog as reusable helpers over gpui
+//! Animation kit — the ensembyte motion catalog as reusable helpers over gpui
 //! [`Animation`]/[`AnimationExt`].
 //!
 //! Catalog (docs/research/feature-inventory.md §1.12):
@@ -7,7 +7,7 @@
 //! - `menu-in`   0.14s scale 0.96 + translateY −2 (popovers)
 //! - `dialog-in` 0.18s scale 0.96→1
 //! - `splash-out` 0.5s opacity + translateY −6, 0.15s delay
-//! - `orbit-pulse` 2.4s staggered cell opacity 0.08→1, scale 0.9→1 (loaders)
+//! - `ensembyte-pulse` 2.4s staggered cell opacity 0.08→1, scale 0.9→1 (loaders)
 //! - `gradient-spin-pulse` 750ms per-cell phase wave (working indicator)
 //! - 200ms ease-out width/height transitions (sidebar/panes)
 //!
@@ -295,7 +295,7 @@ impl CubicBezier {
     }
 }
 
-/// orbit's signature entrance curve — CSS `cubic-bezier(0.16, 1, 0.3, 1)`.
+/// ensembyte's signature entrance curve — CSS `cubic-bezier(0.16, 1, 0.3, 1)`.
 pub const EASE_OUT_EXPO: CubicBezier = CubicBezier::new(0.16, 1.0, 0.3, 1.0);
 /// CSS `ease-out` — width/height transitions.
 pub const EASE_OUT: CubicBezier = CubicBezier::new(0.0, 0.0, 0.58, 1.0);
@@ -404,13 +404,13 @@ pub const CHEVRON: MotionSpec = MotionSpec::new(200, EASE);
 /// scroll, a fixed-duration gentle ease, never percent-of-remaining).
 pub const SCROLL_GLIDE: MotionSpec = MotionSpec::new(500, EASE_IN_OUT);
 /// Tailwind's default transition curve — CSS `cubic-bezier(0.4, 0, 0.2, 1)`
-/// (`transition-colors` et al. carry it unless overridden; orbit never does).
+/// (`transition-colors` et al. carry it unless overridden; ensembyte never does).
 pub const EASE_TAILWIND: CubicBezier = CubicBezier::new(0.4, 0.0, 0.2, 1.0);
 /// CSS `transition-colors` default: 150ms over [`EASE_TAILWIND`] — the temporal
 /// blend every interactive hover wash rides in the original.
 pub const HOVER_FADE: MotionSpec = MotionSpec::new(150, EASE_TAILWIND);
 /// Orbit loader pulse period: 2.4s.
-pub const ORBIT_PULSE: MotionSpec = MotionSpec::new(2400, EASE);
+pub const ENSEMBYTE_PULSE: MotionSpec = MotionSpec::new(2400, EASE);
 /// Gradient matrix spinner wave period: 750ms.
 pub const GRADIENT_SPIN: MotionSpec = MotionSpec::new(750, EASE);
 
@@ -535,7 +535,7 @@ where
 }
 
 /// Popover entrance: fade + translateY −2→0 over [`MENU_IN`].
-/// (orbit also scales 0.96→1; divs have no scale transform in gpui — approximated.)
+/// (ensembyte) 0.96→1; divs have no scale transform in gpui — approximated.)
 pub fn menu_in<E>(id: impl Into<ElementId>, element: E) -> AnimationElement<E>
 where
     E: Styled + IntoElement + 'static,
@@ -617,9 +617,9 @@ where
 // ---------------------------------------------------------------------------
 
 /// Orbit-pulse floor opacity.
-// The loader constants and math live in `orbit_proto::motion` (pure phase
+// The loader constants and math live in `ensembyte_proto::motion` (pure phase
 // functions); this crate animates them with gpui.
-pub use orbit_proto::motion::{
+pub use ensembyte_proto::motion::{
     PULSE_MIN_OPACITY, PULSE_MIN_SCALE, PULSE_STAGGER, gspin_opacity, pulse_opacity, pulse_scale,
     pulse_wave, staggered_phase,
 };
@@ -642,7 +642,7 @@ pub fn lerp(from: f32, to: f32, t: f32) -> f32 {
 // ---------------------------------------------------------------------------
 //
 // gpui `.hover()` styles snap by construction — the style applies the frame
-// the pointer enters. The original orbit puts Tailwind `transition-colors`
+// the pointer enters. The original ensembyte puts Tailwind `transition-colors`
 // (150ms, cubic-bezier(0.4, 0, 0.2, 1)) on every interactive wash, so hover
 // states FADE. This is the manual-drive tween for that (the shell `WidthTween`
 // pattern — never `with_animation`, whose element-id-keyed clock replays on
@@ -838,14 +838,14 @@ pub fn hover_blend(key: &str, rest: Hsla, hover: Hsla) -> Hsla {
 // Reduced motion
 // ---------------------------------------------------------------------------
 
-/// Dev/measurement knob (`ORBIT_MOTION_SCALE`, default 1): stretches every
-/// catalog timeline by this factor — e.g. `ORBIT_MOTION_SCALE=10` slows the
+/// Dev/measurement knob (`ENSEMBYTE_MOTION_SCALE`, default 1): stretches every
+/// catalog timeline by this factor — e.g. `ENSEMBYTE_MOTION_SCALE=10` slows the
 /// 200ms pane tweens to 2s so screenshot bursts can sample the geometry
 /// per frame. Read once; never set in production.
 pub fn speed_scale() -> f32 {
     static SCALE: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
     *SCALE.get_or_init(|| {
-        std::env::var("ORBIT_MOTION_SCALE")
+        std::env::var("ENSEMBYTE_MOTION_SCALE")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())
             .filter(|s| s.is_finite())
@@ -1218,7 +1218,7 @@ mod tests {
         assert_eq!(NEW_THREAD_TRANSITION.duration_ms, 420);
         assert_eq!(NEW_THREAD_TRANSITION.curve, EASE_RESORT);
         assert_eq!(CHEVRON.duration_ms, 200);
-        assert_eq!(ORBIT_PULSE.duration_ms, 2400);
+        assert_eq!(ENSEMBYTE_PULSE.duration_ms, 2400);
         assert_eq!(GRADIENT_SPIN.duration_ms, 750);
         assert_eq!(EASE_OUT_EXPO, CubicBezier::new(0.16, 1.0, 0.3, 1.0));
         assert_eq!(EASE_OUT_QUINT, CubicBezier::new(0.22, 1.0, 0.36, 1.0));

@@ -1,5 +1,5 @@
 //! Exercise the explorer and editors against an isolated real workspace/RPC.
-//! Set ORBIT_FILES_CAPTURES to a directory to run on X11 and capture the fixture.
+//! Set ENSEMBYTE_FILES_CAPTURES to a directory to run on X11 and capture the fixture.
 use super::*;
 use gpui::{AppContext, AsyncApp, WindowHandle};
 use std::{path::Path, sync::Arc};
@@ -109,10 +109,10 @@ fn files_panel_workspace_navigation_and_external_updates() {
     std::fs::write(project.join("src/new.rs"), "// new file\n").unwrap();
     let core = runtime
         .block_on(async {
-            orbit_engine::EngineCore::assemble(
+            ensembyte_engine::EngineCore::assemble(
                 &directory.path().join("engine"),
-                Arc::new(orbit_engine::default_registry()),
-                orbit_proto::HarnessId::Mock,
+                Arc::new(ensembyte_engine::default_registry()),
+                ensembyte_proto::HarnessId::Mock,
                 None,
             )
         })
@@ -144,9 +144,9 @@ fn files_panel_workspace_navigation_and_external_updates() {
     let port = listener.local_addr().unwrap().port();
     drop(listener);
     let _ipc = runtime
-        .block_on(orbit_engine::serve_ipc(port, core.rpc_service()))
+        .block_on(ensembyte_engine::serve_ipc(port, core.rpc_service()))
         .unwrap();
-    let output = std::env::var_os("ORBIT_FILES_CAPTURES").map(PathBuf::from);
+    let output = std::env::var_os("ENSEMBYTE_FILES_CAPTURES").map(PathBuf::from);
     let application = if output.is_some() {
         gpui_platform::application()
     } else {
@@ -196,7 +196,7 @@ fn files_panel_workspace_navigation_and_external_updates() {
                 edge_token: None,
                 org_id: None,
                 workos_client_id: None,
-                default_harness: orbit_proto::HarnessId::Mock,
+                default_harness: ensembyte_proto::HarnessId::Mock,
             };
             let state = cx.new(|_| AppState::new());
             let window = cx

@@ -2,9 +2,9 @@ import AuthenticationServices
 import UIKit
 
 enum Endpoints {
-    static let edgeURL = URL(string: "https://edge.orbit.sh")!
+    static let edgeURL = URL(string: "https://edge.ensembyte.sh")!
     static let workosClientId = "client_01KWD0EAKZKD50YCQJNYSRE4BY"
-    static let callbackScheme = "orbit"
+    static let callbackScheme = "ensembyte"
 
     static func authorizeURL(state: String) -> URL {
         var c = URLComponents(string: "https://api.workos.com/user_management/authorize")!

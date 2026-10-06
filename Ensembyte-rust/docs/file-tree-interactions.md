@@ -78,13 +78,13 @@ between the tree and the real conversation drop zone.
 Commands from the repository root:
 
 ```sh
-cargo test --release --locked -p orbit-proto --lib
-cargo test --release --locked -p orbit-engine --lib workspace_files::
-cargo test --release --locked -p orbit-engine --lib rpc::
-cargo test --release --locked -p orbit-engine --test workspace_files
-cargo test --release --locked -p orbit-engine --test device_routing workspace_entry_mutations_are_forwarded
-cargo test --release --locked -p orbit-ui --lib -- --test-threads=1
-cargo check --release --locked -p orbit
+cargo test --release --locked -p ensembyte-proto --lib
+cargo test --release --locked -p ensembyte-engine --lib workspace_files::
+cargo test --release --locked -p ensembyte-engine --lib rpc::
+cargo test --release --locked -p ensembyte-engine --test workspace_files
+cargo test --release --locked -p ensembyte-engine --test device_routing workspace_entry_mutations_are_forwarded
+cargo test --release --locked -p ensembyte-ui --lib -- --test-threads=1
+cargo check --release --locked -p ensembyte
 ```
 
 This implementation was exercised on Linux with GPUI's test backend. Native

@@ -8,8 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
-use orbit_engine::{AgentAccounts, AgentAccountsConfig};
-use orbit_proto::{AgentLoginMode, HarnessId};
+use ensembyte_engine::{AgentAccounts, AgentAccountsConfig};
+use ensembyte_proto::{AgentLoginMode, HarnessId};
 
 fn test_accounts(root: &Path) -> AgentAccounts {
     let config = AgentAccountsConfig {
@@ -65,7 +65,7 @@ async fn login_child() {
     let Ok(expected) = std::env::var("CODEX_LOGIN_EXPECTED") else {
         return;
     };
-    let root = std::env::temp_dir().join(format!("orbit-codex-login-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("ensembyte-codex-login-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let accounts = test_accounts(&root);
     let result = accounts.start_login(HarnessId::Codex).await;
@@ -106,7 +106,7 @@ fn probe(path: &Path, override_path: Option<&Path>, expected: bool) {
     command
         .env("PATH", path)
         .env("CODEX_LOGIN_EXPECTED", expected.to_string())
-        .env("ORBIT_NO_LOGIN_SHELL", "1");
+        .env("ENSEMBYTE_NO_LOGIN_SHELL", "1");
     if let Some(path) = override_path {
         command.env("CODEX_EXECUTABLE", path);
     }

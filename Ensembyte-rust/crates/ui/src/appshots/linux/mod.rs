@@ -158,8 +158,8 @@ mod tests {
     #[test]
     fn activation_path_stays_inside_data_directory() {
         assert_eq!(
-            activation_socket_path(Path::new("/tmp/orbit-test")),
-            Path::new("/tmp/orbit-test/appshot-activation.sock")
+            activation_socket_path(Path::new("/tmp/ensembyte-test")),
+            Path::new("/tmp/ensembyte-test/appshot-activation.sock")
         );
     }
 }

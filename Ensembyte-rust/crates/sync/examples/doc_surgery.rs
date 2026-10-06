@@ -5,8 +5,8 @@
 //!   inspect-chat      <data_dir> <chat_id>
 //!   cut-chat          <data_dir> <chat_id> <from_index>
 use loro::{LoroDoc, ToJson};
-use orbit_doc::SessionDoc;
-use orbit_sync::DocsStore;
+use ensembyte_doc::SessionDoc;
+use ensembyte_sync::DocsStore;
 
 fn load_doc(store: &DocsStore, doc_id: &str) -> LoroDoc {
     let bytes = store

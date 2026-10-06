@@ -29,10 +29,10 @@ Watch and acknowledgement revisions are monotonic within an engine attachment, n
 ## Regression commands
 
 ```sh
-cargo test --locked -p orbit-proto --lib
-cargo test --locked -p orbit-doc --lib
-cargo test --locked -p orbit-engine --lib
-cargo test --locked -p orbit-ui --lib -- --test-threads=1
+cargo test --locked -p ensembyte-proto --lib
+cargo test --locked -p ensembyte-doc --lib
+cargo test --locked -p ensembyte-engine --lib
+cargo test --locked -p ensembyte-ui --lib -- --test-threads=1
 cd edge && npm run typecheck && npm test
 ```
 

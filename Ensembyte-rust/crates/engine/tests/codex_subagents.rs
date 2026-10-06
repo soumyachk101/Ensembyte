@@ -5,10 +5,10 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, SubagentStatus};
-use orbit_engine::{EngineCore, EngineProfile, HarnessRegistry};
-use orbit_harness::CodexHarness;
-use orbit_proto::{HarnessId, RunRequest, SandboxLevel, SessionStatus};
+use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, SubagentStatus};
+use ensembyte_engine::{EngineCore, EngineProfile, HarnessRegistry};
+use ensembyte_harness::CodexHarness;
+use ensembyte_proto::{HarnessId, RunRequest, SandboxLevel, SessionStatus};
 
 const CHAT: &str = "codex-subagents";
 

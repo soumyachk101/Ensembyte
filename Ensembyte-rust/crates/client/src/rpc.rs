@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-pub use orbit_proto::{FolderEntry, FolderListing, RepoRef, WorktreeSpec};
+pub use ensembyte_proto::{FolderEntry, FolderListing, RepoRef, WorktreeSpec};
 
 /// Engine capability strings a device row advertises (`Device::capabilities`).
 /// Capabilities, not semver: a personal integration build can share an
@@ -35,7 +35,7 @@ pub const QUEUED_ATTACHMENTS_MIN: (u64, u64, u64) = (0, 2, 12);
 /// host has committed.
 pub type ProgressFn = Arc<dyn Fn(f64) + Send + Sync>;
 
-/// Relay method names (single source of truth: `orbit_rpc::methods`).
+/// Relay method names (single source of truth: `ensembyte_rpc::methods`).
 pub mod methods {
-    pub use orbit_rpc::methods::*;
+    pub use ensembyte_rpc::methods::*;
 }

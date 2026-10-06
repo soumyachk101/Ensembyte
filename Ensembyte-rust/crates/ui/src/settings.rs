@@ -1,5 +1,5 @@
 //! UI settings persisted to a small JSON file in the data dir — pane widths and
-//! collapse flags (orbit persisted the same set in localStorage).
+//! collapse flags (ensembyte persisted the same set in localStorage).
 //!
 //! Loaded once at boot and then owned by [`SettingsStore`], the only production
 //! writer. Frequent geometry changes are debounced; durable choices flush
@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use gpui::{App, Global, Task};
 use serde::{Deserialize, Serialize};
-use orbit_proto::{AuthState, WorkspaceScope};
+use ensembyte_proto::{AuthState, WorkspaceScope};
 
 pub mod accounts;
 pub mod appearance;
@@ -374,7 +374,7 @@ pub fn install_new_thread_composer_background(source: &Path, cx: &mut App) -> Re
 fn install_staged_background(
     source: &Path,
     staged: crate::attachments::StagedAttachment,
-    color: Option<orbit_theme::Color>,
+    color: Option<ensembyte_theme::Color>,
     cx: &mut App,
 ) -> Result<(), String> {
     let data_dir = cx
@@ -443,7 +443,7 @@ fn prepare_background_file(
 fn commit_background(
     source: &Path,
     mut prepared: PreparedBackgroundFile,
-    color: Option<orbit_theme::Color>,
+    color: Option<ensembyte_theme::Color>,
     cx: &mut App,
 ) -> Result<(), String> {
     let data_dir = cx
@@ -764,7 +764,7 @@ pub struct SkillCompletionSettings {
 impl SkillCompletionSettings {
     /// Every harness defaults to `$` skills kept out of the `/` menu; an
     /// explicit per-harness choice (or the legacy slash-menu flag) wins.
-    pub fn for_harness(_harness: orbit_proto::HarnessId) -> Self {
+    pub fn for_harness(_harness: ensembyte_proto::HarnessId) -> Self {
         Self {
             dollar: true,
             separate_from_slash: true,
@@ -772,23 +772,23 @@ impl SkillCompletionSettings {
     }
 }
 
-pub const SKILL_COMPLETION_HARNESSES: [(orbit_proto::HarnessId, &str); 9] = [
-    (orbit_proto::HarnessId::Antigravity, "Antigravity"),
-    (orbit_proto::HarnessId::ClaudeCode, "Claude Code"),
-    (orbit_proto::HarnessId::Codex, "Codex"),
-    (orbit_proto::HarnessId::Cursor, "Cursor"),
-    (orbit_proto::HarnessId::Devin, "Devin"),
-    (orbit_proto::HarnessId::Grok, "Grok"),
-    (orbit_proto::HarnessId::Hermes, "Hermes"),
-    (orbit_proto::HarnessId::Pi, "Pi"),
-    (orbit_proto::HarnessId::Opencode, "OpenCode"),
+pub const SKILL_COMPLETION_HARNESSES: [(ensembyte_proto::HarnessId, &str); 9] = [
+    (ensembyte_proto::HarnessId::Antigravity, "Antigravity"),
+    (ensembyte_proto::HarnessId::ClaudeCode, "Claude Code"),
+    (ensembyte_proto::HarnessId::Codex, "Codex"),
+    (ensembyte_proto::HarnessId::Cursor, "Cursor"),
+    (ensembyte_proto::HarnessId::Devin, "Devin"),
+    (ensembyte_proto::HarnessId::Grok, "Grok"),
+    (ensembyte_proto::HarnessId::Hermes, "Hermes"),
+    (ensembyte_proto::HarnessId::Pi, "Pi"),
+    (ensembyte_proto::HarnessId::Opencode, "OpenCode"),
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UiSettings {
     pub dictation_enabled: bool,
-    /// Dictation microphone as a `orbit_voice::InputDevice` id; `None`
+    /// Dictation microphone as a `ensembyte_voice::InputDevice` id; `None`
     /// follows the system default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dictation_input: Option<String>,
@@ -799,7 +799,7 @@ pub struct UiSettings {
     /// Legacy global opt-in; per-harness preferences take precedence.
     pub skills_in_slash_menu: bool,
     pub skill_completion_by_harness:
-        std::collections::HashMap<orbit_proto::HarnessId, SkillCompletionSettings>,
+        std::collections::HashMap<ensembyte_proto::HarnessId, SkillCompletionSettings>,
     /// Open model selection with an effort slider and a separate model list.
     pub compact_model_picker: bool,
     pub sidebar_width: f32,
@@ -853,7 +853,7 @@ pub struct UiSettings {
     /// list. Kept for file compatibility; no longer read.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub space_order: Vec<String>,
-    /// Master switch for session notification chimes. `ORBIT_DISABLE_SOUND`
+    /// Master switch for session notification chimes. `ENSEMBYTE_DISABLE_SOUND`
     /// overrides every per-event preference below.
     pub sound_enabled: bool,
     /// Chime when an agent run completes successfully.
@@ -863,7 +863,7 @@ pub struct UiSettings {
     /// Chime when a run fails or the durable connection state degrades.
     pub sound_attention_enabled: bool,
     /// Desktop banner notifications on the same transitions.
-    /// `ORBIT_DISABLE_NOTIFICATIONS` overrides.
+    /// `ENSEMBYTE_DISABLE_NOTIFICATIONS` overrides.
     pub notifications_enabled: bool,
     /// Suppress the banner while an Ensembyte window is focused (the chime covers
     /// the foreground case).
@@ -874,7 +874,7 @@ pub struct UiSettings {
     pub agent_update_notifications: bool,
     pub right_pane_width: f32,
     /// Legacy: panel *open* flags are session-scoped in-memory state now
-    /// (`shell::SessionPanels`, orbit `sessionPanels` parity). Kept for file
+    /// (`shell::SessionPanels`, ensembyte `sessionPanels` parity). Kept for file
     /// compatibility; no longer read or written by the shell.
     pub right_pane_open: bool,
     pub terminal_height: f32,
@@ -919,7 +919,7 @@ pub struct UiSettings {
     pub code_font_family: crate::typography::UiFontFamily,
     pub code_font_size: f32,
     /// Independently selected light and dark theme variants.
-    pub theme_selection: orbit_theme::ThemeSelection,
+    pub theme_selection: ensembyte_theme::ThemeSelection,
     /// Changes pane: side-by-side diffs instead of the unified stack.
     pub diff_split: bool,
     /// Changes pane: wrap long source lines instead of scrolling horizontally.
@@ -932,7 +932,7 @@ pub struct UiSettings {
     pub transcript_width: f32,
     /// Open a normal web-link activation in the session Browser. Explicit
     /// context-menu actions remain available regardless of this preference.
-    pub open_web_links_in_orbit: bool,
+    pub open_web_links_in_ensembyte: bool,
     /// Compact transcript: a turn's working steps (thinking, tool calls, and
     /// the narration between them) fold into one collapsed accordion, so only
     /// the reply text stays visible.
@@ -946,9 +946,9 @@ pub struct UiSettings {
     /// Include hidden and ignored entries in workspace file trees.
     pub files_show_all: bool,
     /// Interactive identity overlay; imported themes default to their own accent.
-    pub accent: orbit_theme::AccentSelection,
+    pub accent: ensembyte_theme::AccentSelection,
     /// Glass policy, independent from the selected appearance, theme, and accent.
-    pub surface: orbit_theme::SurfacePreference,
+    pub surface: ensembyte_theme::SurfacePreference,
     /// Optional device-local artwork behind the blank new-thread composer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new_thread_composer_background: Option<NewThreadComposerBackground>,
@@ -958,7 +958,7 @@ pub struct UiSettings {
     /// Most recently displayed sources first; bounded by the shuffle cooldown.
     pub wallpaper_history: Vec<PathBuf>,
     pub wallpaper_theme_colors: bool,
-    pub wallpaper_color: Option<orbit_theme::Color>,
+    pub wallpaper_color: Option<ensembyte_theme::Color>,
     /// Non-destructive treatment composited inside the artwork's fade mask.
     pub new_thread_background_effect: NewThreadBackgroundEffect,
     /// Snap animations to rest. Defaults to following the OS.
@@ -1030,19 +1030,19 @@ impl Default for UiSettings {
             terminal_font_size: crate::typography::TERMINAL_FONT_SIZE_DEFAULT,
             code_font_family: crate::typography::UiFontFamily::GeistMono,
             code_font_size: crate::typography::CODE_FONT_SIZE_DEFAULT,
-            theme_selection: orbit_theme::ThemeSelection::default(),
+            theme_selection: ensembyte_theme::ThemeSelection::default(),
             diff_split: false,
             diff_wrap: false,
             code_fences_fit_content: false,
             transcript_width: TRANSCRIPT_WIDTH_DEFAULT,
-            open_web_links_in_orbit: true,
+            open_web_links_in_ensembyte: true,
             transcript_compact_mode: false,
             files_autosave_enabled: false,
             files_autosave_delay_ms: FILES_AUTOSAVE_DELAY_DEFAULT_MS,
             files_word_wrap: false,
             files_show_all: false,
-            accent: orbit_theme::AccentSelection::default(),
-            surface: orbit_theme::SurfacePreference::default(),
+            accent: ensembyte_theme::AccentSelection::default(),
+            surface: ensembyte_theme::SurfacePreference::default(),
             new_thread_composer_background: None,
             wallpaper_folder: None,
             wallpaper_source: None,
@@ -1136,7 +1136,7 @@ impl ShortcutId {
         self != Self::CaptureAppshot || crate::appshots::is_desktop()
     }
 
-    /// Row label (orbit lib/shortcuts.ts `SHORTCUT_DEFINITIONS`, verbatim).
+    /// Row label (ensembyte lib/shortcuts.ts `SHORTCUT_DEFINITIONS`, verbatim).
     pub fn label(self) -> &'static str {
         match self {
             ShortcutId::ToggleDictation => "Hold to dictate",
@@ -1274,7 +1274,7 @@ pub fn sidebar_pin_profile_key(
             }
             let org_id = token_org_id
                 .or(development_org_id.filter(|org_id| !org_id.is_empty()))
-                .unwrap_or(orbit_engine::DEFAULT_ORG_ID);
+                .unwrap_or(ensembyte_engine::DEFAULT_ORG_ID);
             Some(format!("development:{org_id}:{user_id}"))
         }
     }
@@ -1574,7 +1574,7 @@ impl UiSettings {
             .or_default()
     }
 
-    pub fn skill_completion(&self, harness: orbit_proto::HarnessId) -> SkillCompletionSettings {
+    pub fn skill_completion(&self, harness: ensembyte_proto::HarnessId) -> SkillCompletionSettings {
         self.skill_completion_by_harness
             .get(&harness)
             .copied()
@@ -1674,7 +1674,7 @@ impl UiSettings {
             diff_wrap,
             code_fences_fit_content,
             transcript_width,
-            open_web_links_in_orbit,
+            open_web_links_in_ensembyte,
             transcript_compact_mode,
             files_autosave_enabled,
             files_autosave_delay_ms,
@@ -1866,10 +1866,10 @@ impl UiSettings {
     }
 
     fn migrated(mut self) -> Self {
-        if self.accent == orbit_theme::AccentSelection::ThemeDefault
+        if self.accent == ensembyte_theme::AccentSelection::ThemeDefault
             && let Some(accent) = self.legacy_accent_color.take()
         {
-            self.accent = orbit_theme::AccentSelection::Preset(accent.into());
+            self.accent = ensembyte_theme::AccentSelection::Preset(accent.into());
         }
         self.legacy_accent_color = None;
         self
@@ -1896,7 +1896,7 @@ fn min_or(value: f32, min: f32, default: f32) -> f32 {
     }
 }
 
-pub use orbit_proto::SidebarSection;
+pub use ensembyte_proto::SidebarSection;
 
 #[cfg(test)]
 mod tests {
@@ -1904,7 +1904,7 @@ mod tests {
 
     #[test]
     fn skill_completion_defaults_overrides_and_persistence_are_per_harness() {
-        use orbit_proto::HarnessId;
+        use ensembyte_proto::HarnessId;
         let dir = tempfile::tempdir().unwrap();
         let mut settings = UiSettings::default();
         for (harness, _) in SKILL_COMPLETION_HARNESSES {
@@ -1978,7 +1978,7 @@ mod tests {
 
         let loaded = UiSettings::load(dir.path());
         assert_eq!(loaded.composer_send_behavior, ComposerSendBehavior::Enter);
-        assert!(loaded.open_web_links_in_orbit);
+        assert!(loaded.open_web_links_in_ensembyte);
         assert!(loaded.new_thread_composer_background.is_none());
         assert_eq!(
             loaded.new_thread_background_effect,
@@ -2704,7 +2704,7 @@ mod tests {
             git_history_author_display: GitHistoryAuthorDisplay::Name,
             ui_font_family: crate::typography::UiFontFamily::Installed("Arial".into()),
             ui_font_size: crate::typography::UiFontSize::ALL[5],
-            theme_selection: orbit_theme::ThemeSelection {
+            theme_selection: ensembyte_theme::ThemeSelection {
                 light: "catppuccin-latte".into(),
                 dark: "catppuccin-mocha".into(),
             },
@@ -2712,7 +2712,7 @@ mod tests {
             diff_wrap: true,
             code_fences_fit_content: true,
             transcript_width: 960.0,
-            open_web_links_in_orbit: false,
+            open_web_links_in_ensembyte: false,
             transcript_compact_mode: true,
             files_autosave_enabled: true,
             files_autosave_delay_ms: 1_500,
@@ -2722,10 +2722,10 @@ mod tests {
             code_font_family: crate::typography::UiFontFamily::Geist,
             code_font_size: 11.0,
             files_show_all: true,
-            accent: orbit_theme::AccentSelection::Preset(orbit_theme::AccentPreset::Cyan),
-            surface: orbit_theme::SurfacePreference::Frosted,
+            accent: ensembyte_theme::AccentSelection::Preset(ensembyte_theme::AccentPreset::Cyan),
+            surface: ensembyte_theme::SurfacePreference::Frosted,
             new_thread_composer_background: Some(NewThreadComposerBackground {
-                path: "/tmp/orbit/new-thread-background.png".into(),
+                path: "/tmp/ensembyte/new-thread-background.png".into(),
                 name: "background.png".into(),
                 adjustment: NewThreadBackgroundAdjustment {
                     focal_x: 0.25,
@@ -2889,8 +2889,8 @@ mod tests {
         .unwrap();
         let loaded = UiSettings::load(dir.path());
         assert_eq!(loaded.appearance, crate::appearance::AppearanceMode::System);
-        assert_eq!(loaded.accent, orbit_theme::AccentSelection::ThemeDefault);
-        assert_eq!(loaded.surface, orbit_theme::SurfacePreference::ThemeDefault);
+        assert_eq!(loaded.accent, ensembyte_theme::AccentSelection::ThemeDefault);
+        assert_eq!(loaded.surface, ensembyte_theme::SurfacePreference::ThemeDefault);
         assert_eq!(loaded.sidebar_width, 300.0);
         assert!(loaded.sidebar_pinned_session_ids_by_profile.is_empty());
         assert!(!loaded.sound_enabled, "other keys still parse");
@@ -2977,7 +2977,7 @@ mod tests {
         let loaded = UiSettings::load(dir.path());
         assert_eq!(
             loaded.accent,
-            orbit_theme::AccentSelection::Preset(orbit_theme::AccentPreset::Cyan)
+            ensembyte_theme::AccentSelection::Preset(ensembyte_theme::AccentPreset::Cyan)
         );
         loaded.save(dir.path()).unwrap();
         let saved = std::fs::read_to_string(UiSettings::path(dir.path())).unwrap();
@@ -3045,7 +3045,7 @@ mod tests {
 
     fn signed_in(user_id: &str, org_id: Option<&str>) -> AuthState {
         AuthState::SignedIn {
-            user: orbit_proto::UserProfile {
+            user: ensembyte_proto::UserProfile {
                 id: user_id.to_string(),
                 email: format!("{user_id}@example.com"),
                 name: None,
@@ -3292,7 +3292,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_match_orbit() {
+    fn defaults_match_ensembyte() {
         let d = UiSettings::default();
         assert_eq!(d.sidebar_width, 256.0);
         assert_eq!(d.right_pane_width, 520.0);

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fake orbit cursor shim for orbit-harness tests: speaks the shim's JSONL
+# Fake orbit cursor shim for ensembyte-harness tests: speaks the shim's JSONL
 # protocol (see crates/harness/src/cursor/shim.mjs) without node or the SDK.
 # Driven by crates/harness/tests/cursor.rs.
 
@@ -23,7 +23,7 @@ case "$first" in
 
 *scenario:mcp*)
   case "$first" in
-    *'"mcp":{"args":["mcp"],"command":"/path with spaces/orbit","env":{"ORBIT_CHAT_ID":"origin-chat"},"name":"orbit"}'*) ;;
+    *'"mcp":{"args":["mcp"],"command":"/path with spaces/ensembyte","env":{"ENSEMBYTE_CHAT_ID":"origin-chat"},"name":"ensembyte"}'*) ;;
     *) exit 1 ;;
   esac
   emit '{"ev":"ready","agentId":"agent-1","model":"auto"}'

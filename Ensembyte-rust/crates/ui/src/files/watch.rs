@@ -1,7 +1,7 @@
 use std::{collections::HashSet, time::Duration};
 
 use gpui::Context;
-use orbit_proto::{WorkspaceFileChangeKind, WorkspaceFileChanges};
+use ensembyte_proto::{WorkspaceFileChangeKind, WorkspaceFileChanges};
 
 use super::{FilesEvent, FilesSurface, client::WorkspaceFilesClient, model::parent_path};
 
@@ -215,7 +215,7 @@ mod tests {
         let (out, mut requests) = tokio::sync::mpsc::channel(16);
         let (replies, inbound) = tokio::sync::mpsc::channel(16);
         let engine =
-            crate::state::EngineHandle::from_test_client(orbit_rpc::RpcClient::new(out, inbound));
+            crate::state::EngineHandle::from_test_client(ensembyte_rpc::RpcClient::new(out, inbound));
         let state = cx.new(|_| {
             let mut state = super::super::test_support::state();
             state.set_test_engine(engine);
@@ -234,7 +234,7 @@ mod tests {
                 WorkspaceFileChanges {
                     sequence: 1,
                     resync_required: false,
-                    changes: vec![orbit_proto::WorkspaceFileChange {
+                    changes: vec![ensembyte_proto::WorkspaceFileChange {
                         operation_id: None,
                         kind: WorkspaceFileChangeKind::Modified,
                         path: "a.txt".into(),
@@ -253,11 +253,11 @@ mod tests {
         .unwrap();
         assert_eq!(
             request["method"],
-            orbit_rpc::methods::LIST_WORKSPACE_DIRECTORY
+            ensembyte_rpc::methods::LIST_WORKSPACE_DIRECTORY
         );
         assert_eq!(request["params"]["directory"], "");
         let mut entry =
-            super::super::test_support::entry("a.txt", orbit_proto::WorkspaceEntryKind::File);
+            super::super::test_support::entry("a.txt", ensembyte_proto::WorkspaceEntryKind::File);
         entry.mutation_revision = Some("after-save".into());
         runtime.block_on(async {
             replies

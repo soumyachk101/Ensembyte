@@ -1,8 +1,8 @@
 //! Windows npm Codex must survive the production registry and ListHarnesses RPC.
 #![cfg(windows)]
 
-use orbit_engine::{EngineCore, registry::default_registry};
-use orbit_proto::HarnessId;
+use ensembyte_engine::{EngineCore, registry::default_registry};
+use ensembyte_proto::HarnessId;
 
 #[tokio::test]
 async fn catalog_child() {
@@ -17,9 +17,9 @@ async fn catalog_child() {
         None,
     )
     .expect("assemble isolated engine");
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
     let catalog = client
-        .call(orbit_rpc::methods::LIST_HARNESSES, serde_json::json!({}))
+        .call(ensembyte_rpc::methods::LIST_HARNESSES, serde_json::json!({}))
         .await
         .unwrap();
     let codex = catalog

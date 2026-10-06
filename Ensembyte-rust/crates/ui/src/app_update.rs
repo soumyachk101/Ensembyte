@@ -11,13 +11,13 @@
 //! release downloads in the background and is verified, the strip offers
 //! "restart to apply", and a staged update the user never restarts for is
 //! installed when the app quits — so nobody stays on a stale version just
-//! because they never clicked. `ORBIT_AUTO_UPDATE=0` keeps it report-only.
+//! because they never clicked. `ENSEMBYTE_AUTO_UPDATE=0` keeps it report-only.
 
 use std::path::{Path, PathBuf};
 
 use gpui::{App, AppContext as _, Context, Entity, Global, SharedString, Task};
 use gpui_tokio::Tokio;
-use orbit_update::{InstallKind, UpdateBlocker, UpdateStatus, Updater};
+use ensembyte_update::{InstallKind, UpdateBlocker, UpdateStatus, Updater};
 
 /// Download/install lifecycle of the newest release in this process.
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +66,7 @@ pub enum StripAction {
 pub struct AppUpdate {
     install: InstallKind,
     blocker: Option<UpdateBlocker>,
-    /// Background download + install on quit (`ORBIT_AUTO_UPDATE` unset or on).
+    /// Background download + install on quit (`ENSEMBYTE_AUTO_UPDATE` unset or on).
     automatic: bool,
     edge_url: String,
     data_dir: PathBuf,
@@ -100,7 +100,7 @@ impl AppUpdate {
     }
 
     fn new(edge_url: String, data_dir: PathBuf, cx: &mut Context<Self>) -> Self {
-        let install = orbit_update::detect_install();
+        let install = ensembyte_update::detect_install();
         let blocker = install
             .supports_desktop_update()
             .then(|| install.desktop_update_blocker())
@@ -125,7 +125,7 @@ impl AppUpdate {
         Self {
             install,
             blocker,
-            automatic: orbit_update::desktop_auto_update_enabled(),
+            automatic: ensembyte_update::desktop_auto_update_enabled(),
             edge_url,
             data_dir,
             checker,
@@ -197,7 +197,7 @@ impl AppUpdate {
             Flow::Ready { version, .. } => Some(version),
             Flow::Idle | Flow::Failed { .. } => None,
         };
-        if current.is_some_and(|version| !orbit_update::version_newer(latest, version)) {
+        if current.is_some_and(|version| !ensembyte_update::version_newer(latest, version)) {
             return;
         }
         self.start_download(cx);
@@ -219,9 +219,9 @@ impl AppUpdate {
         let stage = Tokio::spawn(cx, async move {
             // Re-read the manifest so a long-lived status still downloads the
             // newest release, with that release's checksums.
-            let manifest = orbit_update::fetch_latest(&edge_url).await?;
+            let manifest = ensembyte_update::fetch_latest(&edge_url).await?;
             anyhow::ensure!(
-                orbit_update::version_newer(&manifest.version, orbit_update::current_version()),
+                ensembyte_update::version_newer(&manifest.version, ensembyte_update::current_version()),
                 "the release feed no longer offers a newer version"
             );
             let staged = install
@@ -377,7 +377,7 @@ impl AppUpdate {
 
 /// Label + click action of the strip. Self-updating installs drive their flow
 /// from it; blocked installs explain themselves; managed installs without a
-/// desktop path get the `orbit update` hint; unmanaged installs (source builds,
+/// desktop path get the `ensembyte update` hint; unmanaged installs (source builds,
 /// hand-copied binaries) are pointed at the GitHub releases page.
 pub fn strip_for(
     install: &InstallKind,
@@ -413,7 +413,7 @@ pub fn strip_for(
     }
     if matches!(install, InstallKind::Managed { .. }) {
         (
-            format!("Update available — v{latest} · run `orbit update`").into(),
+            format!("Update available — v{latest} · run `ensembyte update`").into(),
             StripAction::Advise {
                 open_releases: false,
             },
@@ -508,7 +508,7 @@ mod tests {
             )
         );
         let managed = InstallKind::Managed {
-            app_root: PathBuf::from("/home/u/.orbit/app"),
+            app_root: PathBuf::from("/home/u/.ensembyte/app"),
         };
         let strip = strip_for(&managed, false, &Flow::Idle, "0.2.86");
         if cfg!(target_os = "linux") {
@@ -518,7 +518,7 @@ mod tests {
         } else {
             assert_eq!(
                 strip.0,
-                SharedString::from("Update available — v0.2.86 · run `orbit update`")
+                SharedString::from("Update available — v0.2.86 · run `ensembyte update`")
             );
         }
     }

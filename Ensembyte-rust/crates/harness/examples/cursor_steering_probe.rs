@@ -1,10 +1,10 @@
 //! Real-model conversational steering check (no tools or additive jobs).
-//! cargo run -p orbit-harness --example cursor_steering_probe -- gemini-3-flash
+//! cargo run -p ensembyte-harness --example cursor_steering_probe -- gemini-3-flash
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
-use orbit_harness::{CancellationToken, CursorHarness, Harness, RunControls, SteerMessage};
-use orbit_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
+use ensembyte_harness::{CancellationToken, CursorHarness, Harness, RunControls, SteerMessage};
+use ensembyte_proto::{AgentEvent, DoneStatus, RunRequest, SandboxLevel};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

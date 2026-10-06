@@ -11,8 +11,8 @@ discovery. `PI_CODING_AGENT_DIR` continues to control Pi settings and credential
 installs nor launches `pi-acp`, and existing adapter files need not be deleted.
 
 Sessions retain their native UUID and JSONL history. Orbit records the UUID to
-absolute file mapping in `PI_CODING_AGENT_DIR/orbit-sessions` (normally
-`~/.pi/agent/orbit-sessions`). For older chats it also reads
+absolute file mapping in `PI_CODING_AGENT_DIR/ensembyte-sessions` (normally
+`~/.pi/agent/ensembyte-sessions`). For older chats it also reads
 `~/.pi/pi-acp/session-map.json`, then searches native session directories,
 including configured `sessionDir` locations. It validates the session header
 before reopening the exact file. A session that cannot be found starts a new
@@ -59,11 +59,11 @@ image blocks; image-only tool results do not yet render inline in Orbit.
 Validation:
 
 ```sh
-cargo test -p orbit-harness --features native-fixture
-cargo test -p orbit-engine --lib --test pi_resume --test acp_lifecycle --test message_queue --test e2e
-cargo test -p orbit-harness --test pi_live -- --ignored --nocapture
-cargo check -p orbit-ui --tests
-cargo build -p orbit-mobile --features bindgen
+cargo test -p ensembyte-harness --features native-fixture
+cargo test -p ensembyte-engine --lib --test pi_resume --test acp_lifecycle --test message_queue --test e2e
+cargo test -p ensembyte-harness --test pi_live -- --ignored --nocapture
+cargo check -p ensembyte-ui --tests
+cargo build -p ensembyte-mobile --features bindgen
 ```
 
 The ignored Pi test requires an installed CLI and uses isolated settings and a

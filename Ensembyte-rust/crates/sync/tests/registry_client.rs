@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use orbit_doc::{REGISTRY_DOC_ID, RegistryDoc};
-use orbit_proto::{Chat, Device, Session, SessionStatus};
-use orbit_sync::registry::mock_server::MockRegistryServer;
-use orbit_sync::{DocsStore, RegistryClient, RegistryEvent};
+use ensembyte_doc::{REGISTRY_DOC_ID, RegistryDoc};
+use ensembyte_proto::{Chat, Device, Session, SessionStatus};
+use ensembyte_sync::registry::mock_server::MockRegistryServer;
+use ensembyte_sync::{DocsStore, RegistryClient, RegistryEvent};
 
 fn ts(ms: i64) -> DateTime<Utc> {
     DateTime::from_timestamp_millis(ms).unwrap_or(DateTime::UNIX_EPOCH)
@@ -502,11 +502,11 @@ struct FlakyAckTransport {
     push_calls: Arc<std::sync::atomic::AtomicU64>,
 }
 
-impl orbit_sync::registry::RegistryTransport for FlakyAckTransport {
+impl ensembyte_sync::registry::RegistryTransport for FlakyAckTransport {
     fn fetch(
         &self,
         _since: u64,
-    ) -> futures::future::BoxFuture<'static, Result<String, orbit_sync::SyncError>> {
+    ) -> futures::future::BoxFuture<'static, Result<String, ensembyte_sync::SyncError>> {
         Box::pin(async {
             Ok(r#"{"seq":0,"full":false,"gcFloor":0,"rows":[],"presence":{}}"#.to_string())
         })
@@ -515,7 +515,7 @@ impl orbit_sync::registry::RegistryTransport for FlakyAckTransport {
     fn push(
         &self,
         body: String,
-    ) -> futures::future::BoxFuture<'static, Result<String, orbit_sync::SyncError>> {
+    ) -> futures::future::BoxFuture<'static, Result<String, ensembyte_sync::SyncError>> {
         let call = self
             .push_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -541,10 +541,10 @@ async fn unreadable_http_ack_retries_instead_of_stranding_the_batch() {
     }
     // The WS side never connects (dead port): every sync runs over HTTPS.
     let client = RegistryClient::connect_via_transport(
-        Arc::new(orbit_sync::StaticUrl("ws://127.0.0.1:1/ws".into())),
+        Arc::new(ensembyte_sync::StaticUrl("ws://127.0.0.1:1/ws".into())),
         doc.clone(),
         "dev-a",
-        orbit_sync::RegistryTuning::default(),
+        ensembyte_sync::RegistryTuning::default(),
         Arc::new(FlakyAckTransport {
             push_calls: push_calls.clone(),
         }),

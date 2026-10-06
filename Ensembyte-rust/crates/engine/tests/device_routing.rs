@@ -24,17 +24,17 @@ use tokio_tungstenite::tungstenite::handshake::server::{
     Request as WsRequest, Response as WsResponse,
 };
 
-use orbit_doc::SessionCommandPayload;
-use orbit_engine::{
+use ensembyte_doc::SessionCommandPayload;
+use ensembyte_engine::{
     BranchHeadContext, ChangeRequestError, CheckoutChangeRequestLookup, CheckoutChangeRequests,
     CheckoutSourceContext, EngineCore, HarnessRegistry,
 };
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, ChangeRequestState, ChangeRequestSummary, DoneStatus, HarnessId, Model,
     ReasoningLevel, RunRequest, SandboxLevel, SteeringMode,
 };
-use orbit_rpc::{
+use ensembyte_rpc::{
     DeviceFrameHeader, HostRelay, HostRelayConfig, LinkCache, LinkCacheConfig, RpcError, RpcReply,
     RpcService, StaticToken, decode_device_frame, encode_device_frame, methods,
 };
@@ -288,7 +288,7 @@ fn change_request_lookup(root: &std::path::Path) -> Arc<StaticChangeRequestLooku
                 "feature/status",
                 Some("origin/feature/status"),
                 Some("origin"),
-                Some("https://github.com/acme/orbit.git"),
+                Some("https://github.com/acme/ensembyte.git"),
             ),
             default_branch: Some("main".into()),
         },
@@ -296,7 +296,7 @@ fn change_request_lookup(root: &std::path::Path) -> Arc<StaticChangeRequestLooku
             provider: "github".into(),
             number: 90,
             title: "Stream checkout pull request".into(),
-            url: "https://github.com/acme/orbit/pull/90".into(),
+            url: "https://github.com/acme/ensembyte/pull/90".into(),
             state: ChangeRequestState::Open,
             base_ref: "main".into(),
             head_ref: "feature/status".into(),
@@ -415,7 +415,7 @@ async fn checkout_change_request_stream_matches_locally_and_through_device_routi
     let lookup = change_request_lookup(&checkout);
     core_b.change_requests =
         CheckoutChangeRequests::new(core_b.repos.clone(), "device-b", lookup.clone());
-    let local_client = orbit_rpc::memory_client(core_b.rpc_service());
+    let local_client = ensembyte_rpc::memory_client(core_b.rpc_service());
     let rejected = match local_client
         .subscribe_checked(
             methods::WATCH_CHECKOUT_CHANGE_REQUEST,
@@ -442,7 +442,7 @@ async fn checkout_change_request_stream_matches_locally_and_through_device_routi
         LinkCacheConfig::new(relay_url.clone(), Arc::new(StaticToken("test-user".into())));
     link_config.probe_timeout = Duration::from_secs(5);
     core_a.set_links(LinkCache::new(link_config));
-    let client = orbit_rpc::memory_client(core_a.rpc_service());
+    let client = ensembyte_rpc::memory_client(core_a.rpc_service());
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     let mut remote = loop {
@@ -538,7 +538,7 @@ async fn unsupported_remote_change_request_watch_keeps_the_shared_device_link() 
         LinkCacheConfig::new(relay_url, Arc::new(StaticToken("test-user".into())));
     link_config.probe_timeout = Duration::from_secs(5);
     core.set_links(LinkCache::new(link_config));
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
 
     // The host can take a moment to attach to the room. Once attached, an old
     // host rejects only the capability added by this version.
@@ -613,7 +613,7 @@ async fn git_status_is_computed_on_the_checkout_host_through_the_relay() {
         .create_chat("remote-chat", Some("remote-space"), None, None, None)
         .unwrap();
     host.diff_sync.reconcile_now().await;
-    let local_client = orbit_rpc::memory_client(host.rpc_service());
+    let local_client = ensembyte_rpc::memory_client(host.rpc_service());
     let mut local = local_client
         .subscribe_checked(
             methods::WATCH_WORKSPACE_GIT_STATUS,
@@ -640,7 +640,7 @@ async fn git_status_is_computed_on_the_checkout_host_through_the_relay() {
     let mut config = LinkCacheConfig::new(relay_url, Arc::new(StaticToken("test-user".into())));
     config.probe_timeout = Duration::from_secs(5);
     consumer.set_links(LinkCache::new(config));
-    let client = orbit_rpc::memory_client(consumer.rpc_service());
+    let client = ensembyte_rpc::memory_client(consumer.rpc_service());
     // The consumer has no corresponding space/chat: resolving locally must fail.
     assert!(
         client
@@ -702,7 +702,7 @@ async fn target_device_id_routes_over_the_relay() {
         .write_user_message("m-b-1", "hello from B", 1_000)
         .expect("write user message");
 
-    let client = orbit_rpc::memory_client(core_a.rpc_service());
+    let client = ensembyte_rpc::memory_client(core_a.rpc_service());
 
     // Our own id in targetDeviceId: handled locally, no forward.
     let local = client
@@ -747,7 +747,7 @@ async fn target_device_id_routes_over_the_relay() {
         .uploads
         .import_generated_image(&source, &generated_root, "chat-remote\0image")
         .unwrap();
-    let local_b = orbit_rpc::memory_client(core_b.rpc_service());
+    let local_b = ensembyte_rpc::memory_client(core_b.rpc_service());
     let local_image = local_b
         .call(
             methods::READ_ATTACHMENT_CHUNK,
@@ -881,7 +881,7 @@ async fn target_device_id_routes_over_the_relay() {
     git(&project_root, &["init", "-b", "main"]).await;
     std::fs::write(project_root.join("README.md"), "host B\n").expect("seed repo on B");
     std::fs::write(
-        project_root.join("orbit.json"),
+        project_root.join("ensembyte.json"),
         r#"{"actions":[{"name":"Lint","command":"pnpm lint","icon":"lint"}]}"#,
     )
     .expect("project file");
@@ -918,7 +918,7 @@ async fn target_device_id_routes_over_the_relay() {
                 "targetDeviceId": "device-b",
                 "action": {
                     "name": "Lint",
-                    "command": "printf 'remote-action\\n' > action-marker; if [ -n \"$ORBIT_WORKTREE_PATH\" ]; then printf 'ROOT=%s\\nWT=%s\\nCWD=%s\\n' \"$ORBIT_PROJECT_ROOT\" \"$ORBIT_WORKTREE_PATH\" \"$PWD\" > setup-marker; fi; printf 'remote-action\\n'",
+                    "command": "printf 'remote-action\\n' > action-marker; if [ -n \"$ENSEMBYTE_WORKTREE_PATH\" ]; then printf 'ROOT=%s\\nWT=%s\\nCWD=%s\\n' \"$ENSEMBYTE_PROJECT_ROOT\" \"$ENSEMBYTE_WORKTREE_PATH\" \"$PWD\" > setup-marker; fi; printf 'remote-action\\n'",
                     "icon": "lint",
                     "runOnWorktreeCreate": true,
                 },
@@ -1253,7 +1253,7 @@ async fn exercise_terminal_relay(projectless: bool) {
         LinkCacheConfig::new(relay_url.clone(), Arc::new(StaticToken("test-user".into())));
     link_config.probe_timeout = Duration::from_secs(5);
     core_a.set_links(LinkCache::new(link_config));
-    let client = orbit_rpc::memory_client(core_a.rpc_service());
+    let client = ensembyte_rpc::memory_client(core_a.rpc_service());
 
     // OpenTerminal forwards to B once the relay session is up.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
@@ -1399,7 +1399,7 @@ async fn workspace_file_surface_proxies_over_the_relay() {
         LinkCacheConfig::new(relay_url, Arc::new(StaticToken("test-user".into())));
     link_config.probe_timeout = Duration::from_secs(5);
     core_a.set_links(LinkCache::new(link_config));
-    let client = orbit_rpc::memory_client(core_a.rpc_service());
+    let client = ensembyte_rpc::memory_client(core_a.rpc_service());
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     let listing = loop {
@@ -1495,7 +1495,7 @@ async fn workspace_file_surface_proxies_over_the_relay() {
 
     let large_svg = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><!--{}--><rect width="20" height="20" fill="red"/></svg>"#,
-        " ".repeat(orbit_proto::WORKSPACE_IMAGE_CHUNK_BYTES)
+        " ".repeat(ensembyte_proto::WORKSPACE_IMAGE_CHUNK_BYTES)
     );
     std::fs::write(repo_b.join("remote-image.svg"), &large_svg).unwrap();
     let image_request = serde_json::json!({
@@ -1613,7 +1613,7 @@ async fn workspace_file_surface_proxies_over_the_relay() {
 async fn remote_target_without_links_fails_clearly() {
     let dirs = tempfile::tempdir().expect("tempdir");
     let core = assemble(&dirs.path().join("solo"), "device-solo");
-    let client = orbit_rpc::memory_client(core.rpc_service());
+    let client = ensembyte_rpc::memory_client(core.rpc_service());
     for (method, params) in [
         (
             methods::LIST_PROJECT_ACTIONS,
@@ -1718,8 +1718,8 @@ async fn queue_watch_and_single_consumption_route_to_the_remote_chat_host() {
         LinkCacheConfig::new(relay_url, Arc::new(StaticToken("test-user".into())));
     link_config.probe_timeout = Duration::from_secs(5);
     core_a.set_links(LinkCache::new(link_config));
-    let remote_client = orbit_rpc::memory_client(core_a.rpc_service());
-    let local_client = orbit_rpc::memory_client(core_b.rpc_service());
+    let remote_client = ensembyte_rpc::memory_client(core_a.rpc_service());
+    let local_client = ensembyte_rpc::memory_client(core_b.rpc_service());
 
     // The opening stream frame is the authoritative whole-list snapshot a
     // remote Desktop/iOS client uses to repair or initialize its queue.
@@ -1870,7 +1870,7 @@ async fn workspace_entry_mutations_are_forwarded_to_the_owning_plain_folder() {
             false,
         )
         .unwrap();
-    let client = orbit_rpc::memory_client(viewer.rpc_service());
+    let client = ensembyte_rpc::memory_client(viewer.rpc_service());
     let page = client
         .call(
             methods::LIST_WORKSPACE_DIRECTORY,
@@ -1906,7 +1906,7 @@ async fn workspace_entry_mutations_are_forwarded_to_the_owning_plain_folder() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn mcp_standalone_session_executes_on_the_selected_device() {
     use serde_json::json;
-    use orbit_mcp::{Origin, Tools, Orbit};
+    use ensembyte_mcp::{Origin, Tools, Orbit};
 
     let (relay_url, relay) = fake_device_room().await;
     let dirs = tempfile::tempdir().unwrap();
@@ -1916,8 +1916,8 @@ async fn mcp_standalone_session_executes_on_the_selected_device() {
     let remote_dir = dirs.path().join("b");
     std::fs::create_dir_all(&remote_dir).unwrap();
     std::fs::write(remote_dir.join("device-id"), "device-b").unwrap();
-    let profile = orbit_engine::EngineProfile::development(&remote_dir, "dev-org", "dev-user");
-    let remote_store = orbit_sync::DocsStore::open(profile.store_root()).unwrap();
+    let profile = ensembyte_engine::EngineProfile::development(&remote_dir, "dev-org", "dev-user");
+    let remote_store = ensembyte_sync::DocsStore::open(profile.store_root()).unwrap();
     let b = EngineCore::assemble_with_profile(
         profile,
         registry_for(HarnessId::Codex),
@@ -1925,14 +1925,14 @@ async fn mcp_standalone_session_executes_on_the_selected_device() {
         None,
     )
     .unwrap();
-    let registry = orbit_sync::registry::mock_server::MockRegistryServer::start().await;
+    let registry = ensembyte_sync::registry::mock_server::MockRegistryServer::start().await;
     a.workspace.connect_registry_url(&registry.url());
     b.workspace.connect_registry_url(&registry.url());
     let host = b.start_host_relay(&relay_url);
     let mut config = LinkCacheConfig::new(relay_url, Arc::new(StaticToken("test-user".into())));
     config.probe_timeout = Duration::from_secs(5);
     a.set_links(LinkCache::new(config));
-    let client = orbit_rpc::memory_client(a.rpc_service());
+    let client = ensembyte_rpc::memory_client(a.rpc_service());
     let tools = Tools::new(Arc::new(Orbit::with_client(
         client,
         Origin {

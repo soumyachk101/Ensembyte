@@ -20,7 +20,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use orbit_proto::{Chat, ChatConfig, Device, MAX_SIDEBAR_PINS, Session, SidebarPreferences, Space};
+use ensembyte_proto::{Chat, ChatConfig, Device, MAX_SIDEBAR_PINS, Session, SidebarPreferences, Space};
 
 use crate::schema::DocError;
 use crate::workspace::{DeletedSpace, WorkspaceState};
@@ -342,7 +342,7 @@ struct PersistedState {
 }
 
 /// The local registry replica. Pure data — no I/O, no async; the transport
-/// (`orbit_sync::RegistryClient`) and the engine host drive it under a lock.
+/// (`ensembyte_sync::RegistryClient`) and the engine host drive it under a lock.
 pub struct RegistryDoc {
     device_id: String,
     /// kind → id → row (server truth).
@@ -1042,7 +1042,7 @@ impl RegistryDoc {
     pub fn set_chat_source_context(
         &mut self,
         chat_id: &str,
-        context: &orbit_proto::ConversationSourceContext,
+        context: &ensembyte_proto::ConversationSourceContext,
     ) -> Result<bool, DocError> {
         if !self.row_exists(KIND_CHATS, chat_id) {
             return Ok(false);
@@ -1219,7 +1219,7 @@ impl RegistryDoc {
             .filter(|(id, _)| !known.contains(id))
             .collect();
         for (id, _) in &removed {
-            self.change_sidebar_pin(&orbit_proto::SidebarPinChange::Unpin {
+            self.change_sidebar_pin(&ensembyte_proto::SidebarPinChange::Unpin {
                 session_id: id.clone(),
             })?;
         }
@@ -1408,7 +1408,7 @@ fn row_to<T: serde::de::DeserializeOwned>(row: &RegistryRow) -> Option<T> {
 }
 
 // SessionStatus needs to serialize to the same strings the loro doc used
-// ("idle"/"working"/…) — orbit_proto's serde derives already use camelCase;
+// ("idle"/"working"/…) — ensembyte_proto's serde derives already use camelCase;
 // the compile-time check lives in the tests below.
 
 #[cfg(test)]

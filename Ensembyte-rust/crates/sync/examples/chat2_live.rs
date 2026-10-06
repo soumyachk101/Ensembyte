@@ -5,7 +5,7 @@
 //! checkpoint-then-rows on a fresh doc, then live push/ack.
 //!
 //! Usage:
-//!   cargo run -p orbit-sync --example chat2_live -- <baseUrl> <chatId> <token> <device>
+//!   cargo run -p ensembyte-sync --example chat2_live -- <baseUrl> <chatId> <token> <device>
 //!
 //! Prints a single JSON result line prefixed RESULT: for the driver to parse.
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 
 use futures::future::BoxFuture;
 use loro::{ExportMode, LoroDoc, VersionVector};
-use orbit_sync::SyncError;
-use orbit_sync::chat_client::{ChatClient, ChatDocSink, CheckpointFetcher, RowImportOutcome};
+use ensembyte_sync::SyncError;
+use ensembyte_sync::chat_client::{ChatClient, ChatDocSink, CheckpointFetcher, RowImportOutcome};
 
 struct DocSink {
     doc: Mutex<LoroDoc>,

@@ -4,7 +4,7 @@
 //! ## EngineHandle
 //! The UI talks the same typed RPC whether the engine is in-process or a separate
 //! daemon (ARCHITECTURE §1). [`EngineHandle::bootstrap`] probes the localhost IPC
-//! port, mirroring orbit: if an engine is listening it connects over WebSocket
+//! port, mirroring ensembyte: if an engine is listening it connects over WebSocket
 //! ([`RemoteEngine`]); otherwise it embeds one via [`EngineCore::assemble`] and an
 //! in-memory RPC transport ([`InProcessEngine`]) — same envelopes, same dispatch.
 //!
@@ -28,13 +28,13 @@ use gpui_tokio::Tokio;
 use serde::de::DeserializeOwned;
 
 use crate::comments::ReviewComment;
-use orbit_doc::{SessionMessageEntry, TranscriptDesync, TranscriptFrame};
-use orbit_engine::{Engine, EngineConfig, EngineRuntime, InstanceLock, rpc::AuthRpc};
-use orbit_proto::{
+use ensembyte_doc::{SessionMessageEntry, TranscriptDesync, TranscriptFrame};
+use ensembyte_engine::{Engine, EngineConfig, EngineRuntime, InstanceLock, rpc::AuthRpc};
+use ensembyte_proto::{
     AuthState, ChangeRequestSummary, Chat, ChatIndicator, CheckoutChangeRequestStatus, Device,
     EngineInfo, HarnessId, Session, SidebarPreferencesState, Space, WorkspaceScope,
 };
-use orbit_rpc::{RpcClient, RpcError, RpcReply, RpcService, connect_ws, memory_client, methods};
+use ensembyte_rpc::{RpcClient, RpcError, RpcReply, RpcService, connect_ws, memory_client, methods};
 
 use crate::change_requests::{
     ChangeRequestClientState, ChangeRequestWatchKey, desired_watch_targets, watch_params,
@@ -49,7 +49,7 @@ struct CachedTranscript {
     prepared: Option<Arc<crate::transcript::PreparedTranscript>>,
     chat_id: String,
     entries: Vec<SessionMessageEntry>,
-    context_usage: Option<orbit_proto::ContextUsage>,
+    context_usage: Option<ensembyte_proto::ContextUsage>,
     bytes: usize,
 }
 
@@ -68,7 +68,7 @@ impl WatchPreparation {
     }
     fn prepare(
         &mut self,
-        update: &orbit_doc::TranscriptUpdate,
+        update: &ensembyte_doc::TranscriptUpdate,
     ) -> Result<Arc<crate::transcript::PreparedTranscript>, TranscriptDesync> {
         self.worker.as_mut().unwrap().prepare(update)
     }
@@ -91,7 +91,7 @@ impl Drop for WatchPreparation {
 /// Everything needed to reach (or start) an engine.
 #[derive(Debug, Clone)]
 pub struct EngineBootConfig {
-    /// Data directory for the embedded engine (`~/.orbit`).
+    /// Data directory for the embedded engine (`~/.ensembyte`).
     pub data_dir: PathBuf,
     /// Localhost IPC port to probe / serve.
     pub ipc_port: u16,
@@ -345,7 +345,7 @@ impl EngineHandle {
         //
         // Best-effort — losing the bind race with another engine costs other
         // viewports, not this one.
-        let ipc_task = match orbit_engine::serve_ipc(engine_config.ipc_port, service).await {
+        let ipc_task = match ensembyte_engine::serve_ipc(engine_config.ipc_port, service).await {
             Ok(task) => Some(task),
             Err(err) => {
                 tracing::warn!(
@@ -576,10 +576,10 @@ async fn query_engine_info(client: &RpcClient) -> Result<EngineInfo, RpcError> {
 // ---------------------------------------------------------------------------
 
 // The frontend-agnostic derivations (sort orders, staleness gating, sidebar
-// grouping, the boot gate, relative times) live in `orbit_proto::view`, pure
+// grouping, the boot gate, relative times) live in `ensembyte_proto::view`, pure
 // and with their own test suite. Re-exported here because every call site in
 // this crate reads them as `state::…`.
-pub use orbit_proto::view::{
+pub use ensembyte_proto::view::{
     ChatGroup, ConnectionStatus, GatePhase, Indicator, SESSION_STALE_MS, attention_rank,
     chat_location, display_status, effective_indicator, format_time_ago, gate_phase, group_chats,
     parse_auth_state, project_label, sort_active, sort_chats, sort_spaces, sort_tabs,
@@ -688,7 +688,7 @@ pub struct AppState {
     session_presence_presentation: Vec<Indicator>,
     /// Live edge posture (WatchConnectivity): drives the connection pill,
     /// composer honesty ("will queue"), and the Queued send badges.
-    pub connectivity: orbit_proto::Connectivity,
+    pub connectivity: ensembyte_proto::Connectivity,
     /// Whether this runtime's connectivity watch has delivered its first
     /// frame. The default `Disabled` value is only a placeholder and must not
     /// seed notification decisions before the watch is authoritative.
@@ -739,14 +739,14 @@ pub struct AppState {
     /// The selected chat's pending-message queue — what was typed while the
     /// agent was busy, in the order it will be sent. Device-agnostic: the
     /// chat's doc holds them (every device sees the same queue).
-    pub queue: Vec<orbit_doc::QueuedMessage>,
-    pub context_usage: Option<orbit_proto::ContextUsage>,
+    pub queue: Vec<ensembyte_doc::QueuedMessage>,
+    pub context_usage: Option<ensembyte_proto::ContextUsage>,
     /// The selected chat has a transcript from a `WatchDocMessages` reset
     /// (including a retained reset from an earlier visit). An
     /// empty transcript is otherwise indistinguishable from the pre-replay
     /// gap after selection, where optimistic echoes may already be visible.
     pub transcript_replayed: bool,
-    transcript_baselines: HashMap<String, Arc<orbit_doc::TranscriptBaseline>>,
+    transcript_baselines: HashMap<String, Arc<ensembyte_doc::TranscriptBaseline>>,
     transcript_cache: std::collections::VecDeque<CachedTranscript>,
     pub(crate) prepared_transcripts: HashMap<String, Arc<crate::transcript::PreparedTranscript>>,
     /// Changes only when transcript/optimistic content changes. Presence,
@@ -778,7 +778,7 @@ pub struct AppState {
     pub local_device_id: Option<String>,
     /// Device-local agent CLI update lifecycle. Unlike `ListHarnesses`, this
     /// standing stream may be backed by subprocess and network probes.
-    pub harness_updates: Vec<orbit_proto::HarnessUpdateStatus>,
+    pub harness_updates: Vec<ensembyte_proto::HarnessUpdateStatus>,
     /// Data directory (`ui-settings.json`, `composer-defaults.json`); set at
     /// bootstrap so child views can persist small preference files.
     pub data_dir: Option<PathBuf>,
@@ -829,7 +829,7 @@ impl AppState {
             devices: Vec::new(),
             device_presentation: None,
             session_presence_presentation: Vec::new(),
-            connectivity: orbit_proto::Connectivity::default(),
+            connectivity: ensembyte_proto::Connectivity::default(),
             connectivity_observed: false,
             spaces: Vec::new(),
             chats: Vec::new(),
@@ -1215,7 +1215,7 @@ impl AppState {
     /// Optimistic local echo of a `setChatConfig` mutate: stamp the row now so
     /// the chips update on click; the next chats watch frame carries the same
     /// value once the engine applies the LWW write.
-    pub fn apply_chat_config(&mut self, chat_id: &str, config: orbit_proto::ChatConfig) {
+    pub fn apply_chat_config(&mut self, chat_id: &str, config: ensembyte_proto::ChatConfig) {
         // The pending side chat's copy is what `apply_chats` re-inserts and
         // what an unsaved one is minted from.
         if let Some(chat) = self
@@ -1230,7 +1230,7 @@ impl AppState {
         }
     }
 
-    pub fn apply_connectivity(&mut self, connectivity: orbit_proto::Connectivity) {
+    pub fn apply_connectivity(&mut self, connectivity: ensembyte_proto::Connectivity) {
         self.connectivity = connectivity;
         self.connectivity_observed = true;
     }
@@ -1243,7 +1243,7 @@ impl AppState {
     /// the host device has gone presence-dark. A Local sync state is normal
     /// dormancy while the global connection and remote host are healthy.
     pub fn chat_delivery_degraded(&self, chat_id: &str) -> bool {
-        use orbit_proto::ConnectivityState as S;
+        use ensembyte_proto::ConnectivityState as S;
         if self.connectivity.state == S::Disabled {
             return false;
         }
@@ -1271,7 +1271,7 @@ impl AppState {
             return !net.is_some_and(|net| net.delivery_live);
         }
         match net {
-            Some(net) if net.sync_state == orbit_proto::ChatSyncState::Local => false,
+            Some(net) if net.sync_state == ensembyte_proto::ChatSyncState::Local => false,
             Some(net) => !net.connected,
             None => false,
         }
@@ -1379,7 +1379,7 @@ impl AppState {
             .map(|s| s.id.clone())
     }
 
-    pub fn apply_harness_updates(&mut self, statuses: Vec<orbit_proto::HarnessUpdateStatus>) {
+    pub fn apply_harness_updates(&mut self, statuses: Vec<ensembyte_proto::HarnessUpdateStatus>) {
         self.harness_updates = statuses;
     }
 
@@ -1396,7 +1396,7 @@ impl AppState {
     }
 
     /// The signed-in user, if the engine reports one.
-    pub fn auth_user(&self) -> Option<&orbit_proto::UserProfile> {
+    pub fn auth_user(&self) -> Option<&ensembyte_proto::UserProfile> {
         match self.auth.as_ref()? {
             AuthState::SignedIn { user, .. } | AuthState::NeedsOrganization { user } => Some(user),
             AuthState::SignedOut => None,
@@ -1430,7 +1430,7 @@ impl AppState {
         }
         self.transcript_revision = self.transcript_revision.wrapping_add(1);
         let is_reset = matches!(&frame, TranscriptFrame::Reset { .. });
-        orbit_doc::apply_transcript_frame(&mut self.transcript, frame)?;
+        ensembyte_doc::apply_transcript_frame(&mut self.transcript, frame)?;
         if is_reset {
             self.transcript_replayed = true;
         }
@@ -1471,13 +1471,13 @@ impl AppState {
     pub(crate) fn transcript_baseline(
         &self,
         doc_id: &str,
-    ) -> Option<&Arc<orbit_doc::TranscriptBaseline>> {
+    ) -> Option<&Arc<ensembyte_doc::TranscriptBaseline>> {
         self.transcript_baselines.get(doc_id)
     }
 
     pub fn receive_transcript_update(
         &mut self,
-        update: orbit_doc::TranscriptUpdate,
+        update: ensembyte_doc::TranscriptUpdate,
         cx: &mut Context<Self>,
     ) -> Result<(), TranscriptDesync> {
         self.receive_transcript_frame(update.frame, cx)?;
@@ -1496,7 +1496,7 @@ impl AppState {
     /// with it, and don't treat it as a full reset for caching/scroll anchors.
     pub(crate) fn receive_opening_transcript_update(
         &mut self,
-        update: orbit_doc::TranscriptUpdate,
+        update: ensembyte_doc::TranscriptUpdate,
         history_pending: bool,
         cx: &mut Context<Self>,
     ) -> Result<(), TranscriptDesync> {
@@ -1566,7 +1566,7 @@ impl AppState {
         self.sub_watch_tasks.remove(&doc_id);
         self.transcript_baselines.insert(
             doc_id.clone(),
-            Arc::new(orbit_doc::TranscriptBaseline::capture(&entries)),
+            Arc::new(ensembyte_doc::TranscriptBaseline::capture(&entries)),
         );
         self.sub_transcripts.insert(doc_id, entries);
     }
@@ -1666,7 +1666,7 @@ impl AppState {
 
     /// A `WatchTransfers` snapshot: the engine-side relay leg's in-flight
     /// queued-attachment transfers, replacing the whole set each frame.
-    pub fn apply_transfers(&mut self, transfers: Vec<orbit_proto::TransferProgress>) {
+    pub fn apply_transfers(&mut self, transfers: Vec<ensembyte_proto::TransferProgress>) {
         self.transfers = transfers
             .into_iter()
             .map(|t| (t.upload_id, (t.done, t.total)))
@@ -1745,7 +1745,7 @@ impl AppState {
 
     /// A send the host held for the next turn shows as its queue row, not
     /// as an echo: drop echoes (and the pending-send overlay) for queued ids.
-    pub fn apply_queue(&mut self, items: Vec<orbit_doc::QueuedMessage>) {
+    pub fn apply_queue(&mut self, items: Vec<ensembyte_doc::QueuedMessage>) {
         if let Some(chat_id) = self.selected_chat.as_deref() {
             if let Some(echoes) = self.echoes.get_mut(chat_id) {
                 let before = echoes.len();
@@ -2168,7 +2168,7 @@ impl AppState {
         self.transcript_task = Some(spawn_transcript_watch(cx, handle.clone(), chat_id.clone()));
         if handle
             .engine_info()
-            .supports(orbit_proto::capabilities::MESSAGE_QUEUE_V1)
+            .supports(ensembyte_proto::capabilities::MESSAGE_QUEUE_V1)
         {
             self.queue_task = Some(spawn_queue_watch(cx, handle, chat_id));
         }
@@ -2219,7 +2219,7 @@ impl AppState {
         self.connectivity_observed = false;
         let engine_info = handle.engine_info();
         let supports_harness_updates =
-            engine_info.supports(orbit_proto::capabilities::HARNESS_UPDATES_V1);
+            engine_info.supports(ensembyte_proto::capabilities::HARNESS_UPDATES_V1);
         self.workspace_scope = Some(engine_info.workspace_scope);
         self.local_device_id = Some(engine_info.device_id.clone());
         self.link_roots_revision = self.link_roots_revision.wrapping_add(1);
@@ -2302,7 +2302,7 @@ impl AppState {
                 Some(spawn_transcript_watch(cx, handle.clone(), chat_id.clone()));
             if handle
                 .engine_info()
-                .supports(orbit_proto::capabilities::MESSAGE_QUEUE_V1)
+                .supports(ensembyte_proto::capabilities::MESSAGE_QUEUE_V1)
             {
                 self.queue_task = Some(spawn_queue_watch(cx, handle, chat_id));
             }
@@ -2350,7 +2350,7 @@ impl AppState {
     }
 
     pub fn open_deep_link(&mut self, url: &str, cx: &mut Context<Self>) {
-        match crate::links::parse_orbit_conversation_link(url) {
+        match crate::links::parse_ensembyte_conversation_link(url) {
             Ok(link) => {
                 self.pending_deep_link = Some(link);
                 self.apply_pending_deep_link(cx);
@@ -2440,7 +2440,7 @@ impl AppState {
                                         .parts
                                         .iter()
                                         .map(|part| {
-                                            std::mem::size_of::<orbit_doc::MessagePart>()
+                                            std::mem::size_of::<ensembyte_doc::MessagePart>()
                                                 + part.byte_len()
                                         })
                                         .sum::<usize>()
@@ -2487,7 +2487,7 @@ impl AppState {
                     .as_ref()
                     .map(|p| p.navigation_baseline.clone())
                     .unwrap_or_else(|| {
-                        Arc::new(orbit_doc::TranscriptBaseline::capture(&cached.entries))
+                        Arc::new(ensembyte_doc::TranscriptBaseline::capture(&cached.entries))
                     }),
             );
             if let Some(prepared) = cached.prepared {
@@ -2541,7 +2541,7 @@ impl AppState {
         };
         if handle
             .engine_info()
-            .supports(orbit_proto::capabilities::MESSAGE_QUEUE_V1)
+            .supports(ensembyte_proto::capabilities::MESSAGE_QUEUE_V1)
         {
             self.queue_task = Some(spawn_queue_watch(cx, handle, chat_id));
         }
@@ -2719,7 +2719,7 @@ fn spawn_chats_watch(cx: &mut Context<AppState>, handle: EngineHandle) -> Task<(
     })
 }
 
-pub use orbit_proto::version_triple;
+pub use ensembyte_proto::version_triple;
 
 fn spawn_change_request_watch(
     cx: &mut Context<AppState>,
@@ -2946,7 +2946,7 @@ fn spawn_transcript_watch(
                 let decoded = cx
                     .background_executor()
                     .spawn(async move {
-                        let update: orbit_doc::TranscriptUpdate =
+                        let update: ensembyte_doc::TranscriptUpdate =
                             serde_json::from_value(value).map_err(|e| e.to_string())?;
                         let prepared = preparation.prepare(&update).map_err(|e| e.to_string())?;
                         Ok::<_, String>((update, prepared, preparation))
@@ -3012,7 +3012,7 @@ fn spawn_queue_watch(
     #[derive(serde::Deserialize)]
     struct QueueFrame {
         #[serde(default)]
-        items: Vec<orbit_doc::QueuedMessage>,
+        items: Vec<ensembyte_doc::QueuedMessage>,
     }
     cx.spawn(async move |this, cx| {
         const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
@@ -3092,7 +3092,7 @@ fn spawn_subagent_watch(
                 let decoded = cx
                     .background_executor()
                     .spawn(async move {
-                        let update: orbit_doc::TranscriptUpdate =
+                        let update: ensembyte_doc::TranscriptUpdate =
                             serde_json::from_value(value).map_err(|e| e.to_string())?;
                         let prepared = preparation.prepare(&update).map_err(|e| e.to_string())?;
                         Ok::<_, String>((update, prepared, preparation))
@@ -3114,7 +3114,7 @@ fn spawn_subagent_watch(
                         let frame = update.frame;
                         let text_only = is_text_append(&frame);
                         state.transcript_revision = state.transcript_revision.wrapping_add(1);
-                        if let Err(err) = orbit_doc::apply_transcript_frame(rows, frame) {
+                        if let Err(err) = ensembyte_doc::apply_transcript_frame(rows, frame) {
                             tracing::warn!(%doc_id, error = %err, "resubscribing subagent watch");
                             desync = true;
                         }
@@ -3156,10 +3156,10 @@ mod tests {
     use super::*;
     use chrono::TimeDelta;
     use gpui::AppContext;
-    use orbit_engine::{EngineCore, default_registry};
+    use ensembyte_engine::{EngineCore, default_registry};
     // `SessionStatus` is only needed to build the fixtures below — the module
-    // itself derives everything through `orbit_proto::view`.
-    use orbit_proto::{SessionStatus, UserProfile};
+    // itself derives everything through `ensembyte_proto::view`.
+    use ensembyte_proto::{SessionStatus, UserProfile};
 
     /// A localhost port that was just free (bind :0, read, drop).
     async fn free_port() -> u16 {
@@ -3233,7 +3233,7 @@ mod tests {
     async fn remote_viewport_treats_legacy_daemon_as_ready() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        let server = tokio::spawn(orbit_rpc::serve_ws_listener(
+        let server = tokio::spawn(ensembyte_rpc::serve_ws_listener(
             listener,
             Arc::new(LegacyIdentityRpc),
         ));
@@ -3301,7 +3301,7 @@ mod tests {
     #[tokio::test]
     async fn bootstrap_reports_local_assembly_failure_before_returning_a_handle() {
         let dir = tempfile::tempdir().unwrap();
-        orbit_engine::EngineProfile::local(dir.path()).unwrap();
+        ensembyte_engine::EngineProfile::local(dir.path()).unwrap();
         std::fs::create_dir(dir.path().join("profiles")).unwrap();
         std::fs::write(dir.path().join("profiles/local"), b"not a directory").unwrap();
         let port = free_port().await;
@@ -3349,14 +3349,14 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let (state_tx, state_rx) = tokio::sync::watch::channel(DeferredEngineState::Waiting);
-        let server = tokio::spawn(orbit_rpc::serve_ws_listener(
+        let server = tokio::spawn(ensembyte_rpc::serve_ws_listener(
             listener,
             Arc::new(DeferredIdentityRpc {
                 engine_info: EngineInfo {
                     device_id: "owner-device".into(),
                     workspace_scope: WorkspaceScope::Local,
                     cursor_sdk_version: None,
-                    capabilities: orbit_proto::capabilities::current(),
+                    capabilities: ensembyte_proto::capabilities::current(),
                 },
                 state: state_rx,
             }),
@@ -3625,7 +3625,7 @@ mod tests {
 
     #[tokio::test]
     async fn bootstrap_connects_when_daemon_is_listening() {
-        // Stand in for `orbit headless`: an engine served over the WS IPC port.
+        // Stand in for `ensembyte headless`: an engine served over the WS IPC port.
         let daemon_dir = tempfile::tempdir().unwrap();
         let core = EngineCore::assemble(
             daemon_dir.path(),
@@ -3636,7 +3636,7 @@ mod tests {
         .unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        tokio::spawn(orbit_rpc::serve_ws_listener(listener, core.rpc_service()));
+        tokio::spawn(ensembyte_rpc::serve_ws_listener(listener, core.rpc_service()));
 
         let ui_dir = tempfile::tempdir().unwrap();
         let handle = EngineHandle::bootstrap(EngineBootConfig {
@@ -3736,7 +3736,7 @@ mod tests {
     fn user_entry(id: &str) -> SessionMessageEntry {
         SessionMessageEntry {
             id: id.into(),
-            role: orbit_doc::MessageRole::User,
+            role: ensembyte_doc::MessageRole::User,
             parts: Vec::new(),
             created_at: 0,
             device_id: "dev".into(),
@@ -3752,7 +3752,7 @@ mod tests {
     ) {
         let state = cx.new(|_| AppState::new());
         state.update(cx, |state, cx| {
-            let update = |id: &str| orbit_doc::TranscriptUpdate {
+            let update = |id: &str| ensembyte_doc::TranscriptUpdate {
                 frame: TranscriptFrame::reset(&[user_entry(id)]),
                 context_usage: None,
                 replay_baseline: None,
@@ -3802,7 +3802,7 @@ mod tests {
             let entries: Vec<_> = (0..2000)
                 .map(|i| {
                     let mut entry = user_entry(&format!("message-{i}"));
-                    entry.parts.push(orbit_doc::MessagePart::Text {
+                    entry.parts.push(ensembyte_doc::MessagePart::Text {
                         id: "text".into(),
                         text: "x".repeat(2048),
                     });
@@ -3890,7 +3890,7 @@ mod tests {
             state.select_chat(Some("oversize".into()), cx);
             assert!(state.transcript_cache.is_empty());
             let mut entry = user_entry("large");
-            entry.parts.push(orbit_doc::MessagePart::Text {
+            entry.parts.push(ensembyte_doc::MessagePart::Text {
                 id: "text".into(),
                 text: "x".repeat(TRANSCRIPT_CACHE_BYTES + 1),
             });
@@ -4091,7 +4091,7 @@ mod tests {
         let mut s = AppState::new();
         assert_eq!(s.transfer_percent("u1"), None);
 
-        let frame = |id: &str, done, total| orbit_proto::TransferProgress {
+        let frame = |id: &str, done, total| ensembyte_proto::TransferProgress {
             upload_id: id.into(),
             file_name: "a.png".into(),
             done,
@@ -4371,7 +4371,7 @@ mod tests {
         remote.parent_chat_id = Some("fork".into());
         state.apply_chats(vec![parent, fork, remote]);
         state.apply_spaces(vec![
-            space("local", "dev", "/projects/orbit", 0),
+            space("local", "dev", "/projects/ensembyte", 0),
             space("remote", "other", "/remote/only", 1),
         ]);
         let root = |chat: Option<&str>, root: &str, local: bool| FileLinkRoot {
@@ -4386,7 +4386,7 @@ mod tests {
             vec![
                 root(Some("fork"), "/fork/fork", true),
                 root(Some("parent"), "/repo", true),
-                root(None, "/projects/orbit", true),
+                root(None, "/projects/ensembyte", true),
             ],
             "own checkout, parent, then this device's projects"
         );
@@ -4634,12 +4634,12 @@ mod tests {
     fn apply_chat_config_stamps_the_row() {
         let mut state = AppState::new();
         state.apply_chats(vec![chat("a", 0, None), chat("b", 1, None)]);
-        let config = orbit_proto::ChatConfig {
+        let config = ensembyte_proto::ChatConfig {
             harness: HarnessId::ClaudeCode,
             model: Some("claude-fable-5".into()),
-            reasoning: Some(orbit_proto::ReasoningLevel::XHigh),
+            reasoning: Some(ensembyte_proto::ReasoningLevel::XHigh),
             model_options: serde_json::Map::new(),
-            sandbox: orbit_proto::SandboxLevel::WorkspaceWrite,
+            sandbox: ensembyte_proto::SandboxLevel::WorkspaceWrite,
         };
         state.apply_chat_config("a", config.clone());
         assert_eq!(
@@ -4658,12 +4658,12 @@ mod tests {
         // Unknown chat: no-op, no panic.
         state.apply_chat_config(
             "missing",
-            orbit_proto::ChatConfig {
+            ensembyte_proto::ChatConfig {
                 harness: HarnessId::ClaudeCode,
                 model: None,
                 reasoning: None,
                 model_options: serde_json::Map::new(),
-                sandbox: orbit_proto::SandboxLevel::WorkspaceWrite,
+                sandbox: ensembyte_proto::SandboxLevel::WorkspaceWrite,
             },
         );
     }
@@ -4791,7 +4791,7 @@ mod tests {
         state.selected_chat = Some("c1".into());
         let echo = |id: &str| SessionMessageEntry {
             id: id.into(),
-            role: orbit_doc::MessageRole::User,
+            role: ensembyte_doc::MessageRole::User,
             parts: vec![],
             created_at: 0,
             device_id: "local".into(),
@@ -4799,7 +4799,7 @@ mod tests {
             continuation_of: None,
             duration_ms: None,
         };
-        let row = |id: &str| orbit_doc::QueuedMessage {
+        let row = |id: &str| ensembyte_doc::QueuedMessage {
             id: id.into(),
             text: "held".into(),
             attachments: vec![],
@@ -4829,7 +4829,7 @@ mod tests {
         state.selected_chat = Some("c1".into());
         let echo = SessionMessageEntry {
             id: "m1".into(),
-            role: orbit_doc::MessageRole::User,
+            role: ensembyte_doc::MessageRole::User,
             parts: vec![],
             created_at: 0,
             device_id: "local".into(),
@@ -5013,8 +5013,8 @@ mod tests {
 
     #[test]
     fn project_labels_from_cwd() {
-        assert_eq!(project_label(Some("/home/w/dev/orbit")), "orbit");
-        assert_eq!(project_label(Some("/home/w/dev/orbit/")), "orbit");
+        assert_eq!(project_label(Some("/home/w/dev/ensembyte")), "orbit");
+        assert_eq!(project_label(Some("/home/w/dev/ensembyte/")), "orbit");
         assert_eq!(project_label(None), "No project");
         assert_eq!(project_label(Some("~")), "No project");
         assert_eq!(project_label(Some("~/")), "No project");
@@ -5026,22 +5026,22 @@ mod tests {
     fn grouped_sidebar_preserves_recency_order() {
         // Input is sidebar-sorted (most recent first).
         let chats = [
-            chat_with_cwd("a", 9, Some("/dev/orbit")),
+            chat_with_cwd("a", 9, Some("/dev/ensembyte")),
             chat_with_cwd("b", 8, Some("/dev/zed")),
-            chat_with_cwd("c", 7, Some("/dev/orbit")),
+            chat_with_cwd("c", 7, Some("/dev/ensembyte")),
             chat_with_cwd("d", 6, None),
         ];
         let groups = group_chats(chats.iter());
         let labels: Vec<&str> = groups.iter().map(|g| g.label.as_str()).collect();
         // Groups ordered by their most recent chat; rows keep order.
-        assert_eq!(labels, ["orbit", "zed", "No project"]);
-        let orbit_ids: Vec<&str> = groups[0].chats.iter().map(|c| c.id.as_str()).collect();
-        assert_eq!(orbit_ids, ["a", "c"]);
+        assert_eq!(labels, ["ensembyte", "zed", "No project"]);
+        let ensembyte_ids: Vec<&str> = groups[0].chats.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ensembyte_ids, ["a", "c"]);
         assert!(group_chats(std::iter::empty()).is_empty());
     }
 
     #[test]
-    fn relative_times_match_orbit_format() {
+    fn relative_times_match_ensembyte_format() {
         let now = Utc::now();
         let ago = |secs: i64| now - chrono::Duration::seconds(secs);
         assert_eq!(format_time_ago(ago(0), now), "now");
@@ -5066,10 +5066,10 @@ mod tests {
     #[test]
     fn chat_location_joins_project_and_branch() {
         let mut c = chat_with_cwd("x", 1, Some("/home/w/dev/soccertcg"));
-        c.branch = Some("orbit/rebalance".into());
+        c.branch = Some("ensembyte/rebalance".into());
         assert_eq!(
             chat_location(&c).as_deref(),
-            Some("soccertcg · orbit/rebalance")
+            Some("soccertcg · ensembyte/rebalance")
         );
         c.branch = None;
         assert_eq!(chat_location(&c).as_deref(), Some("soccertcg"));
@@ -5195,7 +5195,7 @@ mod tests {
                 created_at: None,
                 version: Some("0.2.31".into()),
                 cursor_sdk_version: None,
-                capabilities: vec![orbit_proto::capabilities::MESSAGE_QUEUE_V1.into()],
+                capabilities: vec![ensembyte_proto::capabilities::MESSAGE_QUEUE_V1.into()],
             },
             Device {
                 id: "upstream".into(),
@@ -5209,13 +5209,13 @@ mod tests {
             },
         ];
 
-        assert!(state.device_supports("personal", orbit_proto::capabilities::MESSAGE_QUEUE_V1));
-        assert!(!state.device_supports("upstream", orbit_proto::capabilities::MESSAGE_QUEUE_V1));
+        assert!(state.device_supports("personal", ensembyte_proto::capabilities::MESSAGE_QUEUE_V1));
+        assert!(!state.device_supports("upstream", ensembyte_proto::capabilities::MESSAGE_QUEUE_V1));
     }
 
     #[test]
     fn delivery_degradation_and_queued_sends_tell_the_truth() {
-        use orbit_proto::{ChatConnectivity, ConnectivityState};
+        use ensembyte_proto::{ChatConnectivity, ConnectivityState};
         let now = Utc::now();
         let mut s = AppState::default();
         s.local_device_id = Some("local".into());
@@ -5236,7 +5236,7 @@ mod tests {
         }];
         s.connectivity.state = ConnectivityState::Connected;
         s.connectivity.chats = vec![ChatConnectivity {
-            sync_state: orbit_proto::ChatSyncState::Unknown,
+            sync_state: ensembyte_proto::ChatSyncState::Unknown,
             chat_id: "c-remote".into(),
             connected: true,
             delivery_live: false,
@@ -5249,43 +5249,43 @@ mod tests {
 
         // Idle chats can remain without a socket for longer than the engine's
         // grace. A stale down sample during focus must not flash a warning.
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Local;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Local;
         s.connectivity.chats[0].connected = false;
         assert!(!s.chat_delivery_degraded("c-remote"));
 
         // A requested reconnect stays quiet inside its fresh grace window.
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Waiting;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Waiting;
         s.connectivity.chats[0].connected = true;
         assert!(!s.chat_delivery_degraded("c-remote"));
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Connecting;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Connecting;
         assert!(!s.chat_delivery_degraded("c-remote"));
 
         // A requested or active room down past grace degrades even while
         // globally Connected.
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Waiting;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Waiting;
         s.connectivity.chats[0].connected = false;
         assert!(s.chat_delivery_degraded("c-remote"));
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Connecting;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Connecting;
         assert!(s.chat_delivery_degraded("c-remote"));
         s.connectivity.chats[0].connected = true;
 
         // Global registry failure and host presence loss still warn for a
         // dormant chat.
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Local;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Local;
         s.connectivity.state = ConnectivityState::Reconnecting;
         assert!(s.chat_delivery_degraded("c-remote"));
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Waiting;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Waiting;
         assert!(s.chat_delivery_degraded("c-remote"));
 
         // A live chat room can deliver while the registry reconnects. The
         // graced `connected` bit alone is not proof, but delivery_live is.
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Synced;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Synced;
         assert!(s.chat_delivery_degraded("c-remote"));
         s.connectivity.chats[0].delivery_live = true;
         assert!(!s.chat_delivery_degraded("c-remote"));
         s.begin_pending_send("c-remote", "m-live", now);
         assert!(!s.send_queued("c-remote", now));
-        s.connectivity.chats[0].sync_state = orbit_proto::ChatSyncState::Connecting;
+        s.connectivity.chats[0].sync_state = ensembyte_proto::ChatSyncState::Connecting;
         s.connectivity.chats[0].connected = false; // HTTP delivery can outlive the socket.
         assert!(!s.chat_delivery_degraded("c-remote"));
         s.connectivity.chats[0].delivery_live = false;
@@ -5348,7 +5348,7 @@ impl AppState {
     /// Seed provider metadata for the isolated native sidebar review fixture.
     pub fn fixture_sidebar_change_request(
         &mut self,
-        snapshot: orbit_proto::CheckoutChangeRequestStatus,
+        snapshot: ensembyte_proto::CheckoutChangeRequestStatus,
     ) {
         let key = crate::change_requests::ChangeRequestWatchKey {
             device_id: snapshot.device_id.clone(),

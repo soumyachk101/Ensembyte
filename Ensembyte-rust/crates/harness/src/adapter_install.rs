@@ -4,9 +4,9 @@
 //! user's npm state in the hot path: a cold cache meant a multi-minute
 //! download while the chat showed "Working", and a broken one meant npm dying
 //! before the adapter ever ran — silently, with an errno-encoded exit code
-//! (254 = ENOENT, the orbit upstream#95 crash) that surfaced as an opaque
+//! (254 = ENOENT, the ensembyte upstream#95 crash) that surfaced as an opaque
 //! "harness protocol error". Instead, pinned adapter packages are installed
-//! ONCE into a orbit-owned prefix (`~/.orbit/adapters/<pkg>/<version>` on
+//! ONCE into a ensembyte-owned prefix (`~/.ensembyte/adapters/<pkg>/<version>` on
 //! Unix, the local app-data directory on Windows), with its own npm cache
 //! beside it, so a root-owned or read-only user cache cannot break us. Every
 //! subsequent launch spawns `node <entry>` directly — no npm anywhere near a
@@ -59,13 +59,13 @@ impl NpmPin {
     }
 }
 
-pub(crate) const OK_MARKER: &str = ".orbit-install-ok";
+pub(crate) const OK_MARKER: &str = ".ensembyte-install-ok";
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// Managed adapter storage. `$ORBIT_ADAPTERS_DIR` wins, followed by
-/// `$ORBIT_DATA_DIR/adapters`. Windows defaults to
+/// Managed adapter storage. `$ENSEMBYTE_ADAPTERS_DIR` wins, followed by
+/// `$ENSEMBYTE_DATA_DIR/adapters`. Windows defaults to
 /// `%LOCALAPPDATA%/Orbit/adapters` (or `%USERPROFILE%/AppData/Local/...`);
-/// Unix keeps `~/.orbit/adapters`.
+/// Unix keeps `~/.ensembyte/adapters`.
 pub(crate) fn adapters_root() -> Option<PathBuf> {
     adapters_root_with(
         &|key| std::env::var_os(key),
@@ -82,10 +82,10 @@ fn adapters_root_with(
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
     };
-    if let Some(dir) = value("ORBIT_ADAPTERS_DIR") {
+    if let Some(dir) = value("ENSEMBYTE_ADAPTERS_DIR") {
         return Some(dir);
     }
-    if let Some(dir) = value("ORBIT_DATA_DIR") {
+    if let Some(dir) = value("ENSEMBYTE_DATA_DIR") {
         return Some(dir.join("adapters"));
     }
     if platform == crate::executable::Platform::Windows {
@@ -100,7 +100,7 @@ fn adapters_root_with(
                 })
             })
     } else {
-        value("HOME").map(|home| home.join(".orbit").join("adapters"))
+        value("HOME").map(|home| home.join(".ensembyte").join("adapters"))
     }
 }
 
@@ -372,7 +372,7 @@ pub(crate) async fn ensure_installed(
     })
 }
 
-/// A orbit-owned shim script materialized INSIDE a managed install dir, for
+/// A ensembyte-owned shim script materialized INSIDE a managed install dir, for
 /// SDK packages with no bin entry (`@cursor/sdk`): the shim resolves the SDK
 /// from the sibling `node_modules`. Returns the shim path when the install is
 /// complete. Each build's shim source has its own immutable filename.
@@ -410,7 +410,7 @@ fn materialize_shim(dir: &Path, name: &str, contents: &str) -> std::io::Result<P
 }
 
 /// Like [`ensure_installed`], for a package consumed as a LIBRARY by a
-/// orbit-owned shim rather than through a bin entry. Installs the pin once,
+/// ensembyte-owned shim rather than through a bin entry. Installs the pin once,
 /// writes `contents` to a content-addressed sibling of `shim_name`, and returns the shim
 /// path (spawn it via [`launch_for_entry`]).
 pub(crate) async fn ensure_installed_shim(
@@ -523,7 +523,7 @@ async fn install_into(
     // A bare manifest keeps npm from walking up into a user project.
     std::fs::write(tmp_dir.join("package.json"), "{\"private\":true}\n")?;
     tracing::info!(
-        target: "orbit_harness::adapter_install",
+        target: "ensembyte_harness::adapter_install",
         package = %pin.spec(),
         dir = %tmp_dir.display(),
         "installing ACP adapter"
@@ -700,8 +700,8 @@ mod tests {
         assert_eq!(
             adapters_root_with(
                 &env(&[
-                    ("ORBIT_ADAPTERS_DIR", explicit.clone().into_os_string()),
-                    ("ORBIT_DATA_DIR", data.clone().into_os_string()),
+                    ("ENSEMBYTE_ADAPTERS_DIR", explicit.clone().into_os_string()),
+                    ("ENSEMBYTE_DATA_DIR", data.clone().into_os_string()),
                     ("LOCALAPPDATA", local.clone().into_os_string()),
                 ]),
                 crate::executable::Platform::Windows,
@@ -710,7 +710,7 @@ mod tests {
         );
         assert_eq!(
             adapters_root_with(
-                &env(&[("ORBIT_DATA_DIR", data.clone().into_os_string())]),
+                &env(&[("ENSEMBYTE_DATA_DIR", data.clone().into_os_string())]),
                 crate::executable::Platform::Windows,
             ),
             Some(data.join("adapters"))

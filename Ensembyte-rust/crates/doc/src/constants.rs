@@ -1,4 +1,4 @@
-//! Constants carried over from orbit `packages/session-doc/src/constants.ts`.
+//! Constants carried over from ensembyte `packages/session-doc/src/constants.ts`.
 //! Per the original design these are starting points — re-measure with real heavy sessions.
 
 /// Max bytes for a single message entry before continuation splitting.

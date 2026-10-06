@@ -179,7 +179,7 @@ impl PreviewService {
             loop {
                 let binding = tokio::select! {
                     _ = proxy_stop.cancelled() => break,
-                    binding = proxy::serve(router.clone(), orbit_proto::PREVIEW_PROXY_PORT, proxy_stop.child_token()) => binding,
+                    binding = proxy::serve(router.clone(), ensembyte_proto::PREVIEW_PROXY_PORT, proxy_stop.child_token()) => binding,
                 };
                 match binding {
                     Ok((port, tasks)) => {
@@ -190,7 +190,7 @@ impl PreviewService {
                         break;
                     }
                     Err(error) => proxy_catalog.set_proxy_status(
-                        orbit_proto::PREVIEW_PROXY_PORT,
+                        ensembyte_proto::PREVIEW_PROXY_PORT,
                         Some(format!(
                             "Local previews could not listen on port 7331: {error}"
                         )),
@@ -224,7 +224,7 @@ impl PreviewService {
                         discovery::listeners()
                             .into_iter()
                             .filter(|l| {
-                                l.address.port() != orbit_proto::PREVIEW_PROXY_PORT
+                                l.address.port() != ensembyte_proto::PREVIEW_PROXY_PORT
                                     && l.pid != std::process::id()
                             })
                             .filter_map(|listener| {
@@ -328,7 +328,7 @@ mod tests {
             args: vec!["node".into()],
             started_at: 1_000,
             address: ([127, 0, 0, 1], port).into(),
-            orbit_owned: false,
+            ensembyte_owned: false,
         }
     }
     #[test]

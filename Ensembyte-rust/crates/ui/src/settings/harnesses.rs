@@ -23,11 +23,11 @@ use gpui::{
     px,
 };
 
-use orbit_engine::registry::{HarnessDescriptor, descriptor_enabled};
+use ensembyte_engine::registry::{HarnessDescriptor, descriptor_enabled};
 
-use orbit_proto::{HarnessId, HarnessUpdatePhase, HarnessUpdatePolicy, HarnessUpdateStatus};
+use ensembyte_proto::{HarnessId, HarnessUpdatePhase, HarnessUpdatePolicy, HarnessUpdateStatus};
 
-use orbit_rpc::methods;
+use ensembyte_rpc::methods;
 
 use crate::motion;
 use crate::pickers::visible_harnesses;
@@ -85,7 +85,7 @@ fn install_hint(harness: HarnessId, enabled: bool, can_install: bool) -> String 
     } else {
         format!("Install the {} CLI to enable", cli_name(harness))
     };
-    if !can_install && let Some(command) = orbit_harness::install::manual_command(harness) {
+    if !can_install && let Some(command) = ensembyte_harness::install::manual_command(harness) {
         format!("{hint}. Install with `{command}`")
     } else {
         hint
@@ -364,9 +364,9 @@ impl HarnessesPage {
             || {
                 engine
                     .engine_info()
-                    .supports(orbit_proto::capabilities::HARNESS_UPDATES_V1)
+                    .supports(ensembyte_proto::capabilities::HARNESS_UPDATES_V1)
             },
-            |device| state.device_supports(device, orbit_proto::capabilities::HARNESS_UPDATES_V1),
+            |device| state.device_supports(device, ensembyte_proto::capabilities::HARNESS_UPDATES_V1),
         )
     }
 
@@ -1252,11 +1252,11 @@ mod tests {
             let state = cx.new(|_| crate::state::AppState::new());
             super::HarnessesPage::new(state, cx)
         });
-        let descriptor = |id, name: &str| orbit_engine::registry::HarnessDescriptor {
+        let descriptor = |id, name: &str| ensembyte_engine::registry::HarnessDescriptor {
             id,
             name: name.into(),
             supports_steering: false,
-            steering_mode: orbit_proto::SteeringMode::TurnBoundary,
+            steering_mode: ensembyte_proto::SteeringMode::TurnBoundary,
             reasoning_levels: Vec::new(),
             installed: true,
             can_install: false,
@@ -1265,13 +1265,13 @@ mod tests {
         window
             .update(cx, |page, _, cx| {
                 page.harnesses = super::Loadable::Ready(vec![
-                    descriptor(orbit_proto::HarnessId::ClaudeCode, "Claude Code"),
-                    descriptor(orbit_proto::HarnessId::Codex, "Codex"),
+                    descriptor(ensembyte_proto::HarnessId::ClaudeCode, "Claude Code"),
+                    descriptor(ensembyte_proto::HarnessId::Codex, "Codex"),
                 ]);
-                page.toggle_agent_details(orbit_proto::HarnessId::ClaudeCode, cx);
+                page.toggle_agent_details(ensembyte_proto::HarnessId::ClaudeCode, cx);
                 assert_eq!(
                     page.expanded_harness,
-                    Some(orbit_proto::HarnessId::ClaudeCode)
+                    Some(ensembyte_proto::HarnessId::ClaudeCode)
                 );
                 assert_eq!(
                     page.accounts_page
@@ -1279,7 +1279,7 @@ mod tests {
                         .unwrap()
                         .read(cx)
                         .embedded_harness(),
-                    Some(orbit_proto::HarnessId::ClaudeCode)
+                    Some(ensembyte_proto::HarnessId::ClaudeCode)
                 );
             })
             .unwrap();
@@ -1287,15 +1287,15 @@ mod tests {
             .unwrap();
         window
             .update(cx, |page, _, cx| {
-                page.toggle_agent_details(orbit_proto::HarnessId::Codex, cx);
-                assert_eq!(page.expanded_harness, Some(orbit_proto::HarnessId::Codex));
+                page.toggle_agent_details(ensembyte_proto::HarnessId::Codex, cx);
+                assert_eq!(page.expanded_harness, Some(ensembyte_proto::HarnessId::Codex));
                 assert_eq!(
                     page.accounts_page
                         .as_ref()
                         .unwrap()
                         .read(cx)
                         .embedded_harness(),
-                    Some(orbit_proto::HarnessId::Codex)
+                    Some(ensembyte_proto::HarnessId::Codex)
                 );
             })
             .unwrap();
@@ -1305,17 +1305,17 @@ mod tests {
         window
             .update(cx, |page, _, cx| {
                 page.harnesses = super::Loadable::Ready(vec![descriptor(
-                    orbit_proto::HarnessId::Antigravity,
+                    ensembyte_proto::HarnessId::Antigravity,
                     "Antigravity",
                 )]);
-                page.toggle_agent_details(orbit_proto::HarnessId::Antigravity, cx);
+                page.toggle_agent_details(ensembyte_proto::HarnessId::Antigravity, cx);
                 assert_eq!(
                     page.accounts_page
                         .as_ref()
                         .unwrap()
                         .read(cx)
                         .embedded_harness(),
-                    Some(orbit_proto::HarnessId::Antigravity)
+                    Some(ensembyte_proto::HarnessId::Antigravity)
                 );
             })
             .unwrap();

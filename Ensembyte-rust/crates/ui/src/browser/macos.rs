@@ -61,7 +61,7 @@ impl BrowserData {
             return;
         };
         if url.scheme() != "http"
-            || url.port() != Some(orbit_proto::PREVIEW_PROXY_PORT)
+            || url.port() != Some(ensembyte_proto::PREVIEW_PROXY_PORT)
             || !host.ends_with(".localhost")
         {
             return;

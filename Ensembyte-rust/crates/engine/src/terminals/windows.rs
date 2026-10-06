@@ -19,7 +19,7 @@ use windows_sys::Win32::System::Threading::{
     GetExitCodeProcess, INFINITE, PROCESS_INFORMATION, ResumeThread, STARTF_USESTDHANDLES,
     STARTUPINFOEXW, WaitForSingleObject,
 };
-use orbit_harness::windows_process::{Attributes, Job};
+use ensembyte_harness::windows_process::{Attributes, Job};
 
 /// One teardown operation shared by natural exit, close, and shutdown. Empty
 /// resource slots mean ownership moved, not that ConPTY and its reader closed.

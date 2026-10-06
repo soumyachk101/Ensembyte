@@ -1,9 +1,9 @@
 //! Pi's native session id survives an idle process crash through dispatch.
 #![cfg(unix)]
 use std::{sync::Arc, time::Duration};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::PiHarness;
-use orbit_proto::{HarnessId, RunRequest, SandboxLevel};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::PiHarness;
+use ensembyte_proto::{HarnessId, RunRequest, SandboxLevel};
 
 #[tokio::test]
 async fn pi_idle_crash_next_dispatch_loads_stored_session() {
@@ -43,7 +43,7 @@ async fn pi_idle_crash_next_dispatch_loads_stored_session() {
             loop {
                 let entries = handle.doc().read_entries().unwrap();
                 if entries.iter().any(|entry| entry.parts.iter().any(|part|
-                    matches!(part, orbit_doc::MessagePart::Text { text, .. } if text == &format!("reply:{prompt}"))
+                    matches!(part, ensembyte_doc::MessagePart::Text { text, .. } if text == &format!("reply:{prompt}"))
                 )) { break; }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -95,7 +95,7 @@ async fn timed_out_native_question_resolves_and_finishes_without_user_input() {
         while !core
             .sessions
             .session_status(chat)
-            .is_some_and(|s| s.status == orbit_proto::SessionStatus::AwaitingInput)
+            .is_some_and(|s| s.status == ensembyte_proto::SessionStatus::AwaitingInput)
         {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
@@ -103,12 +103,12 @@ async fn timed_out_native_question_resolves_and_finishes_without_user_input() {
             let entries = handle.doc().read_entries().unwrap();
             if entries.iter().any(|entry| {
                 entry.parts.iter().any(|part| {
-                    matches!(part, orbit_doc::MessagePart::Input { resolved: true, .. })
+                    matches!(part, ensembyte_doc::MessagePart::Input { resolved: true, .. })
                 })
             }) && core
                 .sessions
                 .session_status(chat)
-                .is_some_and(|s| s.status == orbit_proto::SessionStatus::Idle)
+                .is_some_and(|s| s.status == ensembyte_proto::SessionStatus::Idle)
             {
                 break;
             }

@@ -32,16 +32,16 @@ const CAPTURED_ENV: &[&str] = &[
     "ENSEMBYTE_CALLBACK_PORT",
     "ENSEMBYTE_HARNESS",
     "ENSEMBYTE_DEVICE_NAME",
-    "ORBIT_DATA_DIR",
-    "ORBIT_EDGE_URL",
-    "ORBIT_EDGE_TOKEN",
-    "ORBIT_ORG_ID",
-    "ORBIT_WORKOS_CLIENT_ID",
-    "ORBIT_WORKOS_API_BASE",
-    "ORBIT_IPC_PORT",
-    "ORBIT_CALLBACK_PORT",
-    "ORBIT_HARNESS",
-    "ORBIT_DEVICE_NAME",
+    "ENSEMBYTE_DATA_DIR",
+    "ENSEMBYTE_EDGE_URL",
+    "ENSEMBYTE_EDGE_TOKEN",
+    "ENSEMBYTE_ORG_ID",
+    "ENSEMBYTE_WORKOS_CLIENT_ID",
+    "ENSEMBYTE_WORKOS_API_BASE",
+    "ENSEMBYTE_IPC_PORT",
+    "ENSEMBYTE_CALLBACK_PORT",
+    "ENSEMBYTE_HARNESS",
+    "ENSEMBYTE_DEVICE_NAME",
     "RUST_LOG",
 ];
 
@@ -266,10 +266,10 @@ fn exec_path_for(exe: &Path, home: Option<&Path>) -> String {
         "%h/.ensembyte/app/current/ensembyte".to_string()
     } else {
         let legacy_installed = home
-            .map(|home| home.join(".orbit/app"))
+            .map(|home| home.join(".ensembyte/app"))
             .is_some_and(|app_root| exe.starts_with(app_root));
         if legacy_installed {
-            "%h/.orbit/app/current/orbit".to_string()
+            "%h/.ensembyte/app/current/ensembyte".to_string()
         } else {
             format!("{}", exe.display())
         }

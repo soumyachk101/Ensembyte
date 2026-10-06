@@ -173,9 +173,9 @@ Separate process memory peaks need not occur at the same instant.
 
 ```sh
 CLAUDE_CODE_EXECUTABLE="$PWD/scripts/replay-claude.py" \
-ORBIT_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
-ORBIT_PROFILE_BACKGROUND_CHATS=50 ORBIT_PROFILE_SUBMIT_UI=1 \
-ORBIT_PROFILE_PROMPT='Replay fixture.' ORBIT_PROFILE_IDLE_MS=10000 \
-ORBIT_FRAME_STATS=0 node scripts/resource-profile.mjs \
-  /path/to/immutable/orbit /tmp/fresh-replay-profile claude-code
+ENSEMBYTE_REPLAY_JOURNAL="$PWD/scripts/fixtures/resource-stream.jsonl" \
+ENSEMBYTE_PROFILE_BACKGROUND_CHATS=50 ENSEMBYTE_PROFILE_SUBMIT_UI=1 \
+ENSEMBYTE_PROFILE_PROMPT='Replay fixture.' ENSEMBYTE_PROFILE_IDLE_MS=10000 \
+ENSEMBYTE_FRAME_STATS=0 node scripts/resource-profile.mjs \
+  /path/to/immutable/ensembyte /tmp/fresh-replay-profile claude-code
 ```

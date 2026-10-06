@@ -2,8 +2,8 @@
 //! threads, chosen with the composer's own model picker (title-bound mode).
 
 use gpui::{AnyElement, Context, Entity, Subscription, Task, div, prelude::*, px};
-use orbit_engine::registry::TitleSettings;
-use orbit_rpc::methods;
+use ensembyte_engine::registry::TitleSettings;
+use ensembyte_rpc::methods;
 
 use crate::pickers::{Pickers, TitleModelPicked};
 use crate::popover::Loadable;

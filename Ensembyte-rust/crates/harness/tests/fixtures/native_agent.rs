@@ -29,9 +29,9 @@ fn main() {
             json!({
                 "argv": args.iter().skip(2).collect::<Vec<_>>(),
                 "cwd": std::env::current_dir().unwrap(),
-                "marker": std::env::var("ORBIT_LAUNCH_MARKER").ok(),
-                "removed": std::env::var("ORBIT_LAUNCH_REMOVED").ok(),
-                "unicode": std::env::var("ORBIT_Ä_KEY").ok(),
+                "marker": std::env::var("ENSEMBYTE_LAUNCH_MARKER").ok(),
+                "removed": std::env::var("ENSEMBYTE_LAUNCH_REMOVED").ok(),
+                "unicode": std::env::var("ENSEMBYTE_Ä_KEY").ok(),
                 "path": std::env::var("PATH").ok(),
             })
         );
@@ -49,13 +49,13 @@ fn main() {
         let path = std::env::current_dir()
             .unwrap()
             .join("descendant-pids.json");
-        let mut command = orbit_harness::process::Command::new(std::env::current_exe().unwrap());
+        let mut command = ensembyte_harness::process::Command::new(std::env::current_exe().unwrap());
         command
             .arg("--tree-child")
             .arg(&path)
-            .stdin(orbit_harness::process::Stdio::null())
-            .stdout(orbit_harness::process::Stdio::null())
-            .stderr(orbit_harness::process::Stdio::null());
+            .stdin(ensembyte_harness::process::Stdio::null())
+            .stdout(ensembyte_harness::process::Stdio::null())
+            .stderr(ensembyte_harness::process::Stdio::null());
         let _owned = command.spawn().unwrap();
         let pids = await_tree(&path);
         println!("{}", serde_json::to_string(&pids).unwrap());

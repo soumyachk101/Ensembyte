@@ -6,13 +6,13 @@ Project Actions are named shell commands attached to a project. They can be run 
 
 Actions are private configuration on the device that owns the project. Orbit stores them in the active engine profile's `project-actions.json`; they are not written to the workspace registry, session documents, or the edge service.
 
-Opening a repository never authorizes a command. A repository may offer Actions through `orbit.json`, but each candidate must be explicitly imported before it can be run or selected as setup.
+Opening a repository never authorizes a command. A repository may offer Actions through `ensembyte.json`, but each candidate must be explicitly imported before it can be run or selected as setup.
 
 For a remote project, list, edit, delete, and run requests are sent to the owning device through `targetDeviceId`. The viewing device never resolves the remote path or falls back to running the command locally when the owner is offline.
 
-## `orbit.json`
+## `ensembyte.json`
 
-Place `orbit.json` at the exact project root to offer version-controlled imports:
+Place `ensembyte.json` at the exact project root to offer version-controlled imports:
 
 ```json
 {
@@ -42,8 +42,8 @@ Every invocation opens a fresh managed terminal. On Unix, Orbit stores the exact
 The owning engine validates that the Space, Chat, and checkout belong to the same local project before opening the PTY. A manual run uses the chat checkout as its working directory and injects:
 
 ```text
-ORBIT_PROJECT_ROOT=<canonical project root>
-ORBIT_WORKTREE_PATH=<canonical chat worktree, only outside the main checkout>
+ENSEMBYTE_PROJECT_ROOT=<canonical project root>
+ENSEMBYTE_WORKTREE_PATH=<canonical chat worktree, only outside the main checkout>
 ```
 
 The terminal output is replayable, so output produced before the desktop subscribes is still displayed. Subscribe, resize, write, and close requests retain the terminal's owning `targetDeviceId`.
@@ -54,7 +54,7 @@ The main title-bar segment remembers the last successfully started Action for th
 
 Only creation of a new worktree can start the setup Action. Reusing an existing worktree and using the main checkout do not run setup again.
 
-For desktop sends, the worktree directive rides the durable queued `Run` command. The owning engine creates the worktree and starts setup while draining that command, before dispatching the first agent turn. Setup runs with the new worktree as its cwd and always receives both `ORBIT_PROJECT_ROOT` and `ORBIT_WORKTREE_PATH`.
+For desktop sends, the worktree directive rides the durable queued `Run` command. The owning engine creates the worktree and starts setup while draining that command, before dispatching the first agent turn. Setup runs with the new worktree as its cwd and always receives both `ENSEMBYTE_PROJECT_ROOT` and `ENSEMBYTE_WORKTREE_PATH`.
 
 The queue reply is not held open while the host creates the worktree. Desktop polls a short-lived, command-scoped handoff to attach the already-open setup terminal when it becomes available. A lost relay reply therefore cannot leave the composer stuck on `Sending…` while the agent runs remotely.
 

@@ -12,7 +12,7 @@ final class LineBreakAccuracyTests: XCTestCase {
             "Inline code spans get chips, links are tappable, and old ideas are struck through when they no longer apply to the plan.",
             "Nested bullet with a very/long/path/that/must/wrap/somewhere/in/the/middle/because/it/is/too/wide.rs and then more words.",
             "See https://example.com/a/very/long/url/that/keeps/going/and/going?query=parameters&more=stuff for the details.",
-            "Run cargo test -p orbit-text --release -- --nocapture, then compare the numbers against the previous baseline run.",
+            "Run cargo test -p ensembyte-text --release -- --nocapture, then compare the numbers against the previous baseline run.",
             "CJK: 日本語のテキストも正しく折り返されます。中文也可以正确换行，不需要空格。한국어 문장도 줄바꿈이 됩니다.",
             "Emoji sequences 👩‍💻 🧑🏽‍🚀 🇯🇵 1️⃣ never split, even when a line is tight 🚀✨🔥 around them.",
             "Numbers like 3,100 and 1.5×, dates like 2026-09-26, and times like 12:48 stay intact; so do e.g. and i.e. abbreviations.",

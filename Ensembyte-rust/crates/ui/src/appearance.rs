@@ -21,7 +21,7 @@
 
 use gpui::{App, Global, Subscription, Window};
 use serde::{Deserialize, Serialize};
-use orbit_theme::{AccentSelection, SurfacePreference, ThemeSelection};
+use ensembyte_theme::{AccentSelection, SurfacePreference, ThemeSelection};
 
 use crate::settings::{self, SavePolicy};
 use crate::theme::{Appearance, Theme};
@@ -293,10 +293,10 @@ pub fn apply_registry_change(cx: &mut App) {
     reapply_window_background(cx);
 }
 
-fn model_appearance(appearance: Appearance) -> orbit_theme::Appearance {
+fn model_appearance(appearance: Appearance) -> ensembyte_theme::Appearance {
     match appearance {
-        Appearance::Dark => orbit_theme::Appearance::Dark,
-        Appearance::Light => orbit_theme::Appearance::Light,
+        Appearance::Dark => ensembyte_theme::Appearance::Dark,
+        Appearance::Light => ensembyte_theme::Appearance::Light,
     }
 }
 

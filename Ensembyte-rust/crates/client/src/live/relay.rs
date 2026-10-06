@@ -1,4 +1,4 @@
-//! Host RPCs over the device-room relay (`orbit_rpc::LinkCache`: one cached,
+//! Host RPCs over the device-room relay (`ensembyte_rpc::LinkCache`: one cached,
 //! self-evicting link per target device, dark-peer fast-fail, dial cooldown),
 //! plus the multi-call transfers built on it and the PR-status watches.
 
@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
-use orbit_proto::CheckoutChangeRequestStatus;
-use orbit_rpc::{LinkCache, LinkCacheConfig, PeerLiveness, RpcError, methods};
+use ensembyte_proto::CheckoutChangeRequestStatus;
+use ensembyte_rpc::{LinkCache, LinkCacheConfig, PeerLiveness, RpcError, methods};
 
 use super::{Bearer, b64};
 use crate::client::ClientInner;

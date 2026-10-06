@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Notify, broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
-use orbit_proto::{
+use ensembyte_proto::{
     ListWorkspaceDirectoryRequest, ReadWorkspaceFileRequest, SearchWorkspaceFilesRequest,
     WatchWorkspaceFilesRequest, WorkspaceDirectoryPage, WorkspaceEntry, WorkspaceEntryKind,
     WorkspaceFileChange, WorkspaceFileChangeKind, WorkspaceFileChanges,
@@ -22,7 +22,7 @@ use orbit_proto::{
     WorkspaceTextEncoding, WorkspaceWritableEncoding, WorkspaceWritableLineEnding,
     WriteWorkspaceFileOutcome, WriteWorkspaceFileRequest,
 };
-use orbit_rpc::RpcError;
+use ensembyte_rpc::RpcError;
 
 use crate::{Repos, WorkspaceHost};
 
@@ -398,7 +398,7 @@ impl WorkspaceFiles {
         cancel_on_drop.disarm();
         result.map(|mut page| {
             page.checkout_id = Some(workspace.checkout_id);
-            page.mutation_capabilities = Some(orbit_proto::WorkspaceMutationCapabilities {
+            page.mutation_capabilities = Some(ensembyte_proto::WorkspaceMutationCapabilities {
                 move_entry: cfg!(any(target_os = "linux", target_os = "macos", windows)),
                 delete_entry: true,
             });
@@ -458,8 +458,8 @@ impl WorkspaceFiles {
 
     pub async fn read_image(
         &self,
-        request: orbit_proto::ReadWorkspaceImageRequest,
-    ) -> Result<orbit_proto::WorkspaceImageChunk, WorkspaceFilesError> {
+        request: ensembyte_proto::ReadWorkspaceImageRequest,
+    ) -> Result<ensembyte_proto::WorkspaceImageChunk, WorkspaceFilesError> {
         let workspace = self.resolve_target(&request.target).await?;
         let absolute = request.target.chat_id.is_some() && request.path.starts_with('/');
         if !absolute
@@ -994,7 +994,7 @@ fn normalize_watch_path_including_temp(root: &Path, path: &Path) -> Option<Strin
 fn is_internal_temp_wire_path(path: &str) -> bool {
     path.rsplit('/')
         .next()
-        .is_some_and(|name| name.starts_with(".orbit-save-") && name.ends_with(".tmp"))
+        .is_some_and(|name| name.starts_with(".ensembyte-save-") && name.ends_with(".tmp"))
 }
 
 fn exceeds_watch_budget(root: &Path) -> bool {
@@ -1296,11 +1296,11 @@ fn compare_workspace_search_matches(
 fn read_image_blocking(
     root: &Path,
     relative: &WorkspaceRelativePath,
-    request: &orbit_proto::ReadWorkspaceImageRequest,
-) -> Result<orbit_proto::WorkspaceImageChunk, WorkspaceFilesError> {
+    request: &ensembyte_proto::ReadWorkspaceImageRequest,
+) -> Result<ensembyte_proto::WorkspaceImageChunk, WorkspaceFilesError> {
     use base64::Engine as _;
     use std::io::Read;
-    use orbit_proto::{MAX_WORKSPACE_IMAGE_BYTES, WORKSPACE_IMAGE_CHUNK_BYTES};
+    use ensembyte_proto::{MAX_WORKSPACE_IMAGE_BYTES, WORKSPACE_IMAGE_CHUNK_BYTES};
     let mime = match relative
         .as_path()
         .extension()
@@ -1375,7 +1375,7 @@ fn read_image_blocking(
         .offset
         .saturating_add(WORKSPACE_IMAGE_CHUNK_BYTES)
         .min(bytes.len());
-    Ok(orbit_proto::WorkspaceImageChunk {
+    Ok(ensembyte_proto::WorkspaceImageChunk {
         checkout_id: request.expected_checkout_id.clone(),
         content_hash: hash,
         mime_type: mime.into(),
@@ -1829,7 +1829,7 @@ fn write_file_blocking(
     let parent = target
         .parent()
         .ok_or_else(|| WorkspaceFilesError::Io("file has no parent directory".into()))?;
-    let temp_path = parent.join(format!(".orbit-save-{}.tmp", uuid::Uuid::new_v4()));
+    let temp_path = parent.join(format!(".ensembyte-save-{}.tmp", uuid::Uuid::new_v4()));
     let mut temp = TempFileGuard::new(temp_path.clone());
     let mut file = std::fs::OpenOptions::new()
         .write(true)
@@ -2678,7 +2678,7 @@ mod tests {
         else {
             panic!("expected outside resolution");
         };
-        let request = orbit_proto::ReadWorkspaceImageRequest {
+        let request = ensembyte_proto::ReadWorkspaceImageRequest {
             target: WorkspaceTarget {
                 chat_id: Some("chat".into()),
                 space_id: None,
@@ -2799,7 +2799,7 @@ mod tests {
                 .unwrap()
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".orbit-save-")
+                .starts_with(".ensembyte-save-")
         }));
     }
 
@@ -2886,7 +2886,7 @@ mod tests {
             ),
             Ok(
                 notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
-                    .add_path(root.join(".orbit-save-dead.tmp"))
+                    .add_path(root.join(".ensembyte-save-dead.tmp"))
                     .add_path(root.join("saved.rs")),
             ),
         ];
@@ -3167,7 +3167,7 @@ mod tests {
 #[cfg(test)]
 mod image_tests {
     use super::*;
-    use orbit_proto::{ReadWorkspaceImageRequest, WORKSPACE_IMAGE_CHUNK_BYTES, WorkspaceTarget};
+    use ensembyte_proto::{ReadWorkspaceImageRequest, WORKSPACE_IMAGE_CHUNK_BYTES, WorkspaceTarget};
     fn request() -> ReadWorkspaceImageRequest {
         ReadWorkspaceImageRequest {
             target: WorkspaceTarget {
@@ -3215,7 +3215,7 @@ mod image_tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         let file = std::fs::File::create(root.join("image.png")).unwrap();
-        file.set_len(orbit_proto::MAX_WORKSPACE_IMAGE_BYTES as u64 + 1)
+        file.set_len(ensembyte_proto::MAX_WORKSPACE_IMAGE_BYTES as u64 + 1)
             .unwrap();
         assert!(
             read_image_blocking(

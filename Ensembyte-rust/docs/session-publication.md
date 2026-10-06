@@ -44,11 +44,11 @@ history deletion or prove that every possible checkpoint-pruning defect is fixed
 
 ## Validation
 
-`cargo test --locked -p orbit-sync --lib` covers the sync client and storage,
+`cargo test --locked -p ensembyte-sync --lib` covers the sync client and storage,
 including cursor preservation, restart/deduplication, and injected outbox-write
 failure followed by ordinary or cursor-bearing snapshot persistence.
 
-`cargo test --locked -p orbit-engine --lib --test session_publication --test restart_resume --test local_profiles --test born_chat2_race --test codex_subagents --test message_queue --test transcript_salvage`
+`cargo test --locked -p ensembyte-engine --lib --test session_publication --test restart_resume --test local_profiles --test born_chat2_race --test codex_subagents --test message_queue --test transcript_salvage`
 covers actual LRU eviction, disconnected cleanup before snapshot debounce,
 engine restart/resume, command queues, and profile lifecycle. The Codex adapter
 fixture reproduces a successful-but-invisible resumed turn, then validates full

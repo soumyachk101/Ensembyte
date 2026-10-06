@@ -10,7 +10,7 @@ use gpui::{
     Context, Entity, EventEmitter, FocusHandle, ListAlignment, ListState, Pixels, Point, Render,
     SharedString, Subscription, Task, Window, div, prelude::*, px,
 };
-use orbit_proto::ListWorkspaceDirectoryRequest;
+use ensembyte_proto::ListWorkspaceDirectoryRequest;
 
 use crate::{
     composer::{ComposerInput, ComposerInputEvent},
@@ -254,9 +254,9 @@ pub struct FilesSurface {
     surface_id: gpui::EntityId,
     interaction_generation: u64,
     effective_checkout_id: Option<String>,
-    mutation_capabilities: Option<orbit_proto::WorkspaceMutationCapabilities>,
+    mutation_capabilities: Option<ensembyte_proto::WorkspaceMutationCapabilities>,
     pending_mutation: Option<mutations::MutationIntent>,
-    deferred_file_changes: Vec<orbit_proto::WorkspaceFileChanges>,
+    deferred_file_changes: Vec<ensembyte_proto::WorkspaceFileChanges>,
     applied_mutations: std::collections::VecDeque<String>,
     mutation_error: Option<SharedString>,
     mutation_hold: Option<String>,

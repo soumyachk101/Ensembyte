@@ -1,10 +1,10 @@
 //! Ad-hoc RPC probe: call or subscribe against a running engine's IPC socket.
 //!
 //! Usage:
-//!   cargo run -p orbit-rpc --example rpc_probe -- ws://127.0.0.1:27801 LocalDevice '{}'
-//!   cargo run -p orbit-rpc --example rpc_probe -- ws://127.0.0.1:27801 WatchSessions '{}' --stream 3
+//!   cargo run -p ensembyte-rpc --example rpc_probe -- ws://127.0.0.1:27801 LocalDevice '{}'
+//!   cargo run -p ensembyte-rpc --example rpc_probe -- ws://127.0.0.1:27801 WatchSessions '{}' --stream 3
 
-use orbit_rpc::connect_ws;
+use ensembyte_rpc::connect_ws;
 
 #[tokio::main]
 async fn main() {

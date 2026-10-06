@@ -1,19 +1,19 @@
 //! Real-world E2E for the managed adapter install: with no `grok`
 //! binary anywhere, `run()` must npm-install the pinned adapter into
-//! `$ORBIT_ADAPTERS_DIR`, spawn it via node, and reach SessionStarted (the
+//! `$ENSEMBYTE_ADAPTERS_DIR`, spawn it via node, and reach SessionStarted (the
 //! full initialize → session/new handshake) — the exact path that used to be
-//! `npx -y` at chat time (orbit upstream#95).
+//! `npx -y` at chat time (ensembyte upstream#95).
 //!
 //! Ignored: needs network and npm. Run with
-//! `cargo test -p orbit-harness --test managed_install -- --ignored`.
+//! `cargo test -p ensembyte-harness --test managed_install -- --ignored`.
 //!
-//! Single-test binary: it mutates ORBIT_ADAPTERS_DIR process-wide.
+//! Single-test binary: it mutates ENSEMBYTE_ADAPTERS_DIR process-wide.
 
 use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use orbit_harness::{AcpHarness, Harness, RunControls};
-use orbit_proto::{AgentEvent, RunRequest};
+use ensembyte_harness::{AcpHarness, Harness, RunControls};
+use ensembyte_proto::{AgentEvent, RunRequest};
 
 #[tokio::test]
 #[ignore = "network + npm; installs the pinned Grok CLI for real"]
@@ -21,7 +21,7 @@ async fn managed_install_reaches_session_started() {
     let adapters = tempfile::tempdir().unwrap();
     // SAFETY: single-test binary — nothing else reads env concurrently.
     unsafe {
-        std::env::set_var("ORBIT_ADAPTERS_DIR", adapters.path());
+        std::env::set_var("ENSEMBYTE_ADAPTERS_DIR", adapters.path());
         std::env::remove_var("GROK_EXECUTABLE");
     }
 
@@ -42,7 +42,7 @@ async fn managed_install_reaches_session_started() {
         reasoning: None,
         model_options: serde_json::Map::new(),
         cwd: std::env::temp_dir().display().to_string(),
-        sandbox: orbit_proto::SandboxLevel::WorkspaceWrite,
+        sandbox: ensembyte_proto::SandboxLevel::WorkspaceWrite,
         auto_approve: true,
         attachments: Vec::new(),
         worktree: None,
@@ -92,5 +92,5 @@ async fn managed_install_reaches_session_started() {
         .next()
         .expect("a pinned version dir")
         .path();
-    assert!(version_dir.join(".orbit-install-ok").exists());
+    assert!(version_dir.join(".ensembyte-install-ok").exists());
 }

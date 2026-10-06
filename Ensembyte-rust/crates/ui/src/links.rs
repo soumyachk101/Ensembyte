@@ -1,7 +1,7 @@
 //! Stable conversation links shared by sidebar copy actions and inbound URL routing.
 
 use sha2::{Digest, Sha256};
-use orbit_proto::{AuthState, Chat, HarnessId, WorkspaceScope};
+use ensembyte_proto::{AuthState, Chat, HarnessId, WorkspaceScope};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationDeepLink {
@@ -41,7 +41,7 @@ pub fn workspace_locator(
     Some(format!("{:x}", hash.finalize())[..16].to_string())
 }
 
-pub fn orbit_conversation_link(chat_id: &str, workspace: &str) -> String {
+pub fn ensembyte_conversation_link(chat_id: &str, workspace: &str) -> String {
     format!(
         "ensembyte://open/chat/{}?workspace={}",
         encode_component(chat_id),
@@ -49,10 +49,9 @@ pub fn orbit_conversation_link(chat_id: &str, workspace: &str) -> String {
     )
 }
 
-pub fn parse_orbit_conversation_link(url: &str) -> Result<ConversationDeepLink, &'static str> {
+pub fn parse_ensembyte_conversation_link(url: &str) -> Result<ConversationDeepLink, &'static str> {
     let rest = url
         .strip_prefix("ensembyte://open/chat/")
-        .or_else(|| url.strip_prefix("orbit://open/chat/"))
         .ok_or("not an Ensembyte conversation link")?;
     let (chat_id, query) = rest.split_once('?').ok_or("missing workspace locator")?;
     if chat_id.is_empty() || chat_id.contains('/') {
@@ -129,12 +128,12 @@ mod tests {
             branch: None,
             checkout_id: None,
             source_context: None,
-            config: Some(orbit_proto::ChatConfig {
+            config: Some(ensembyte_proto::ChatConfig {
                 harness,
                 model: None,
                 reasoning: None,
                 model_options: Default::default(),
-                sandbox: orbit_proto::SandboxLevel::WorkspaceWrite,
+                sandbox: ensembyte_proto::SandboxLevel::WorkspaceWrite,
             }),
             last_message_preview: None,
             last_message_at: None,
@@ -149,10 +148,10 @@ mod tests {
     }
 
     #[test]
-    fn orbit_link_round_trips_reserved_characters() {
-        let link = orbit_conversation_link("chat/with space", "workspace:one");
+    fn ensembyte_link_round_trips_reserved_characters() {
+        let link = ensembyte_conversation_link("chat/with space", "workspace:one");
         assert_eq!(
-            parse_orbit_conversation_link(&link).unwrap(),
+            parse_ensembyte_conversation_link(&link).unwrap(),
             ConversationDeepLink {
                 chat_id: "chat/with space".into(),
                 workspace: "workspace:one".into(),
@@ -162,9 +161,9 @@ mod tests {
 
     #[test]
     fn malformed_or_foreign_links_are_rejected() {
-        assert!(parse_orbit_conversation_link("https://example.com").is_err());
-        assert!(parse_orbit_conversation_link("orbit://open/chat/id").is_err());
-        assert!(parse_orbit_conversation_link("orbit://open/chat/%GG?workspace=x").is_err());
+        assert!(parse_ensembyte_conversation_link("https://example.com").is_err());
+        assert!(parse_ensembyte_conversation_link("ensembyte://open/chat/id").is_err());
+        assert!(parse_ensembyte_conversation_link("ensembyte://open/chat/%GG?workspace=x").is_err());
     }
 
     #[test]
@@ -191,7 +190,7 @@ mod tests {
             workspace_locator(
                 scope,
                 Some(&AuthState::NeedsOrganization {
-                    user: orbit_proto::UserProfile {
+                    user: ensembyte_proto::UserProfile {
                         id: "user-a".into(),
                         email: "user@example.com".into(),
                         name: None,
@@ -205,7 +204,7 @@ mod tests {
             workspace_locator(
                 scope,
                 Some(&AuthState::SignedIn {
-                    user: orbit_proto::UserProfile {
+                    user: ensembyte_proto::UserProfile {
                         id: "user-a".into(),
                         email: "user@example.com".into(),
                         name: None,

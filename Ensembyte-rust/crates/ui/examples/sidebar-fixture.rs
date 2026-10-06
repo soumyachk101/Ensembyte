@@ -1,6 +1,6 @@
-//! Isolated native sidebar review fixture. ORBIT_SIDEBAR_COMPACT / ORBIT_SIDEBAR_HIDE_LABEL select layout.
+//! Isolated native sidebar review fixture. ENSEMBYTE_SIDEBAR_COMPACT / ENSEMBYTE_SIDEBAR_HIDE_LABEL select layout.
 use gpui::{AppContext, Bounds, WindowBounds, WindowOptions, px, size};
-use orbit_ui::*;
+use ensembyte_ui::*;
 
 fn main() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
@@ -12,32 +12,32 @@ fn main() -> anyhow::Result<()> {
         gpui_tokio::init(cx); gpui_base::init(cx);
         let mut settings = settings::UiSettings::default();
         settings.sidebar_show_branch = true;
-        settings.sidebar_compact = std::env::var_os("ORBIT_SIDEBAR_COMPACT").is_some();
-        settings.sidebar_show_project_label = std::env::var_os("ORBIT_SIDEBAR_HIDE_LABEL").is_none();
+        settings.sidebar_compact = std::env::var_os("ENSEMBYTE_SIDEBAR_COMPACT").is_some();
+        settings.sidebar_show_project_label = std::env::var_os("ENSEMBYTE_SIDEBAR_HIDE_LABEL").is_none();
         settings.sidebar_organization = settings::SidebarOrganization::InOneList;
         settings.sidebar_width = 310.0;
         settings.sidebar_pins_mut("local".into()).extend(["chat-0".into(), "chat-1".into()]);
         let project_path = data.join("fieldnotes");
         std::fs::create_dir_all(project_path.join("public")).unwrap();
         std::fs::write(project_path.join("public/favicon.svg"), r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="6" fill="#668cf5"/><path d="M7 6h11v3h-8v3h6v3h-6v4H7Z" fill="white"/></svg>"##).unwrap();
-        settings.surface = orbit_theme::SurfacePreference::Frosted;
+        settings.surface = ensembyte_theme::SurfacePreference::Frosted;
         settings.save(&data).unwrap();
         settings::init(settings.clone(), data.clone(), cx);
         let fonts = typography::register_fonts(cx);
         typography::init(settings.ui_font_family.clone(), settings.ui_font_size, settings.terminal_font_family.clone(), settings.terminal_font_size, settings.code_font_family.clone(), settings.code_font_size, fonts, cx);
         theme_library::init(data.clone(), cx);
-        appearance::init(if std::env::var_os("ORBIT_PALETTE_LIGHT").is_some() { appearance::AppearanceMode::Light } else { appearance::AppearanceMode::Dark }, settings.theme_selection, settings.accent, settings.surface, cx);
+        appearance::init(if std::env::var_os("ENSEMBYTE_PALETTE_LIGHT").is_some() { appearance::AppearanceMode::Light } else { appearance::AppearanceMode::Dark }, settings.theme_selection, settings.accent, settings.surface, cx);
         history::init(settings.git_history_columns, settings.git_history_column_widths,
             settings.git_history_column_order, settings.git_history_author_display, cx);
         composer::init(cx, settings.composer_send_behavior); terminal::panel::init(cx); app_menus::init(cx);
         let state = cx.new(|_| {
             let mut s = state::AppState::new();
-            s.connection = orbit_proto::view::ConnectionStatus::Ready;
-            s.workspace_scope = Some(orbit_proto::WorkspaceScope::Local);
-            if std::env::var_os("ORBIT_SIDEBAR_ACCOUNT").is_some() {
-                s.workspace_scope = Some(orbit_proto::WorkspaceScope::Synced);
-                s.auth = Some(orbit_proto::AuthState::SignedIn {
-                    user: orbit_proto::UserProfile { id: "fixture-user".into(), email: "alex@example.test".into(), name: Some("Alex".into()) },
+            s.connection = ensembyte_proto::view::ConnectionStatus::Ready;
+            s.workspace_scope = Some(ensembyte_proto::WorkspaceScope::Local);
+            if std::env::var_os("ENSEMBYTE_SIDEBAR_ACCOUNT").is_some() {
+                s.workspace_scope = Some(ensembyte_proto::WorkspaceScope::Synced);
+                s.auth = Some(ensembyte_proto::AuthState::SignedIn {
+                    user: ensembyte_proto::UserProfile { id: "fixture-user".into(), email: "alex@example.test".into(), name: Some("Alex".into()) },
                     org_id: Some("fixture-org".into()),
                 });
             }
@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
                 chat.id = format!("chat-{ix}");
                 chat.title = Some((*title).into());
                 chat.branch = Some(format!("fieldnotes/{}", title.to_lowercase().replace(' ', "-")));
-                chat.source_context = Some(orbit_proto::ConversationSourceContext {
+                chat.source_context = Some(ensembyte_proto::ConversationSourceContext {
                     checkout_id: "fixture-checkout".into(), repo_root: "/tmp/fieldnotes".into(),
                     cwd: "/tmp/fieldnotes".into(), branch: chat.branch.clone().unwrap(),
                     head_sha: None, observed_at: chrono::Utc::now(),
@@ -70,9 +70,9 @@ fn main() -> anyhow::Result<()> {
             for ix in [1, 2, 4, 8] {
                 let chat = s.chats[ix].clone();
                 let source = chat.source_context.as_ref().unwrap();
-                s.fixture_sidebar_change_request(orbit_proto::CheckoutChangeRequestStatus {
+                s.fixture_sidebar_change_request(ensembyte_proto::CheckoutChangeRequestStatus {
                     checkout_id: source.checkout_id.clone(), device_id: chat.device_id.clone(), cwd: source.repo_root.clone(), branch: source.branch.clone(), updated_at: chrono::Utc::now(),
-                    change_request: Some(orbit_proto::ChangeRequestSummary { provider: "github".into(), number: 412 + ix as u64, title: chat.title.clone().unwrap(), url: "https://github.com/soumyachk101/Ensembyte/pull/412".into(), state: orbit_proto::ChangeRequestState::Open, base_ref: "main".into(), head_ref: source.branch.clone() }),
+                    change_request: Some(ensembyte_proto::ChangeRequestSummary { provider: "github".into(), number: 412 + ix as u64, title: chat.title.clone().unwrap(), url: "https://github.com/soumyachk101/Ensembyte/pull/412".into(), state: ensembyte_proto::ChangeRequestState::Open, base_ref: "main".into(), head_ref: source.branch.clone() }),
                 });
             }
             s.chats[4].last_message_at = Some(chrono::Utc::now());

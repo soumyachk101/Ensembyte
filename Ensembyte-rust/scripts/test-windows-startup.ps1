@@ -1,6 +1,6 @@
 # Check the actual executable: startup must not allocate a console, and CLI
 # help/errors must still reach redirected streams before normal initialization.
-param([string]$Exe = (Join-Path $PSScriptRoot '../target/release/orbit.exe'))
+param([string]$Exe = (Join-Path $PSScriptRoot '../target/release/ensembyte.exe'))
 $ErrorActionPreference = 'Stop'
 $Exe = (Resolve-Path -LiteralPath $Exe).Path
 $bytes = [IO.File]::ReadAllBytes($Exe)
@@ -29,7 +29,7 @@ foreach ($argument in @('--help', '--version', '--invalid-startup-test-option'))
             if ($process.ExitCode -eq 0 -or $stderr.Result -notmatch 'unexpected argument') {
                 throw 'Argument error did not reach stderr with a failing exit code'
             }
-        } elseif ($process.ExitCode -ne 0 -or $stdout.Result -notmatch 'orbit') {
+        } elseif ($process.ExitCode -ne 0 -or $stdout.Result -notmatch 'ensembyte') {
             throw "CLI output or exit code failed: $argument"
         }
         Write-Output "PASS: $argument output and exit code"

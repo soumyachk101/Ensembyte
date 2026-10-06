@@ -957,8 +957,8 @@ mod tests {
         let theme = Theme::for_selection(
             Appearance::Dark,
             "dracula",
-            orbit_theme::AccentSelection::ThemeDefault,
-            orbit_theme::SurfacePreference::ThemeDefault,
+            ensembyte_theme::AccentSelection::ThemeDefault,
+            ensembyte_theme::SurfacePreference::ThemeDefault,
         );
         assert_eq!(terminal_panel_bg(&theme), theme.terminal.background);
         assert_eq!(
@@ -978,20 +978,20 @@ mod tests {
 
     #[test]
     fn every_registered_variant_resolves_all_ansi_slots_from_its_theme() {
-        for variant in orbit_theme::ThemeRegistry::builtin()
+        for variant in ensembyte_theme::ThemeRegistry::builtin()
             .families
             .iter()
             .flat_map(|family| &family.variants)
         {
             let appearance = match variant.appearance {
-                orbit_theme::Appearance::Dark => Appearance::Dark,
-                orbit_theme::Appearance::Light => Appearance::Light,
+                ensembyte_theme::Appearance::Dark => Appearance::Dark,
+                ensembyte_theme::Appearance::Light => Appearance::Light,
             };
             let theme = Theme::for_selection(
                 appearance,
                 &variant.id,
-                orbit_theme::AccentSelection::ThemeDefault,
-                orbit_theme::SurfacePreference::ThemeDefault,
+                ensembyte_theme::AccentSelection::ThemeDefault,
+                ensembyte_theme::SurfacePreference::ThemeDefault,
             );
             for index in 0..16 {
                 assert_eq!(

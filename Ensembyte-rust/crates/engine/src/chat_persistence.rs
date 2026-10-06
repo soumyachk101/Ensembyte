@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use tokio::sync::mpsc;
-use orbit_doc::SessionDoc;
-use orbit_sync::DocsStore;
+use ensembyte_doc::SessionDoc;
+use ensembyte_sync::DocsStore;
 
 const SAVE_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -199,9 +199,9 @@ mod tests {
     /// Runs only on an explicitly supplied local snapshot; never writes back
     /// to it or connects to an edge/production room.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[ignore = "requires ORBIT_WHALE_SNAPSHOT; reads privately supplied snapshot into a temporary store"]
+    #[ignore = "requires ENSEMBYTE_WHALE_SNAPSHOT; reads privately supplied snapshot into a temporary store"]
     async fn real_whale_replay_keeps_146_heartbeats_running_on_two_workers() {
-        let bytes = std::fs::read(std::env::var("ORBIT_WHALE_SNAPSHOT").unwrap()).unwrap();
+        let bytes = std::fs::read(std::env::var("ENSEMBYTE_WHALE_SNAPSHOT").unwrap()).unwrap();
         let raw = loro::LoroDoc::new();
         raw.import(&bytes).unwrap();
         let doc = Arc::new(SessionDoc::from_doc(raw));

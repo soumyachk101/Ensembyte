@@ -1,18 +1,18 @@
 [package]
-name = "orbit-engine"
+name = "ensembyte-engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
-orbit-preview.workspace = true
-orbit-proto.workspace = true
-orbit-doc.workspace = true
-orbit-sync.workspace = true
-orbit-harness.workspace = true
-orbit-rpc.workspace = true
-orbit-update.workspace = true
+ensembyte-preview.workspace = true
+ensembyte-proto.workspace = true
+ensembyte-doc.workspace = true
+ensembyte-sync.workspace = true
+ensembyte-harness.workspace = true
+ensembyte-rpc.workspace = true
+ensembyte-update.workspace = true
 loro.workspace = true
 tokio.workspace = true
 futures.workspace = true
@@ -43,9 +43,9 @@ tempfile.workspace = true
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_Threading"] }
 
 [dev-dependencies]
-orbit-mcp.workspace = true
-orbit-harness = { workspace = true, features = ["installer-fixture"] }
+ensembyte-mcp.workspace = true
+ensembyte-harness = { workspace = true, features = ["installer-fixture"] }
 zip.workspace = true
 tokio-tungstenite.workspace = true
 # In-process registry server for the two-engine workspace integration tests.
-orbit-sync = { workspace = true, features = ["mock-server"] }
+ensembyte-sync = { workspace = true, features = ["mock-server"] }

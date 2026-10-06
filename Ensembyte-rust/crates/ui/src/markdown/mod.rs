@@ -19,7 +19,7 @@ mod link_destination;
 mod link_interaction;
 mod link_presentation;
 pub mod links;
-pub use orbit_markdown::{mend, parser};
+pub use ensembyte_markdown::{mend, parser};
 pub mod render;
 pub mod selection;
 pub mod veil;

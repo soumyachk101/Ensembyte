@@ -109,22 +109,22 @@ regression, and the final implementation uses byte progress and fragmentation.
 ## Reproduce
 
 ```sh
-cargo test -p orbit-sync -p orbit-rpc --features orbit-sync/mock-server
-cargo test -p orbit-sync --lib socket:: -- --nocapture
-cargo clippy -p orbit-sync -p orbit-rpc --all-targets --features orbit-sync/mock-server
-cargo build -p orbit-sync --example transport_live
+cargo test -p ensembyte-sync -p ensembyte-rpc --features ensembyte-sync/mock-server
+cargo test -p ensembyte-sync --lib socket:: -- --nocapture
+cargo clippy -p ensembyte-sync -p ensembyte-rpc --all-targets --features ensembyte-sync/mock-server
+cargo build -p ensembyte-sync --example transport_live
 
 # Requires authenticated Wrangler and an account with Workers/R2 enabled.
 cd edge
 npm ci
-node_modules/.bin/wrangler r2 bucket create orbit-transport-385-20260915
+node_modules/.bin/wrangler r2 bucket create ensembyte-transport-385-20260915
 node_modules/.bin/wrangler deploy --config wrangler.transport-test.jsonc
 cd ..
 
 # Use the isolated workers.dev URL printed by deployment.
 python3 scripts/run-transport-matrix.py \
   --binary target/debug/examples/transport_live \
-  --origin https://orbit-transport-385-20260915.YOUR-SUBDOMAIN.workers.dev \
+  --origin https://ensembyte-transport-385-20260915.YOUR-SUBDOMAIN.workers.dev \
   --profile stream --output /tmp/transport-stream.json
 # Repeat with: very-slow, outage, http, catchup, upload.
 ```
@@ -140,7 +140,7 @@ After testing, delete only the isolated resources:
 ```sh
 cd edge
 node_modules/.bin/wrangler delete --config wrangler.transport-test.jsonc
-node_modules/.bin/wrangler r2 bucket delete orbit-transport-385-20260915
+node_modules/.bin/wrangler r2 bucket delete ensembyte-transport-385-20260915
 ```
 
 ## Scope and remaining limits

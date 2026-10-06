@@ -1,7 +1,7 @@
 //! The app theme — two concrete appearances, one token set.
 //!
 //! Colors are precomputed from an oklch-derived neutral scale (perceptually even
-//! lightness steps; the same scale orbit's Tailwind theme used) into gpui [`Hsla`].
+//! lightness steps; the same scale ensembyte's Tailwind theme used) into gpui [`Hsla`].
 //! **Numbers drive layout, colors are paint**: layout constants live here as plain
 //! numbers and never depend on which color is painted.
 //!
@@ -36,8 +36,8 @@ use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 use gpui::{App, Global, Hsla, SharedString, hsla};
 use serde::{Deserialize, Serialize};
-use orbit_syntax::HighlightKind;
-use orbit_theme::{
+use ensembyte_syntax::HighlightKind;
+use ensembyte_theme::{
     AccentPreset, AccentSelection, Color as ModelColor, SurfacePreference, SurfaceTreatment,
     ThemeRegistry, ThemeVariant,
 };
@@ -273,10 +273,10 @@ pub(crate) fn bump_style_generation() {
     STYLE_GENERATION.fetch_add(1, Ordering::Relaxed);
 }
 
-fn model_appearance(appearance: orbit_theme::Appearance) -> Appearance {
+fn model_appearance(appearance: ensembyte_theme::Appearance) -> Appearance {
     match appearance {
-        orbit_theme::Appearance::Dark => Appearance::Dark,
-        orbit_theme::Appearance::Light => Appearance::Light,
+        ensembyte_theme::Appearance::Dark => Appearance::Dark,
+        ensembyte_theme::Appearance::Light => Appearance::Light,
     }
 }
 
@@ -598,7 +598,7 @@ pub struct Theme {
     /// Whether the base theme or a user preset owns interactive identity.
     pub accent_selection: AccentSelection,
     /// Effective wallpaper overlay; manual theme/accent selections remain intact.
-    pub wallpaper_color: Option<orbit_theme::Color>,
+    pub wallpaper_color: Option<ensembyte_theme::Color>,
     /// The persisted policy that resolved [`Self::surface_treatment`].
     pub surface_preference: SurfacePreference,
     /// The effective treatment after applying [`Self::surface_preference`] to
@@ -772,13 +772,13 @@ impl TerminalColors {
         }
     }
 
-    fn orbit(appearance: Appearance) -> Self {
+    fn ensembyte(appearance: Appearance) -> Self {
         let id = match appearance {
-            Appearance::Dark => "orbit-dark",
-            Appearance::Light => "orbit-light",
+            Appearance::Dark => "ensembyte-dark",
+            Appearance::Light => "ensembyte-light",
         };
         let registry = ThemeRegistry::active();
-        Self::from_variant(registry.variant(id).expect("Orbit terminal palette exists"))
+        Self::from_variant(registry.variant(id).expect("Ensembyte terminal palette exists"))
     }
 }
 
@@ -811,7 +811,7 @@ impl Theme {
     } else {
         1.0
     };
-    /// Main-panel header height (orbit `h-11`) — in-card headers (changes pane).
+    /// Main-panel header height (ensembyte `h-11`) — in-card headers (changes pane).
     pub const HEADER_HEIGHT: f32 = 44.0;
     /// The unified window titlebar (traffic lights + cluster + tabs). Content
     /// rides [`Self::TITLEBAR_TOP_PAD`] lower than center so the air above
@@ -820,7 +820,7 @@ impl Theme {
     /// Top-only padding moves the flex center by half this value. On macOS,
     /// 38 / 2 + 4 / 2 = 21 matches the native traffic lights' center.
     pub const TITLEBAR_TOP_PAD: f32 = 4.0;
-    /// Reserved status strip under the content outlet (orbit `h-6`) — the
+    /// Reserved status strip under the content outlet (ensembyte `h-6`) — the
     /// WorkingIndicator row; reserving it keeps the composer from shifting.
     pub const STATUS_STRIP_HEIGHT: f32 = 24.0;
     /// Height of the gradient that fades the transcript into the panel
@@ -1148,8 +1148,8 @@ impl Theme {
         let accent = accent_color.tokens(Appearance::Dark);
         Self {
             appearance: Appearance::Dark,
-            variant_id: "orbit-dark".into(),
-            family_id: "orbit".into(),
+            variant_id: "ensembyte-dark".into(),
+            family_id: "ensembyte".into(),
             accent_selection: AccentSelection::Preset(accent_color.into()),
             wallpaper_color: None,
             surface_preference: SurfacePreference::ThemeDefault,
@@ -1201,7 +1201,7 @@ impl Theme {
             diff_add: oklch(0.765, 0.177, 163.223), // emerald-400
             diff_del: oklch(0.704, 0.191, 22.216),  // red-400
             diff_hunk_bg: hsla(0.6, 0.35, 0.6, 0.05),
-            terminal: TerminalColors::orbit(Appearance::Dark),
+            terminal: TerminalColors::ensembyte(Appearance::Dark),
             font_sans: "Geist".into(),
             font_sans_fixed: "Geist".into(),
             font_mono: "Geist Mono".into(),
@@ -1229,8 +1229,8 @@ impl Theme {
         let accent = accent_color.tokens(Appearance::Light);
         Self {
             appearance: Appearance::Light,
-            variant_id: "orbit-light".into(),
-            family_id: "orbit".into(),
+            variant_id: "ensembyte-light".into(),
+            family_id: "ensembyte".into(),
             accent_selection: AccentSelection::Preset(accent_color.into()),
             wallpaper_color: None,
             surface_preference: SurfacePreference::ThemeDefault,
@@ -1301,7 +1301,7 @@ impl Theme {
             diff_add: oklch(0.596, 0.145, 163.225), // emerald-600
             diff_del: oklch(0.577, 0.245, 27.325),  // red-600
             diff_hunk_bg: hsla(0.6, 0.35, 0.35, 0.07),
-            terminal: TerminalColors::orbit(Appearance::Light),
+            terminal: TerminalColors::ensembyte(Appearance::Light),
             font_sans: "Geist".into(),
             font_sans_fixed: "Geist".into(),
             font_mono: "Geist Mono".into(),
@@ -1373,12 +1373,12 @@ impl Theme {
         variant_id: &str,
         accent_selection: AccentSelection,
         surface_preference: SurfacePreference,
-        wallpaper_color: Option<orbit_theme::Color>,
+        wallpaper_color: Option<ensembyte_theme::Color>,
     ) -> Self {
         let registry = ThemeRegistry::active();
         let fallback_id = match appearance {
-            Appearance::Dark => "orbit-dark",
-            Appearance::Light => "orbit-light",
+            Appearance::Dark => "ensembyte-dark",
+            Appearance::Light => "ensembyte-light",
         };
         let variant = registry
             .variant(variant_id)
@@ -2027,7 +2027,7 @@ mod tests {
 
     #[test]
     fn neutral_950_is_0a0a0a() {
-        // oklch(0.145 0 0) is Tailwind neutral-950, orbit's app background.
+        // oklch(0.145 0 0) is Tailwind neutral-950, ensembyte's app background.
         let rgb = srgb_u8(oklch_to_srgb(0.145, 0.0, 0.0));
         assert_eq!(rgb, [10, 10, 10]);
     }
@@ -2087,7 +2087,7 @@ mod tests {
     }
 
     #[test]
-    fn orbit_accent_is_the_exact_upstream_default() {
+    fn ensembyte_accent_is_the_exact_upstream_default() {
         let dark = Theme::dark();
         let light = Theme::light();
         assert_eq!(dark.accent_color, AccentColor::Orbit);
@@ -2108,8 +2108,8 @@ mod tests {
     #[test]
     fn wallpaper_glass_interactions_lift_toward_white_in_both_appearances() {
         for (appearance, id) in [
-            (Appearance::Dark, "orbit-dark"),
-            (Appearance::Light, "orbit-light"),
+            (Appearance::Dark, "ensembyte-dark"),
+            (Appearance::Light, "ensembyte-light"),
         ] {
             let theme = Theme::for_selection_with_wallpaper(
                 appearance,
@@ -2129,8 +2129,8 @@ mod tests {
     #[test]
     fn wallpaper_colours_keep_text_readable_in_light_and_dark_modes() {
         for (appearance, id) in [
-            (Appearance::Dark, "orbit-dark"),
-            (Appearance::Light, "orbit-light"),
+            (Appearance::Dark, "ensembyte-dark"),
+            (Appearance::Light, "ensembyte-light"),
         ] {
             for color in [
                 ModelColor::BLACK,
@@ -2182,8 +2182,8 @@ mod tests {
             AccentSelection::ThemeDefault,
             SurfacePreference::ThemeDefault,
         );
-        let orbit = Theme::dark();
-        assert_ne!(catppuccin.surface, orbit.surface);
+        let ensembyte = Theme::dark();
+        assert_ne!(catppuccin.surface, ensembyte.surface);
         assert_eq!(catppuccin.busy, catppuccin.accent);
         assert_eq!(catppuccin.glyph.mid, catppuccin.accent);
         assert_eq!(catppuccin.surface_treatment, SurfaceTreatment::Opaque);
@@ -2211,14 +2211,14 @@ mod tests {
             assert!(frosted.is_frost());
         }
 
-        let opaque_orbit = Theme::for_selection(
+        let opaque_ensembyte = Theme::for_selection(
             Appearance::Dark,
-            "orbit-dark",
+            "ensembyte-dark",
             AccentSelection::ThemeDefault,
             SurfacePreference::Opaque,
         );
-        assert_eq!(opaque_orbit.surface_treatment, SurfaceTreatment::Opaque);
-        assert_eq!(opaque_orbit.glass(), opaque_orbit.surface);
+        assert_eq!(opaque_ensembyte.surface_treatment, SurfaceTreatment::Opaque);
+        assert_eq!(opaque_ensembyte.glass(), opaque_ensembyte.surface);
     }
 
     #[test]
@@ -2271,7 +2271,7 @@ mod tests {
     #[test]
     fn runtime_hardening_protects_native_custom_theme_edits() {
         let mut variant = ThemeRegistry::builtin()
-            .variant("orbit-dark")
+            .variant("ensembyte-dark")
             .unwrap()
             .clone();
         variant.colors.text = variant.colors.background;
@@ -2988,7 +2988,7 @@ mod tests {
     #[test]
     fn custom_light_popup_text_is_readable_and_preparation_is_idempotent() {
         let mut variant = ThemeRegistry::builtin()
-            .variant("orbit-light")
+            .variant("ensembyte-light")
             .unwrap()
             .clone();
         variant.id = "custom-light".to_owned();
@@ -3020,7 +3020,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_numbers_match_orbit() {
+    fn layout_numbers_match_ensembyte() {
         assert_eq!(Theme::HEADER_HEIGHT, 44.0); // h-11
         assert_eq!(Theme::STATUS_STRIP_HEIGHT, 24.0); // h-6
         assert_eq!(Theme::BUBBLE_RADIUS, 16.0);

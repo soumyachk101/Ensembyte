@@ -15,17 +15,17 @@ crates that already exist in Rust.
 ## Layers
 
 ```
-crates/text      orbit-text      pretext-style text engine: UAX#14 segmentation,
+crates/text      ensembyte-text      pretext-style text engine: UAX#14 segmentation,
                                  rustybuzz measurement on the bundled Geist faces
                                  (platform fallback for uncovered glyphs), cached
                                  segment widths, pure-arithmetic line layout
-crates/markdown  orbit-markdown  block model + append-incremental reparse
+crates/markdown  ensembyte-markdown  block model + append-incremental reparse
                                  (extracted from the desktop; desktop re-exports it)
-crates/client    orbit-client    engine-free viewer device: registry + chat2 rooms
-                                 (orbit-sync), docs (orbit-doc), relay RPCs, auth,
+crates/client    ensembyte-client    engine-free viewer device: registry + chat2 rooms
+                                 (ensembyte-sync), docs (ensembyte-doc), relay RPCs, auth,
                                  view models (front page ordering = desktop sidebar:
                                  pins, sections, recency), demo dataset
-crates/mobile    orbit-mobile    UniFFI facade (Swift today, Kotlin later) + the
+crates/mobile    ensembyte-mobile    UniFFI facade (Swift today, Kotlin later) + the
                                  transcript layout engine: rows → measured display
                                  lists, prefix-sum offsets, visible-range queries
 apps/ios                          UIKit shell: tab bar + glass, virtualized
@@ -35,11 +35,11 @@ apps/ios                          UIKit shell: tab bar + glass, virtualized
 
 ## Transcript pipeline
 
-1. `orbit-client` applies chat2 rows to the session doc and republishes an
+1. `ensembyte-client` applies chat2 rows to the session doc and republishes an
    immutable snapshot; unchanged entries stay pointer-equal.
 2. The layout engine (background thread) turns changed entries into rows
    (one per top-level markdown block / tool group / user message), parses
-   markdown incrementally, and lays each row out with `orbit-text` at the
+   markdown incrementally, and lays each row out with `ensembyte-text` at the
    viewport width. A row's output is a **display list**: text runs (UTF-16
    ranges + style id + exact x/baseline), boxes (code/quote/table/bubble),
    link hit rects, horizontal scrollers.
@@ -51,7 +51,7 @@ apps/ios                          UIKit shell: tab bar + glass, virtualized
 ## Data path per streamed token
 
 The session doc's `subscribe_root` observer marks only the touched entry maps;
-`orbit-client` re-decodes those entries and republishes a snapshot in which
+`ensembyte-client` re-decodes those entries and republishes a snapshot in which
 every other entry is the same `Arc`. The layout thread reuses rows for
 pointer-equal entries, re-parses only the streaming tail block
 (`IncrementalParser`), re-measures only that row, and rebuilds the prefix sums.
@@ -64,8 +64,8 @@ separate layer, split at the exact glyph offset.
 
 | What | Where |
 | --- | --- |
-| Paint/measure agreement at 7 widths, streaming ≡ full parse, prefix reuse, toggles, mentions | `cargo test -p orbit-mobile --lib layout` |
-| Layout timing (3,300 rows) | `cargo test --release -p orbit-mobile --lib bench_layout -- --ignored --nocapture` |
+| Paint/measure agreement at 7 widths, streaming ≡ full parse, prefix reuse, toggles, mentions | `cargo test -p ensembyte-mobile --lib layout` |
+| Layout timing (3,300 rows) | `cargo test --release -p ensembyte-mobile --lib bench_layout -- --ignored --nocapture` |
 | Line breaks vs CoreText on the same font bytes | `OrbitTests/LineBreakAccuracyTests`, `crates/text/tests/coretext.rs` |
 | Demo end-to-end (send → echo → reply, questions, queue, offline host) | `crates/client/tests/demo.rs`, `OrbitUITests/SessionFlowTests` |
 | Live sync against an in-process edge | `crates/client/tests/live.rs` |
@@ -80,6 +80,6 @@ token 0.19 ms; display-link flings through 3,300 rows — 0 hitches idle
 ## Build
 
 `scripts/ios/build-core.sh` (run by the Xcode "Rust core" phase) builds
-`orbit-mobile` for the active platform with the `mobile` cargo profile (always
+`ensembyte-mobile` for the active platform with the `mobile` cargo profile (always
 optimized), and regenerates the committed UniFFI bindings in
 `apps/ios/Orbit/Core/Generated/`.

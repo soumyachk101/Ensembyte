@@ -30,7 +30,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>ensembyte</string>
-				<string>orbit</string>
+				<string>ensembyte</string>
 			</array>
 		</dict>
 	</array>

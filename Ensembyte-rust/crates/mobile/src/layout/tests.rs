@@ -158,8 +158,8 @@ fn toggles_expand_tool_groups_and_long_user_messages() {
 /// markers (desktop PR #220; the mobile port dropped it).
 #[test]
 fn thinking_renders_styled_markdown_not_markers() {
-    use orbit_doc::parts::{MessagePart, MessageStatus};
-    use orbit_doc::schema::{MessageRole, SessionMessageEntry};
+    use ensembyte_doc::parts::{MessagePart, MessageStatus};
+    use ensembyte_doc::schema::{MessageRole, SessionMessageEntry};
     let reasoning = concat!(
         "**Planning** the `fix`\n\n",
         "- point *one*\n",
@@ -240,8 +240,8 @@ fn thinking_renders_styled_markdown_not_markers() {
 /// settles to exactly the frame a fresh full parse lays out.
 #[test]
 fn streaming_thought_markdown_settles_to_the_fresh_parse() {
-    use orbit_doc::parts::{MessagePart, MessageStatus};
-    use orbit_doc::schema::{MessageRole, SessionMessageEntry};
+    use ensembyte_doc::parts::{MessagePart, MessageStatus};
+    use ensembyte_doc::schema::{MessageRole, SessionMessageEntry};
     let text = "**Checking** the `parser`\n\n1. first step\n2. second with [docs](https://example.com)\n\n> note\n\n```rust\nfn main() {}\n```";
     let entry = |status: MessageStatus, text: &str| {
         Arc::new(SessionMessageEntry {
@@ -291,8 +291,8 @@ fn streaming_thought_markdown_settles_to_the_fresh_parse() {
 }
 
 fn thought_input(text: &str, streaming: bool) -> TranscriptInput {
-    use orbit_doc::parts::{MessagePart, MessageStatus};
-    use orbit_doc::schema::{MessageRole, SessionMessageEntry};
+    use ensembyte_doc::parts::{MessagePart, MessageStatus};
+    use ensembyte_doc::schema::{MessageRole, SessionMessageEntry};
     TranscriptInput {
         entries: vec![Arc::new(SessionMessageEntry {
             id: "a".into(),
@@ -410,7 +410,7 @@ fn huge_single_paragraph_thought_stops_reshaping() {
     assert!(bodies[80..].windows(2).all(|p| Arc::ptr_eq(&p[0], &p[1])), "past the budget, deltas reuse the prepared body");
 }
 
-/// Release-mode timings (run with `cargo test --release -p orbit-mobile -- --ignored --nocapture`).
+/// Release-mode timings (run with `cargo test --release -p ensembyte-mobile -- --ignored --nocapture`).
 #[test]
 #[ignore]
 fn bench_layout_passes() {
@@ -466,12 +466,12 @@ fn bench_layout_passes() {
 #[test]
 fn user_mentions_render_as_accent_chips() {
     let mut w = worker(390.0);
-    let text = "Look at [mod.rs](orbit-file:crates/mobile/src/layout/mod.rs) please".to_owned();
+    let text = "Look at [mod.rs](ensembyte-file:crates/mobile/src/layout/mod.rs) please".to_owned();
     w.input = debug_input(vec![DebugEntry { id: "u".into(), user: true, text, streaming: false }], false);
     let frame = w.pass();
     let d = frame.display(0).unwrap();
     assert!(d.text.contains("@mod.rs"), "{}", d.text);
-    assert!(!d.text.contains("orbit-file:"));
+    assert!(!d.text.contains("ensembyte-file:"));
     assert!(d.runs.iter().any(|r| r.color == display::ColorRole::Link));
 }
 
@@ -503,11 +503,11 @@ fn folded_user_message_fades_its_last_line() {
 
 #[test]
 fn running_subagent_shows_a_spinner_after_its_spawn_resolves() {
-    use orbit_doc::parts::{MessagePart, MessageStatus, SubagentStatus};
-    use orbit_doc::schema::{MessageRole, SessionMessageEntry};
+    use ensembyte_doc::parts::{MessagePart, MessageStatus, SubagentStatus};
+    use ensembyte_doc::schema::{MessageRole, SessionMessageEntry};
     let spawn = |status: SubagentStatus| MessagePart::Tool {
         id: "k1".into(),
-        call: orbit_proto::ToolCall::Unknown { name: "Agent: scan the repo".into(), input: None },
+        call: ensembyte_proto::ToolCall::Unknown { name: "Agent: scan the repo".into(), input: None },
         is_error: false,
         // Eager-done: the spawn call resolved while the subagent still runs.
         resolved: true,

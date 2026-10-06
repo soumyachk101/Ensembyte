@@ -56,7 +56,7 @@ jobs:
         run: cargo clippy --all-targets
 
       - name: Cargo Test Windows
-        run: cargo test --locked -p orbit-engine --lib
+        run: cargo test --locked -p ensembyte-engine --lib
 
   linux-build:
     name: Linux (x86_64)
@@ -94,7 +94,7 @@ jobs:
         run: cargo clippy --all-targets
 
       - name: Cargo Test Linux
-        run: cargo test --locked -p orbit-engine --lib
+        run: cargo test --locked -p ensembyte-engine --lib
 
       - name: Install cargo-audit
         run: cargo install --locked cargo-audit --version "^0.21"

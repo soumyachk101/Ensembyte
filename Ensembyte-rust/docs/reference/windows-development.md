@@ -1,18 +1,18 @@
 # Windows development
 
 Windows supports native x64 and ARM64 source builds, a per-user installer,
-and portable release ZIPs. The installer (`dist/windows/orbit.iss`, Inno
+and portable release ZIPs. The installer (`dist/windows/ensembyte.iss`, Inno
 Setup 6) installs into `%LOCALAPPDATA%\Programs\Orbit` without elevation,
-registers the Start menu entry, the `orbit://` link handler, and the Settings →
-Apps uninstall entry. Both release packages carry `orbit-update.json` beside
-`orbit.exe`, which lets the app replace its executable in place from GitHub
+registers the Start menu entry, the `ensembyte://` link handler, and the Settings →
+Apps uninstall entry. Both release packages carry `ensembyte-update.json` beside
+`ensembyte.exe`, which lets the app replace its executable in place from GitHub
 releases; keep it there for portable copies. Artifact names use Rust's
 architecture token (`x86_64` or `aarch64`) so the updater can find the matching
 executable; published releases currently include x64 only. Background services
 are not supported yet.
 
 `scripts/package-windows.ps1` builds the portable ZIP, the updater payload
-`.exe`, and `orbit-<version>-windows-<arch>-setup.exe` (Inno Setup 6 required:
+`.exe`, and `ensembyte-<version>-windows-<arch>-setup.exe` (Inno Setup 6 required:
 `winget install JRSoftware.InnoSetup`). `scripts/test-windows-installer.ps1`
 installs, inspects, and uninstalls the setup silently; it touches the current
 user's registration, so it only runs in CI or with `-Force`.
@@ -25,19 +25,19 @@ and Git for Windows. On ARM64 also install LLVM so `clang` is on PATH —
 alone is not enough. Then run:
 
 ```powershell
-cargo run --locked -p orbit
+cargo run --locked -p ensembyte
 ```
 
 Close the app before rebuilding. For release builds, use
-`cargo build --release --locked -p orbit`. If shader compiler discovery fails,
+`cargo build --release --locked -p ensembyte`. If shader compiler discovery fails,
 set `GPUI_FXC_PATH` to the Windows SDK's `fxc.exe`.
 
 ## Configuration and agent support
 
 | Setting | Behavior |
 | --- | --- |
-| Application data | `%LOCALAPPDATA%\Orbit`, falling back to `%USERPROFILE%\AppData\Local\Orbit`. Override with `ORBIT_DATA_DIR`. |
-| Managed adapters | `ORBIT_ADAPTERS_DIR`, then `ORBIT_DATA_DIR/adapters`, then the default application's `adapters` directory. |
+| Application data | `%LOCALAPPDATA%\Orbit`, falling back to `%USERPROFILE%\AppData\Local\Orbit`. Override with `ENSEMBYTE_DATA_DIR`. |
+| Managed adapters | `ENSEMBYTE_ADAPTERS_DIR`, then `ENSEMBYTE_DATA_DIR/adapters`, then the default application's `adapters` directory. |
 | Provider credentials | Keep their provider-owned locations; changing Orbit's data root does not migrate them. |
 | `CODEX_EXECUTABLE` | Executable override. `.exe` (and `.com`) launch directly; `.cmd`/`.bat` shims launch through a wrapped `cmd.exe` with literal, individually escaped arguments. The override must exist on disk. |
 
@@ -77,9 +77,9 @@ ConPTY, locking, UI behavior, and shader layouts. Shared Rust regressions run
 on Linux and macOS. To run the engine and harness checks locally:
 
 ```powershell
-cargo test --locked -p orbit-engine -p orbit-harness --lib
-cargo test --locked -p orbit-harness --features native-fixture --test codex_availability --test windows_native
-cargo test --locked -p orbit-engine --test codex_catalog --test codex_login_resolution --test auth
+cargo test --locked -p ensembyte-engine -p ensembyte-harness --lib
+cargo test --locked -p ensembyte-harness --features native-fixture --test codex_availability --test windows_native
+cargo test --locked -p ensembyte-engine --test codex_catalog --test codex_login_resolution --test auth
 ```
 
 Fixtures use synthetic agents, so these tests do not establish authenticated
@@ -87,7 +87,7 @@ provider compatibility. GUI probes are optional CI dispatch checks and can
 also run on an interactive Windows desktop after building the release app:
 
 ```powershell
-cargo build --release --locked -p orbit-ui --example windows-render-fixture --features windows-render-fixture
+cargo build --release --locked -p ensembyte-ui --example windows-render-fixture --features windows-render-fixture
 ./scripts/test-windows-lifecycle.ps1 -Runs 5
 ./scripts/test-windows-rendering.ps1
 ```

@@ -589,7 +589,7 @@ pub fn semantic_settings_url() -> Option<&'static str> {
 }
 
 /// Register the platform global shortcut and, on Linux, the local activation
-/// socket used by `orbit appshot` when the desktop owns shortcut setup.
+/// socket used by `ensembyte appshot` when the desktop owns shortcut setup.
 pub fn start_global_shortcut(
     activation_dir: PathBuf,
 ) -> futures::channel::mpsc::UnboundedReceiver<()> {
@@ -1223,7 +1223,7 @@ pub(crate) mod tests {
         assert!(
             capabilities
                 .shortcut_description()
-                .contains("orbit appshot")
+                .contains("ensembyte appshot")
         );
         assert!(capabilities.capture_description().contains("each capture"));
         assert!(capabilities.window_capture.is_ready());

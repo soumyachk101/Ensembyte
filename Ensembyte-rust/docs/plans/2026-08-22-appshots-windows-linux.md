@@ -20,7 +20,7 @@
    advertised portal Active Window target is also preferred before an EWMH
    active window, passive key grab, direct drawable capture, window metadata,
    and `_NET_WM_ICON`. AT-SPI enrichment is bounded and optional for both.
-4. Add a Linux-only `orbit appshot` activation command and local activation
+4. Add a Linux-only `ensembyte appshot` activation command and local activation
    socket for desktops without the Global Shortcuts portal. It activates the
    already-running headed viewport; it never starts a headless capture.
 5. Rework `crates/ui/src/settings/shortcuts.rs` to render capabilities rather
@@ -40,8 +40,8 @@
 
 - Pure tests for capability copy, PNG/pixel conversion, bounds, X11 property
   parsing, and activation-path derivation.
-- `cargo fmt --all -- --check`, `cargo test -p orbit-ui --lib`,
-  `cargo check -p orbit-ui`, and `cargo check -p orbit` on macOS.
+- `cargo fmt --all -- --check`, `cargo test -p ensembyte-ui --lib`,
+  `cargo check -p ensembyte-ui`, and `cargo check -p orbit` on macOS.
 - Target checks for Windows and Linux where the local toolchain/sysroot allows;
   otherwise record the exact missing machine dependency and keep all platform
   code target-gated for CI/native validation.

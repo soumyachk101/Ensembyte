@@ -1,6 +1,6 @@
-//! orbit-proto — wire types shared by engine, UI, and RPC.
+//! ensembyte-proto — wire types shared by engine, UI, and RPC.
 //!
-//! Ported from orbit's `packages/control/src/wire.ts` + `packages/harness/src/types.ts`.
+//! Ported from ensembyte's `packages/control/src/wire.ts` + `packages/harness/src/types.ts`.
 //! Context occupancy is replicated per chat; billing `Usage` remains a harness passthrough.
 
 pub mod agent;

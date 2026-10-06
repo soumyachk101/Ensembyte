@@ -9,8 +9,8 @@ use gpui::{
 };
 use std::time::Duration;
 
-use orbit_proto::WorkspaceScope;
-use orbit_rpc::methods;
+use ensembyte_proto::WorkspaceScope;
+use ensembyte_rpc::methods;
 
 use crate::composer::{ComposerInput, ComposerInputEvent};
 use crate::popover;
@@ -238,7 +238,7 @@ impl popover::ScrollRailHost for DevicesPage {
     }
 }
 
-/// Human platform label (orbit settings.devices.tsx `platformLabel`).
+/// Human platform label (ensembyte settings.devices.tsx `platformLabel`).
 pub fn platform_label(platform: &str) -> &str {
     match platform {
         "macos" | "darwin" => "macOS",
@@ -280,7 +280,7 @@ impl Render for DevicesPage {
             .into_iter()
             .enumerate()
             .partition(|(_, device)| local_id.as_deref() == Some(device.id.as_str()));
-        let device_row = |ix: usize, device: orbit_proto::Device, first: bool| {
+        let device_row = |ix: usize, device: ensembyte_proto::Device, first: bool| {
             let online = device_online(device.last_seen_at, now);
             let is_local = local_id.as_deref() == Some(device.id.as_str());
             let id_copied = copied.as_deref() == Some(device.id.as_str());

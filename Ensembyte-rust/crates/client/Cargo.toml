@@ -1,5 +1,5 @@
 [package]
-name = "orbit-client"
+name = "ensembyte-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,10 +12,10 @@ publish.workspace = true
 # frontend (iOS, Android, tests, CLIs).
 
 [dependencies]
-orbit-proto.workspace = true
-orbit-doc.workspace = true
-orbit-sync.workspace = true
-orbit-rpc.workspace = true
+ensembyte-proto.workspace = true
+ensembyte-doc.workspace = true
+ensembyte-sync.workspace = true
+ensembyte-rpc.workspace = true
 loro.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -31,7 +31,7 @@ async-trait.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-orbit-sync = { workspace = true, features = ["mock-server"] }
+ensembyte-sync = { workspace = true, features = ["mock-server"] }
 tokio-tungstenite.workspace = true
 async-trait.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

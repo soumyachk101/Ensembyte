@@ -1,8 +1,8 @@
 use futures::StreamExt;
 use std::{sync::Arc, time::Duration};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_proto::{HarnessId, PreviewService};
-use orbit_rpc::{RpcReply, RpcService, methods};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_proto::{HarnessId, PreviewService};
+use ensembyte_rpc::{RpcReply, RpcService, methods};
 
 fn service(device: &str, cwd: &std::path::Path, id: &str) -> PreviewService {
     PreviewService {
@@ -18,7 +18,7 @@ fn service(device: &str, cwd: &std::path::Path, id: &str) -> PreviewService {
         pid: 123,
         cwd: cwd.to_string_lossy().into_owned(),
         started_at: 1,
-        orbit_owned: true,
+        ensembyte_owned: true,
     }
 }
 #[tokio::test]

@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use orbit_doc::{MessagePart, MessageRole, SessionDoc, SessionMessageEntry};
+use ensembyte_doc::{MessagePart, MessageRole, SessionDoc, SessionMessageEntry};
 
-use orbit_engine::local_import::{ImportEvent, marker_grants_read_root};
-use orbit_engine::run_journal::journal_paths;
-use orbit_engine::{EngineCore, EngineProfile, HarnessId, default_registry};
+use ensembyte_engine::local_import::{ImportEvent, marker_grants_read_root};
+use ensembyte_engine::run_journal::journal_paths;
+use ensembyte_engine::{EngineCore, EngineProfile, HarnessId, default_registry};
 
 fn assemble(profile: EngineProfile) -> EngineCore {
     EngineCore::assemble_with_profile(profile, Arc::new(default_registry()), HarnessId::Mock, None)
@@ -61,7 +61,7 @@ async fn seed_local(data_dir: &std::path::Path) -> (String, String, String) {
     })
     .expect("push message");
     let bytes = doc.export_snapshot().expect("snapshot");
-    let store = orbit_sync::DocsStore::open(data_dir.join("profiles").join("local"))
+    let store = ensembyte_sync::DocsStore::open(data_dir.join("profiles").join("local"))
         .expect("open local store");
     store
         .save_snapshot_with_cursor("chat-doc", &bytes, 0, 2)
@@ -162,14 +162,14 @@ async fn local_work_imports_into_synced_profile_once() {
 
     // Doc bytes present in the synced store in born-chat2 shape (cursor 0,
     // epoch 2) — the shape DocHost pushes from VV zero on first room join.
-    let store = orbit_sync::DocsStore::open(dir.path().join("orgs").join("org1").join("user1"))
+    let store = ensembyte_sync::DocsStore::open(dir.path().join("orgs").join("org1").join("user1"))
         .expect("open synced store");
     let (bytes, cursor, epoch) = store
         .load_snapshot_with_cursor(&chat_doc)
         .expect("load")
         .expect("imported doc row");
     assert_eq!((cursor, epoch), (0, 2));
-    let source_store = orbit_sync::DocsStore::open(dir.path().join("profiles").join("local"))
+    let source_store = ensembyte_sync::DocsStore::open(dir.path().join("profiles").join("local"))
         .expect("open source store");
     assert_eq!(
         source_store

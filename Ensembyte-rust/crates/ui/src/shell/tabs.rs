@@ -296,7 +296,7 @@ impl Shell {
         let (title, target, harness, on_canvas): (
             SharedString,
             Option<SharedString>,
-            Option<orbit_proto::HarnessId>,
+            Option<ensembyte_proto::HarnessId>,
             bool,
         ) = {
             let state = self.state.read(cx);

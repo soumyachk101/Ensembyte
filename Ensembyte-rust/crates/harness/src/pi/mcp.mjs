@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 export default function (pi) {
-  const config = JSON.parse(process.env.ENSEMBYTE_PI_MCP || process.env.ORBIT_PI_MCP);
+  const config = JSON.parse(process.env.ENSEMBYTE_PI_MCP || process.env.ENSEMBYTE_PI_MCP);
   let child, lines, nextId = 0;
   const pending = new Map();
   function fail(error) {

@@ -2,20 +2,20 @@
 //! state straight from a data dir's docs store (no engine, no lock contention
 //! beyond sqlite's own).
 //!
-//!   cargo run -p orbit-engine --example doc_inspect -- <store-root> <chat-id>
+//!   cargo run -p ensembyte-engine --example doc_inspect -- <store-root> <chat-id>
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let root = args.next().expect("store root");
     let chat_id = args.next().expect("chat id");
-    let store = orbit_sync::DocsStore::open(std::path::PathBuf::from(root))?;
+    let store = ensembyte_sync::DocsStore::open(std::path::PathBuf::from(root))?;
     let Some(bytes) = store.load_snapshot(&chat_id)? else {
         println!("NO SNAPSHOT for {chat_id}");
         return Ok(());
     };
     let raw = loro::LoroDoc::new();
     raw.import(&bytes)?;
-    let doc = orbit_doc::SessionDoc::from_doc(raw);
+    let doc = ensembyte_doc::SessionDoc::from_doc(raw);
     let entries = doc.read_entries()?;
     println!("== messages: {} ==", entries.len());
     for e in &entries {

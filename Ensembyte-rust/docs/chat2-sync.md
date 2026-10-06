@@ -208,7 +208,7 @@ explicit request; the real healing is M1.
 
 ## Observability / acceptance
 
-- `orbit sync` gains per-chat `cursor / headSeq / floorLag / pendingPushes`.
+- `ensembyte sync` gains per-chat `cursor / headSeq / floorLag / pendingPushes`.
 - Alert-shaped stat: any room with `headSeq - checkpointSeq` bytes > 2 MB or
   checkpoint age > 7 days (the passive failure mode this design trades into — make it
   visible from day one; silent truncation of the old wedge class must not become

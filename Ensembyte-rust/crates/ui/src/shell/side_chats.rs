@@ -48,7 +48,7 @@ impl Shell {
     /// sibling; the picker passes the source itself.
     pub(super) fn fork_chat(
         &mut self,
-        source: orbit_proto::Chat,
+        source: ensembyte_proto::Chat,
         parent_id: String,
         cx: &mut Context<Self>,
     ) {
@@ -69,7 +69,7 @@ impl Shell {
         cx.spawn(async move |this, cx| {
             let result = engine
                 .client()
-                .call_as::<orbit_proto::Chat>(methods::FORK_SIDE_CHAT, params)
+                .call_as::<ensembyte_proto::Chat>(methods::FORK_SIDE_CHAT, params)
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.side_chat_creating = false;
@@ -157,7 +157,7 @@ impl Shell {
 
     pub(super) fn open_side_chat(
         &mut self,
-        chat: orbit_proto::Chat,
+        chat: ensembyte_proto::Chat,
         key: String,
         cx: &mut Context<Self>,
     ) {
@@ -167,7 +167,7 @@ impl Shell {
     /// `unsaved`: `chat` is only minted here, and its first send creates it.
     fn open_side_chat_tab(
         &mut self,
-        chat: orbit_proto::Chat,
+        chat: ensembyte_proto::Chat,
         key: String,
         unsaved: bool,
         cx: &mut Context<Self>,
@@ -387,7 +387,7 @@ mod tests {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -441,7 +441,7 @@ mod tests {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -503,7 +503,7 @@ mod tests {
         window
             .update(cx, |shell, window, cx| {
                 shell.active_chat = "main".into();
-                let main: orbit_proto::Chat = serde_json::from_value(serde_json::json!({
+                let main: ensembyte_proto::Chat = serde_json::from_value(serde_json::json!({
                     "id": "main", "deviceId": "local", "cwd": "/tmp/main",
                     "archived": false, "createdAt": Utc::now(),
                 }))
@@ -520,7 +520,7 @@ mod tests {
                 let chat_id = side.read(cx).selected_chat.clone().unwrap();
                 assert!(side.read(cx).side_chat_unsaved());
                 // A model picked before the first send is what gets minted.
-                let config: orbit_proto::ChatConfig = serde_json::from_value(serde_json::json!({
+                let config: ensembyte_proto::ChatConfig = serde_json::from_value(serde_json::json!({
                     "harness": "codex", "sandbox": "workspace-write",
                 }))
                 .unwrap();
@@ -533,7 +533,7 @@ mod tests {
                 assert_eq!(create["cwd"], "/tmp/main");
                 assert_eq!(create["config"]["harness"], "codex");
                 let row = side.read(cx).selected_chat_row().cloned().unwrap();
-                assert_eq!(row.config.unwrap().harness, orbit_proto::HarnessId::Codex);
+                assert_eq!(row.config.unwrap().harness, ensembyte_proto::HarnessId::Codex);
                 assert_eq!(shell.state.read(cx).chats.len(), 1, "no row yet");
                 // A draft cannot keep it: no row could reopen it.
                 let composer = shell.side_chats[&id].composer.clone();
@@ -567,7 +567,7 @@ mod tests {
                 );
             })
             .unwrap();
-        let chat: orbit_proto::Chat = serde_json::from_value(serde_json::json!({
+        let chat: ensembyte_proto::Chat = serde_json::from_value(serde_json::json!({
             "id": "side", "parentChatId": "main", "deviceId": "local", "cwd": "/tmp/other",
             "archived": false, "createdAt": Utc::now(),
         }))
@@ -575,7 +575,7 @@ mod tests {
         window
             .update(cx, |shell, _, cx| {
                 shell.active_chat = "main".into();
-                let main: orbit_proto::Chat = serde_json::from_value(serde_json::json!({
+                let main: ensembyte_proto::Chat = serde_json::from_value(serde_json::json!({
                     "id": "main", "deviceId": "local", "cwd": "/tmp/main",
                     "archived": false, "createdAt": Utc::now(),
                 }))

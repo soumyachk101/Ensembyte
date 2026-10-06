@@ -7,8 +7,8 @@ import Foundation
 // Depending on the consumer's build setup, the low-level FFI code
 // might be in a separate module, or it might be compiled inline into
 // this module. This is a bit of light hackery to work with both.
-#if canImport(orbit_coreFFI)
-import orbit_coreFFI
+#if canImport(ensembyte_coreFFI)
+import ensembyte_coreFFI
 #endif
 
 fileprivate extension RustBuffer {
@@ -25,13 +25,13 @@ fileprivate extension RustBuffer {
     }
 
     static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> RustBuffer {
-        try! rustCall { ffi_orbit_mobile_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
+        try! rustCall { ffi_ensembyte_mobile_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
     // Frees the buffer in place.
     // The buffer must not be used after this is called.
     func deallocate() {
-        try! rustCall { ffi_orbit_mobile_rustbuffer_free(self, $0) }
+        try! rustCall { ffi_ensembyte_mobile_rustbuffer_free(self, $0) }
     }
 }
 
@@ -721,7 +721,7 @@ open class ClientListenerImpl: ClientListener, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_clientlistener(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_clientlistener(self.handle, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -731,7 +731,7 @@ open class ClientListenerImpl: ClientListener, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_clientlistener(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_clientlistener(handle, $0) }
     }
 
     
@@ -739,7 +739,7 @@ open class ClientListenerImpl: ClientListener, @unchecked Sendable {
     
 open func onEvent(event: ClientEvent)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_clientlistener_on_event(
+    uniffi_ensembyte_mobile_fn_method_clientlistener_on_event(
             self.uniffiCloneHandle(),
         FfiConverterTypeClientEvent_lower(event),uniffiCallStatus
     )
@@ -814,7 +814,7 @@ fileprivate struct UniffiCallbackInterfaceClientListener {
 }
 
 private func uniffiCallbackInitClientListener() {
-    uniffi_orbit_mobile_fn_init_callback_vtable_clientlistener(UniffiCallbackInterfaceClientListener.vtablePtr)
+    uniffi_ensembyte_mobile_fn_init_callback_vtable_clientlistener(UniffiCallbackInterfaceClientListener.vtablePtr)
 }
 
 #if swift(>=5.8)
@@ -1140,7 +1140,7 @@ open class CoreClient: CoreClientProtocol, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_coreclient(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_coreclient(self.handle, $0) }
     }
     /**
      * Build and start. Never blocks on the network: live mode hydrates from
@@ -1150,7 +1150,7 @@ public convenience init(config: CoreConfig, credentials: Credentials, listener: 
     let handle =
         try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_constructor_coreclient_new(
+    uniffi_ensembyte_mobile_fn_constructor_coreclient_new(
         FfiConverterTypeCoreConfig_lower(config),
         FfiConverterTypeCredentials_lower(credentials),
         FfiConverterTypeClientListener_lower(listener),uniffiCallStatus
@@ -1165,7 +1165,7 @@ public convenience init(config: CoreConfig, credentials: Credentials, listener: 
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_coreclient(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_coreclient(handle, $0) }
     }
 
     
@@ -1173,7 +1173,7 @@ public convenience init(config: CoreConfig, credentials: Credentials, listener: 
     
 open func archiveSession(chatId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_archive_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_archive_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1183,7 +1183,7 @@ open func archiveSession(chatId: String)throws   {try rustCallWithError(FfiConve
 open func archivedSessions() -> [SessionRow]  {
     return try!  FfiConverterSequenceTypeSessionRow.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_archived_sessions(
+    uniffi_ensembyte_mobile_fn_method_coreclient_archived_sessions(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1194,7 +1194,7 @@ open func archivedSessions() -> [SessionRow]  {
      */
 open func assignSection(chatId: String, sectionId: String?)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_assign_section(
+    uniffi_ensembyte_mobile_fn_method_coreclient_assign_section(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),
         FfiConverterOptionString.lower(sectionId),uniffiCallStatus
@@ -1208,7 +1208,7 @@ open func assignSection(chatId: String, sectionId: String?)throws   {try rustCal
 open func childSessions(parentId: String) -> [SessionRow]  {
     return try!  FfiConverterSequenceTypeSessionRow.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_child_sessions(
+    uniffi_ensembyte_mobile_fn_method_coreclient_child_sessions(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(parentId),uniffiCallStatus
     )
@@ -1220,7 +1220,7 @@ open func childSessions(parentId: String) -> [SessionRow]  {
      */
 open func closeSession(chatId: String)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_close_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_close_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1230,7 +1230,7 @@ open func closeSession(chatId: String)  {try! rustCall() {
 open func connectivity() -> Connectivity  {
     return try!  FfiConverterTypeConnectivity_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_connectivity(
+    uniffi_ensembyte_mobile_fn_method_coreclient_connectivity(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1243,13 +1243,13 @@ open func createProject(deviceId: String, path: String, gitDetected: Bool)async 
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_create_project(
+                uniffi_ensembyte_mobile_fn_method_coreclient_create_project(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(path),FfiConverterBool.lower(gitDetected)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1261,7 +1261,7 @@ open func createProject(deviceId: String, path: String, gitDetected: Bool)async 
 open func createSection(name: String)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_create_section(
+    uniffi_ensembyte_mobile_fn_method_coreclient_create_section(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(name),uniffiCallStatus
     )
@@ -1274,7 +1274,7 @@ open func createSection(name: String)throws  -> String  {
 open func createSession(newSession: NewSession)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_create_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_create_session(
             self.uniffiCloneHandle(),
         FfiConverterTypeNewSession_lower(newSession),uniffiCallStatus
     )
@@ -1288,13 +1288,13 @@ open func createWorktree(deviceId: String, spaceId: String, repoPath: String, ba
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_create_worktree(
+                uniffi_ensembyte_mobile_fn_method_coreclient_create_worktree(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(spaceId),FfiConverterString.lower(repoPath),FfiConverterString.lower(base)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1302,7 +1302,7 @@ open func createWorktree(deviceId: String, spaceId: String, repoPath: String, ba
     
 open func deleteProject(spaceId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_delete_project(
+    uniffi_ensembyte_mobile_fn_method_coreclient_delete_project(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(spaceId),uniffiCallStatus
     )
@@ -1311,7 +1311,7 @@ open func deleteProject(spaceId: String)throws   {try rustCallWithError(FfiConve
     
 open func deleteSection(sectionId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_delete_section(
+    uniffi_ensembyte_mobile_fn_method_coreclient_delete_section(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(sectionId),uniffiCallStatus
     )
@@ -1320,7 +1320,7 @@ open func deleteSection(sectionId: String)throws   {try rustCallWithError(FfiCon
     
 open func deleteSession(chatId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_delete_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_delete_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1330,7 +1330,7 @@ open func deleteSession(chatId: String)throws   {try rustCallWithError(FfiConver
 open func deviceId() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_device_id(
+    uniffi_ensembyte_mobile_fn_method_coreclient_device_id(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1339,7 +1339,7 @@ open func deviceId() -> String  {
 open func devices() -> [DeviceView]  {
     return try!  FfiConverterSequenceTypeDeviceView.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_devices(
+    uniffi_ensembyte_mobile_fn_method_coreclient_devices(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1351,7 +1351,7 @@ open func devices() -> [DeviceView]  {
 open func executionDevices() -> [DeviceView]  {
     return try!  FfiConverterSequenceTypeDeviceView.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_execution_devices(
+    uniffi_ensembyte_mobile_fn_method_coreclient_execution_devices(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1363,7 +1363,7 @@ open func executionDevices() -> [DeviceView]  {
 open func frontPage() -> FrontPage  {
     return try!  FfiConverterTypeFrontPage_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_front_page(
+    uniffi_ensembyte_mobile_fn_method_coreclient_front_page(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1372,7 +1372,7 @@ open func frontPage() -> FrontPage  {
 open func isDemo() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_is_demo(
+    uniffi_ensembyte_mobile_fn_method_coreclient_is_demo(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1385,13 +1385,13 @@ open func listFolders(deviceId: String, path: String?)async throws  -> FolderLis
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_list_folders(
+                uniffi_ensembyte_mobile_fn_method_coreclient_list_folders(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterOptionString.lower(path)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeFolderListing_lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1405,13 +1405,13 @@ open func listHarnesses(deviceId: String)async  -> [HarnessInfo]  {
     return
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_list_harnesses(
+                uniffi_ensembyte_mobile_fn_method_coreclient_list_harnesses(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeHarnessInfo.lift,
             errorHandler: nil
             
@@ -1425,13 +1425,13 @@ open func listModels(deviceId: String, harness: String)async  -> [ModelInfo]  {
     return
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_list_models(
+                uniffi_ensembyte_mobile_fn_method_coreclient_list_models(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(harness)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeModelInfo.lift,
             errorHandler: nil
             
@@ -1442,13 +1442,13 @@ open func listRefs(deviceId: String, repoPath: String)async throws  -> [RepoRef]
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_list_refs(
+                uniffi_ensembyte_mobile_fn_method_coreclient_list_refs(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(repoPath)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeRepoRef.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1456,7 +1456,7 @@ open func listRefs(deviceId: String, repoPath: String)async throws  -> [RepoRef]
     
 open func markSeen(chatId: String)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_mark_seen(
+    uniffi_ensembyte_mobile_fn_method_coreclient_mark_seen(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1468,7 +1468,7 @@ open func markSeen(chatId: String)  {try! rustCall() {
      */
 open func movePin(chatId: String, after: String?, before: String?)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_move_pin(
+    uniffi_ensembyte_mobile_fn_method_coreclient_move_pin(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),
         FfiConverterOptionString.lower(after),
@@ -1482,7 +1482,7 @@ open func movePin(chatId: String, after: String?, before: String?)throws   {try 
      */
 open func onBackground()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_on_background(
+    uniffi_ensembyte_mobile_fn_method_coreclient_on_background(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -1493,7 +1493,7 @@ open func onBackground()  {try! rustCall() {
      */
 open func onForeground()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_on_foreground(
+    uniffi_ensembyte_mobile_fn_method_coreclient_on_foreground(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -1505,7 +1505,7 @@ open func onForeground()  {try! rustCall() {
 open func openSession(chatId: String)throws  -> SessionHandle  {
     return try  FfiConverterTypeSessionHandle_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_open_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_open_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1515,7 +1515,7 @@ open func openSession(chatId: String)throws  -> SessionHandle  {
 open func orgId() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_org_id(
+    uniffi_ensembyte_mobile_fn_method_coreclient_org_id(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1523,7 +1523,7 @@ open func orgId() -> String  {
     
 open func pinSession(chatId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_pin_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_pin_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1535,7 +1535,7 @@ open func pinSession(chatId: String)throws   {try rustCallWithError(FfiConverter
      */
 open func preloadSessions()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_preload_sessions(
+    uniffi_ensembyte_mobile_fn_method_coreclient_preload_sessions(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -1544,7 +1544,7 @@ open func preloadSessions()  {try! rustCall() {
 open func project(spaceId: String) -> ProjectView?  {
     return try!  FfiConverterOptionTypeProjectView.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_project(
+    uniffi_ensembyte_mobile_fn_method_coreclient_project(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(spaceId),uniffiCallStatus
     )
@@ -1557,7 +1557,7 @@ open func project(spaceId: String) -> ProjectView?  {
 open func projectlessSessions() -> [SessionRow]  {
     return try!  FfiConverterSequenceTypeSessionRow.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_projectless_sessions(
+    uniffi_ensembyte_mobile_fn_method_coreclient_projectless_sessions(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1566,7 +1566,7 @@ open func projectlessSessions() -> [SessionRow]  {
 open func projects() -> [ProjectView]  {
     return try!  FfiConverterSequenceTypeProjectView.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_projects(
+    uniffi_ensembyte_mobile_fn_method_coreclient_projects(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1575,7 +1575,7 @@ open func projects() -> [ProjectView]  {
 open func pullRequests() -> PullRequestGroups  {
     return try!  FfiConverterTypePullRequestGroups_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_pull_requests(
+    uniffi_ensembyte_mobile_fn_method_coreclient_pull_requests(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1588,13 +1588,13 @@ open func readAttachment(deviceId: String, path: String)async throws  -> Data  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_read_attachment(
+                uniffi_ensembyte_mobile_fn_method_coreclient_read_attachment(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(path)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterData.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1608,13 +1608,13 @@ open func registerPushTarget(token: String, environment: String, prefs: PushPref
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_register_push_target(
+                uniffi_ensembyte_mobile_fn_method_coreclient_register_push_target(
                         self.uniffiCloneHandle(),FfiConverterString.lower(token),FfiConverterString.lower(environment),FfiConverterTypePushPrefs_lower(prefs)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_void,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_void,
-            freeFunc: ffi_orbit_mobile_rust_future_free_void,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_void,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_void,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1622,7 +1622,7 @@ open func registerPushTarget(token: String, environment: String, prefs: PushPref
     
 open func renameProject(spaceId: String, name: String?)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_rename_project(
+    uniffi_ensembyte_mobile_fn_method_coreclient_rename_project(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(spaceId),
         FfiConverterOptionString.lower(name),uniffiCallStatus
@@ -1632,7 +1632,7 @@ open func renameProject(spaceId: String, name: String?)throws   {try rustCallWit
     
 open func renameSection(sectionId: String, name: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_rename_section(
+    uniffi_ensembyte_mobile_fn_method_coreclient_rename_section(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(sectionId),
         FfiConverterString.lower(name),uniffiCallStatus
@@ -1642,7 +1642,7 @@ open func renameSection(sectionId: String, name: String)throws   {try rustCallWi
     
 open func renameSession(chatId: String, title: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_rename_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_rename_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),
         FfiConverterString.lower(title),uniffiCallStatus
@@ -1653,7 +1653,7 @@ open func renameSession(chatId: String, title: String)throws   {try rustCallWith
 open func search(query: String, limit: UInt32) -> [SearchHit]  {
     return try!  FfiConverterSequenceTypeSearchHit.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_search(
+    uniffi_ensembyte_mobile_fn_method_coreclient_search(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(query),
         FfiConverterUInt32.lower(limit),uniffiCallStatus
@@ -1669,13 +1669,13 @@ open func searchFiles(deviceId: String, chatId: String?, spaceId: String?, query
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_search_files(
+                uniffi_ensembyte_mobile_fn_method_coreclient_search_files(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterOptionString.lower(chatId),FfiConverterOptionString.lower(spaceId),FfiConverterString.lower(query)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeFileMatch.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1687,7 +1687,7 @@ open func searchFiles(deviceId: String, chatId: String?, spaceId: String?, query
 open func session(chatId: String) -> SessionHandle?  {
     return try!  FfiConverterOptionTypeSessionHandle.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1697,7 +1697,7 @@ open func session(chatId: String) -> SessionHandle?  {
 open func sessionConfig(chatId: String) -> ChatConfig?  {
     return try!  FfiConverterOptionTypeChatConfig.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_session_config(
+    uniffi_ensembyte_mobile_fn_method_coreclient_session_config(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1710,7 +1710,7 @@ open func sessionConfig(chatId: String) -> ChatConfig?  {
 open func sessionRow(chatId: String) -> SessionRow?  {
     return try!  FfiConverterOptionTypeSessionRow.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_session_row(
+    uniffi_ensembyte_mobile_fn_method_coreclient_session_row(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1722,7 +1722,7 @@ open func sessionRow(chatId: String) -> SessionRow?  {
      */
 open func setNetworkOnline(online: Bool)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_set_network_online(
+    uniffi_ensembyte_mobile_fn_method_coreclient_set_network_online(
             self.uniffiCloneHandle(),
         FfiConverterBool.lower(online),uniffiCallStatus
     )
@@ -1731,7 +1731,7 @@ open func setNetworkOnline(online: Bool)  {try! rustCall() {
     
 open func setSectionCollapsed(sectionId: String, collapsed: Bool)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_set_section_collapsed(
+    uniffi_ensembyte_mobile_fn_method_coreclient_set_section_collapsed(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(sectionId),
         FfiConverterBool.lower(collapsed),uniffiCallStatus
@@ -1741,7 +1741,7 @@ open func setSectionCollapsed(sectionId: String, collapsed: Bool)throws   {try r
     
 open func setSessionConfig(chatId: String, config: ChatConfig)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_set_session_config(
+    uniffi_ensembyte_mobile_fn_method_coreclient_set_session_config(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),
         FfiConverterTypeChatConfig_lower(config),uniffiCallStatus
@@ -1754,7 +1754,7 @@ open func setSessionConfig(chatId: String, config: ChatConfig)throws   {try rust
      */
 open func shutdown()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_shutdown(
+    uniffi_ensembyte_mobile_fn_method_coreclient_shutdown(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -1767,13 +1767,13 @@ open func switchRef(deviceId: String, repoPath: String, refName: String)async th
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_switch_ref(
+                uniffi_ensembyte_mobile_fn_method_coreclient_switch_ref(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(repoPath),FfiConverterString.lower(refName)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_void,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_void,
-            freeFunc: ffi_orbit_mobile_rust_future_free_void,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_void,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_void,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1786,13 +1786,13 @@ open func switchSessionRef(chatId: String, reference: RepoRef)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_switch_session_ref(
+                uniffi_ensembyte_mobile_fn_method_coreclient_switch_session_ref(
                         self.uniffiCloneHandle(),FfiConverterString.lower(chatId),FfiConverterTypeRepoRef_lower(reference)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_void,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_void,
-            freeFunc: ffi_orbit_mobile_rust_future_free_void,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_void,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_void,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1800,7 +1800,7 @@ open func switchSessionRef(chatId: String, reference: RepoRef)async throws   {
     
 open func unarchiveSession(chatId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_unarchive_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_unarchive_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1809,7 +1809,7 @@ open func unarchiveSession(chatId: String)throws   {try rustCallWithError(FfiCon
     
 open func unpinSession(chatId: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_unpin_session(
+    uniffi_ensembyte_mobile_fn_method_coreclient_unpin_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(chatId),uniffiCallStatus
     )
@@ -1823,13 +1823,13 @@ open func unregisterPushTarget()async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_unregister_push_target(
+                uniffi_ensembyte_mobile_fn_method_coreclient_unregister_push_target(
                         self.uniffiCloneHandle()
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_void,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_void,
-            freeFunc: ffi_orbit_mobile_rust_future_free_void,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_void,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_void,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1840,7 +1840,7 @@ open func unregisterPushTarget()async throws   {
      */
 open func updateTokens(tokens: AuthTokens)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_update_tokens(
+    uniffi_ensembyte_mobile_fn_method_coreclient_update_tokens(
             self.uniffiCloneHandle(),
         FfiConverterTypeAuthTokens_lower(tokens),uniffiCallStatus
     )
@@ -1854,13 +1854,13 @@ open func uploadAttachment(deviceId: String, name: String, data: Data, progress:
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_coreclient_upload_attachment(
+                uniffi_ensembyte_mobile_fn_method_coreclient_upload_attachment(
                         self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(name),FfiConverterData.lower(data),FfiConverterOptionTypeUploadProgress.lower(progress)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -1869,7 +1869,7 @@ open func uploadAttachment(deviceId: String, name: String, data: Data, progress:
 open func userId() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_user_id(
+    uniffi_ensembyte_mobile_fn_method_coreclient_user_id(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1881,7 +1881,7 @@ open func userId() -> String  {
 open func workspace() -> WorkspaceSnapshot  {
     return try!  FfiConverterTypeWorkspaceSnapshot_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_workspace(
+    uniffi_ensembyte_mobile_fn_method_coreclient_workspace(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1893,7 +1893,7 @@ open func workspace() -> WorkspaceSnapshot  {
 open func workspaceRevision() -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_coreclient_workspace_revision(
+    uniffi_ensembyte_mobile_fn_method_coreclient_workspace_revision(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2040,7 +2040,7 @@ open class LayoutFrame: LayoutFrameProtocol, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_layoutframe(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_layoutframe(self.handle, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -2050,7 +2050,7 @@ open class LayoutFrame: LayoutFrameProtocol, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_layoutframe(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_layoutframe(handle, $0) }
     }
 
     
@@ -2059,7 +2059,7 @@ open class LayoutFrame: LayoutFrameProtocol, @unchecked Sendable {
 open func buildMicros() -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_build_micros(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_build_micros(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2068,7 +2068,7 @@ open func buildMicros() -> UInt64  {
 open func display(index: UInt32) -> RowDisplay?  {
     return try!  FfiConverterOptionTypeRowDisplay.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_display(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_display(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(index),uniffiCallStatus
     )
@@ -2081,7 +2081,7 @@ open func display(index: UInt32) -> RowDisplay?  {
 open func indexAt(y: Float) -> UInt32?  {
     return try!  FfiConverterOptionUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_index_at(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_index_at(
             self.uniffiCloneHandle(),
         FfiConverterFloat.lower(y),uniffiCallStatus
     )
@@ -2091,7 +2091,7 @@ open func indexAt(y: Float) -> UInt32?  {
 open func indexOf(key: UInt64) -> UInt32?  {
     return try!  FfiConverterOptionUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_index_of(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_index_of(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(key),uniffiCallStatus
     )
@@ -2104,7 +2104,7 @@ open func indexOf(key: UInt64) -> UInt32?  {
 open func messageText(index: UInt32) -> String?  {
     return try!  FfiConverterOptionString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_message_text(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_message_text(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(index),uniffiCallStatus
     )
@@ -2114,7 +2114,7 @@ open func messageText(index: UInt32) -> String?  {
 open func placement(index: UInt32) -> RowPlacement?  {
     return try!  FfiConverterOptionTypeRowPlacement.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_placement(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_placement(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(index),uniffiCallStatus
     )
@@ -2127,7 +2127,7 @@ open func placement(index: UInt32) -> RowPlacement?  {
 open func plainText() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_plain_text(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_plain_text(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2139,7 +2139,7 @@ open func plainText() -> String  {
 open func preparedHeapBytes() -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_prepared_heap_bytes(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_prepared_heap_bytes(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2148,7 +2148,7 @@ open func preparedHeapBytes() -> UInt64  {
 open func revision() -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_revision(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_revision(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2157,7 +2157,7 @@ open func revision() -> UInt64  {
 open func rowCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_row_count(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_row_count(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2169,7 +2169,7 @@ open func rowCount() -> UInt32  {
 open func rowsIn(y0: Float, y1: Float) -> [RowPlacement]  {
     return try!  FfiConverterSequenceTypeRowPlacement.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_rows_in(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_rows_in(
             self.uniffiCloneHandle(),
         FfiConverterFloat.lower(y0),
         FfiConverterFloat.lower(y1),uniffiCallStatus
@@ -2180,7 +2180,7 @@ open func rowsIn(y0: Float, y1: Float) -> [RowPlacement]  {
 open func styleCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_style_count(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_style_count(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2189,7 +2189,7 @@ open func styleCount() -> UInt32  {
 open func styles() -> [StyleDesc]  {
     return try!  FfiConverterSequenceTypeStyleDesc.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_styles(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_styles(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2198,7 +2198,7 @@ open func styles() -> [StyleDesc]  {
 open func totalHeight() -> Float  {
     return try!  FfiConverterFloat.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_total_height(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_total_height(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2207,7 +2207,7 @@ open func totalHeight() -> Float  {
 open func width() -> Float  {
     return try!  FfiConverterFloat.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutframe_width(
+    uniffi_ensembyte_mobile_fn_method_layoutframe_width(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2311,7 +2311,7 @@ open class LayoutListenerImpl: LayoutListener, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_layoutlistener(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_layoutlistener(self.handle, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -2321,7 +2321,7 @@ open class LayoutListenerImpl: LayoutListener, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_layoutlistener(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_layoutlistener(handle, $0) }
     }
 
     
@@ -2329,7 +2329,7 @@ open class LayoutListenerImpl: LayoutListener, @unchecked Sendable {
     
 open func frameReady(revision: UInt64)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_layoutlistener_frame_ready(
+    uniffi_ensembyte_mobile_fn_method_layoutlistener_frame_ready(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(revision),uniffiCallStatus
     )
@@ -2404,7 +2404,7 @@ fileprivate struct UniffiCallbackInterfaceLayoutListener {
 }
 
 private func uniffiCallbackInitLayoutListener() {
-    uniffi_orbit_mobile_fn_init_callback_vtable_layoutlistener(UniffiCallbackInterfaceLayoutListener.vtablePtr)
+    uniffi_ensembyte_mobile_fn_init_callback_vtable_layoutlistener(UniffiCallbackInterfaceLayoutListener.vtablePtr)
 }
 
 #if swift(>=5.8)
@@ -2527,7 +2527,7 @@ open class PlatformMeasurerImpl: PlatformMeasurer, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_platformmeasurer(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_platformmeasurer(self.handle, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -2537,7 +2537,7 @@ open class PlatformMeasurerImpl: PlatformMeasurer, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_platformmeasurer(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_platformmeasurer(handle, $0) }
     }
 
     
@@ -2546,7 +2546,7 @@ open class PlatformMeasurerImpl: PlatformMeasurer, @unchecked Sendable {
 open func measure(face: FaceRole, size: Float, ligatures: Bool, text: String) -> Float  {
     return try!  FfiConverterFloat.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_platformmeasurer_measure(
+    uniffi_ensembyte_mobile_fn_method_platformmeasurer_measure(
             self.uniffiCloneHandle(),
         FfiConverterTypeFaceRole_lower(face),
         FfiConverterFloat.lower(size),
@@ -2565,7 +2565,7 @@ open func measure(face: FaceRole, size: Float, ligatures: Bool, text: String) ->
 open func measureRun(face: FaceRole, size: Float, ligatures: Bool, text: String) -> [Float]  {
     return try!  FfiConverterSequenceFloat.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_platformmeasurer_measure_run(
+    uniffi_ensembyte_mobile_fn_method_platformmeasurer_measure_run(
             self.uniffiCloneHandle(),
         FfiConverterTypeFaceRole_lower(face),
         FfiConverterFloat.lower(size),
@@ -2679,7 +2679,7 @@ fileprivate struct UniffiCallbackInterfacePlatformMeasurer {
 }
 
 private func uniffiCallbackInitPlatformMeasurer() {
-    uniffi_orbit_mobile_fn_init_callback_vtable_platformmeasurer(UniffiCallbackInterfacePlatformMeasurer.vtablePtr)
+    uniffi_ensembyte_mobile_fn_init_callback_vtable_platformmeasurer(UniffiCallbackInterfacePlatformMeasurer.vtablePtr)
 }
 
 #if swift(>=5.8)
@@ -2862,7 +2862,7 @@ open class SessionHandle: SessionHandleProtocol, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_sessionhandle(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_sessionhandle(self.handle, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -2872,7 +2872,7 @@ open class SessionHandle: SessionHandleProtocol, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_sessionhandle(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_sessionhandle(handle, $0) }
     }
 
     
@@ -2882,13 +2882,13 @@ open func beginQueuedEdit(id: String, instanceId: String)async  -> QueueEditStar
     return
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_sessionhandle_begin_queued_edit(
+                uniffi_ensembyte_mobile_fn_method_sessionhandle_begin_queued_edit(
                         self.uniffiCloneHandle(),FfiConverterString.lower(id),FfiConverterString.lower(instanceId)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeQueueEditStart_lift,
             errorHandler: nil
             
@@ -2898,7 +2898,7 @@ open func beginQueuedEdit(id: String, instanceId: String)async  -> QueueEditStar
 open func chatId() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_chat_id(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_chat_id(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2906,7 +2906,7 @@ open func chatId() -> String  {
     
 open func clearQueueError()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_clear_queue_error(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_clear_queue_error(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -2918,7 +2918,7 @@ open func clearQueueError()  {try! rustCall() {
 open func composer() -> ComposerState  {
     return try!  FfiConverterTypeComposerState_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_composer(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_composer(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2932,13 +2932,13 @@ open func deliverQueuedNow(id: String)async throws  -> Bool  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_sessionhandle_deliver_queued_now(
+                uniffi_ensembyte_mobile_fn_method_sessionhandle_deliver_queued_now(
                         self.uniffiCloneHandle(),FfiConverterString.lower(id)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_i8,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_i8,
-            freeFunc: ffi_orbit_mobile_rust_future_free_i8,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_i8,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_i8,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -2950,7 +2950,7 @@ open func deliverQueuedNow(id: String)async throws  -> Bool  {
 open func enqueue(text: String, attachments: [String], holdForTurnEnd: Bool)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_enqueue(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_enqueue(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(text),
         FfiConverterSequenceString.lower(attachments),
@@ -2963,13 +2963,13 @@ open func finishQueuedEdit(lease: QueueEditLease, action: QueueEditAction, text:
     return
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_sessionhandle_finish_queued_edit(
+                uniffi_ensembyte_mobile_fn_method_sessionhandle_finish_queued_edit(
                         self.uniffiCloneHandle(),FfiConverterTypeQueueEditLease_lower(lease),FfiConverterTypeQueueEditAction_lower(action),FfiConverterOptionString.lower(text)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeQueueEditFinish_lift,
             errorHandler: nil
             
@@ -2978,7 +2978,7 @@ open func finishQueuedEdit(lease: QueueEditLease, action: QueueEditAction, text:
     
 open func interrupt()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_interrupt(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_interrupt(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -2986,7 +2986,7 @@ open func interrupt()throws   {try rustCallWithError(FfiConverterTypeCoreError_l
     
 open func markSeen()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_mark_seen(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_mark_seen(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -2998,7 +2998,7 @@ open func markSeen()  {try! rustCall() {
 open func messageText(entryId: String) -> String?  {
     return try!  FfiConverterOptionString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_message_text(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_message_text(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(entryId),uniffiCallStatus
     )
@@ -3011,7 +3011,7 @@ open func messageText(entryId: String) -> String?  {
 open func moveQueued(id: String, to: UInt32)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_move_queued(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_move_queued(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterUInt32.lower(to),uniffiCallStatus
@@ -3025,7 +3025,7 @@ open func moveQueued(id: String, to: UInt32)throws  -> Bool  {
 open func moveQueuedBy(id: String, delta: Int32)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_move_queued_by(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_move_queued_by(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterInt32.lower(delta),uniffiCallStatus
@@ -3040,13 +3040,13 @@ open func removeQueued(id: String)async throws  -> Bool  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_sessionhandle_remove_queued(
+                uniffi_ensembyte_mobile_fn_method_sessionhandle_remove_queued(
                         self.uniffiCloneHandle(),FfiConverterString.lower(id)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_i8,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_i8,
-            freeFunc: ffi_orbit_mobile_rust_future_free_i8,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_i8,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_i8,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -3056,13 +3056,13 @@ open func renewQueuedEdit(lease: QueueEditLease)async  -> Bool  {
     return
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_sessionhandle_renew_queued_edit(
+                uniffi_ensembyte_mobile_fn_method_sessionhandle_renew_queued_edit(
                         self.uniffiCloneHandle(),FfiConverterTypeQueueEditLease_lower(lease)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_i8,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_i8,
-            freeFunc: ffi_orbit_mobile_rust_future_free_i8,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_i8,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_i8,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: nil
             
@@ -3071,7 +3071,7 @@ open func renewQueuedEdit(lease: QueueEditLease)async  -> Bool  {
     
 open func respondInput(requestId: String, answers: [UserInputAnswer])throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_respond_input(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_respond_input(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(requestId),
         FfiConverterSequenceTypeUserInputAnswer.lower(answers),uniffiCallStatus
@@ -3084,7 +3084,7 @@ open func respondInput(requestId: String, answers: [UserInputAnswer])throws   {t
      */
 open func retryDelivery()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_retry_delivery(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_retry_delivery(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -3096,7 +3096,7 @@ open func retryDelivery()throws   {try rustCallWithError(FfiConverterTypeCoreErr
 open func send(request: SendRequest)throws  -> SendOutcome  {
     return try  FfiConverterTypeSendOutcome_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_send(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_send(
             self.uniffiCloneHandle(),
         FfiConverterTypeSendRequest_lower(request),uniffiCallStatus
     )
@@ -3110,13 +3110,13 @@ open func sendQueuedNow(id: String)async throws  -> Bool  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_method_sessionhandle_send_queued_now(
+                uniffi_ensembyte_mobile_fn_method_sessionhandle_send_queued_now(
                         self.uniffiCloneHandle(),FfiConverterString.lower(id)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_i8,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_i8,
-            freeFunc: ffi_orbit_mobile_rust_future_free_i8,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_i8,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_i8,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -3127,7 +3127,7 @@ open func sendQueuedNow(id: String)async throws  -> Bool  {
      */
 open func setViewAttached(attached: Bool)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_set_view_attached(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_set_view_attached(
             self.uniffiCloneHandle(),
         FfiConverterBool.lower(attached),uniffiCallStatus
     )
@@ -3137,7 +3137,7 @@ open func setViewAttached(attached: Bool)  {try! rustCall() {
 open func transcriptStatus() -> TranscriptStatus  {
     return try!  FfiConverterTypeTranscriptStatus_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_sessionhandle_transcript_status(
+    uniffi_ensembyte_mobile_fn_method_sessionhandle_transcript_status(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -3239,13 +3239,13 @@ open class TextSystem: TextSystemProtocol, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_textsystem(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_textsystem(self.handle, $0) }
     }
 public convenience init(faces: [FaceData], measurer: PlatformMeasurer?) {
     let handle =
         try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_constructor_textsystem_new(
+    uniffi_ensembyte_mobile_fn_constructor_textsystem_new(
         FfiConverterSequenceTypeFaceData.lower(faces),
         FfiConverterOptionTypePlatformMeasurer.lower(measurer),uniffiCallStatus
     )
@@ -3259,7 +3259,7 @@ public convenience init(faces: [FaceData], measurer: PlatformMeasurer?) {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_textsystem(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_textsystem(handle, $0) }
     }
 
     
@@ -3391,13 +3391,13 @@ open class TranscriptView: TranscriptViewProtocol, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_transcriptview(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_transcriptview(self.handle, $0) }
     }
 public convenience init(text: TextSystem, listener: LayoutListener) {
     let handle =
         try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_constructor_transcriptview_new(
+    uniffi_ensembyte_mobile_fn_constructor_transcriptview_new(
         FfiConverterTypeTextSystem_lower(text),
         FfiConverterTypeLayoutListener_lower(listener),uniffiCallStatus
     )
@@ -3411,7 +3411,7 @@ public convenience init(text: TextSystem, listener: LayoutListener) {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_transcriptview(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_transcriptview(handle, $0) }
     }
 
     
@@ -3424,7 +3424,7 @@ public convenience init(text: TextSystem, listener: LayoutListener) {
 open func attach(client: CoreClient, chatId: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_attach(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_attach(
             self.uniffiCloneHandle(),
         FfiConverterTypeCoreClient_lower(client),
         FfiConverterString.lower(chatId),uniffiCallStatus
@@ -3434,7 +3434,7 @@ open func attach(client: CoreClient, chatId: String) -> Bool  {
     
 open func close()  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_close(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_close(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -3446,7 +3446,7 @@ open func close()  {try! rustCall() {
 open func frame() -> LayoutFrame  {
     return try!  FfiConverterTypeLayoutFrame_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_frame(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_frame(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -3457,7 +3457,7 @@ open func frame() -> LayoutFrame  {
      */
 open func setDebugEntries(entries: [DebugEntry], working: Bool)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_set_debug_entries(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_set_debug_entries(
             self.uniffiCloneHandle(),
         FfiConverterSequenceTypeDebugEntry.lower(entries),
         FfiConverterBool.lower(working),uniffiCallStatus
@@ -3467,7 +3467,7 @@ open func setDebugEntries(entries: [DebugEntry], working: Bool)  {try! rustCall(
     
 open func setViewport(width: Float, textScale: Float)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_set_viewport(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_set_viewport(
             self.uniffiCloneHandle(),
         FfiConverterFloat.lower(width),
         FfiConverterFloat.lower(textScale),uniffiCallStatus
@@ -3480,7 +3480,7 @@ open func setViewport(width: Float, textScale: Float)  {try! rustCall() {
      */
 open func toggle(key: UInt64)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_toggle(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_toggle(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(key),uniffiCallStatus
     )
@@ -3492,7 +3492,7 @@ open func toggle(key: UInt64)  {try! rustCall() {
      */
 open func toggleDetail(row: UInt64, detail: UInt64, `open`: Bool)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_transcriptview_toggle_detail(
+    uniffi_ensembyte_mobile_fn_method_transcriptview_toggle_detail(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(row),
         FfiConverterUInt64.lower(detail),
@@ -3599,7 +3599,7 @@ open class UploadProgressImpl: UploadProgress, @unchecked Sendable {
     @_documentation(visibility: private)
 #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_orbit_mobile_fn_clone_uploadprogress(self.handle, $0) }
+        return try! rustCall { uniffi_ensembyte_mobile_fn_clone_uploadprogress(self.handle, $0) }
     }
     // No primary constructor declared for this class.
 
@@ -3609,7 +3609,7 @@ open class UploadProgressImpl: UploadProgress, @unchecked Sendable {
             return
         }
 
-        try! rustCall { uniffi_orbit_mobile_fn_free_uploadprogress(handle, $0) }
+        try! rustCall { uniffi_ensembyte_mobile_fn_free_uploadprogress(handle, $0) }
     }
 
     
@@ -3617,7 +3617,7 @@ open class UploadProgressImpl: UploadProgress, @unchecked Sendable {
     
 open func onProgress(fraction: Double)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_method_uploadprogress_on_progress(
+    uniffi_ensembyte_mobile_fn_method_uploadprogress_on_progress(
             self.uniffiCloneHandle(),
         FfiConverterDouble.lower(fraction),uniffiCallStatus
     )
@@ -3692,7 +3692,7 @@ fileprivate struct UniffiCallbackInterfaceUploadProgress {
 }
 
 private func uniffiCallbackInitUploadProgress() {
-    uniffi_orbit_mobile_fn_init_callback_vtable_uploadprogress(UniffiCallbackInterfaceUploadProgress.vtablePtr)
+    uniffi_ensembyte_mobile_fn_init_callback_vtable_uploadprogress(UniffiCallbackInterfaceUploadProgress.vtablePtr)
 }
 
 #if swift(>=5.8)
@@ -8198,7 +8198,7 @@ public struct WorktreeSpec: Equatable, Hashable {
      */
     public var repoPath: String
     /**
-     * Base ref for the fresh `orbit/<name>` branch.
+     * Base ref for the fresh `ensembyte/<name>` branch.
      */
     public var base: String
     public var spaceId: String?
@@ -8210,7 +8210,7 @@ public struct WorktreeSpec: Equatable, Hashable {
          * The repo to branch (the project's folder on the host).
          */repoPath: String, 
         /**
-         * Base ref for the fresh `orbit/<name>` branch.
+         * Base ref for the fresh `ensembyte/<name>` branch.
          */base: String, spaceId: String?) {
         self.repoPath = repoPath
         self.base = base
@@ -12735,17 +12735,17 @@ fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: In
 public func coreVersion() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_core_version(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_core_version(uniffiCallStatus
     )
 })
 }
 /**
- * OAuth callback scheme (`orbit`).
+ * OAuth callback scheme (`ensembyte`).
  */
 public func authCallbackScheme() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_auth_callback_scheme(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_auth_callback_scheme(uniffiCallStatus
     )
 })
 }
@@ -12756,12 +12756,12 @@ public func authExchangeCode(edgeUrl: String, code: String)async throws  -> Auth
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_func_auth_exchange_code(FfiConverterString.lower(edgeUrl),FfiConverterString.lower(code)
+                uniffi_ensembyte_mobile_fn_func_auth_exchange_code(FfiConverterString.lower(edgeUrl),FfiConverterString.lower(code)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeAuthExchange_lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -12773,12 +12773,12 @@ public func authListOrgs(edgeUrl: String, accessToken: String)async throws  -> [
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_func_auth_list_orgs(FfiConverterString.lower(edgeUrl),FfiConverterString.lower(accessToken)
+                uniffi_ensembyte_mobile_fn_func_auth_list_orgs(FfiConverterString.lower(edgeUrl),FfiConverterString.lower(accessToken)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAuthOrg.lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -12789,7 +12789,7 @@ public func authListOrgs(edgeUrl: String, accessToken: String)async throws  -> [
 public func authProductionEdgeUrl() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_auth_production_edge_url(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_auth_production_edge_url(uniffiCallStatus
     )
 })
 }
@@ -12800,12 +12800,12 @@ public func authRefresh(edgeUrl: String, refreshToken: String, organizationId: S
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_orbit_mobile_fn_func_auth_refresh(FfiConverterString.lower(edgeUrl),FfiConverterString.lower(refreshToken),FfiConverterOptionString.lower(organizationId)
+                uniffi_ensembyte_mobile_fn_func_auth_refresh(FfiConverterString.lower(edgeUrl),FfiConverterString.lower(refreshToken),FfiConverterOptionString.lower(organizationId)
                 )
             },
-            pollFunc: ffi_orbit_mobile_rust_future_poll_rust_buffer,
-            completeFunc: ffi_orbit_mobile_rust_future_complete_rust_buffer,
-            freeFunc: ffi_orbit_mobile_rust_future_free_rust_buffer,
+            pollFunc: ffi_ensembyte_mobile_rust_future_poll_rust_buffer,
+            completeFunc: ffi_ensembyte_mobile_rust_future_complete_rust_buffer,
+            freeFunc: ffi_ensembyte_mobile_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeAuthTokens_lift,
             errorHandler: FfiConverterTypeCoreError_lift
         )
@@ -12816,7 +12816,7 @@ public func authRefresh(edgeUrl: String, refreshToken: String, organizationId: S
 public func fallbackHarnesses() -> [HarnessInfo]  {
     return try!  FfiConverterSequenceTypeHarnessInfo.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_fallback_harnesses(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_fallback_harnesses(uniffiCallStatus
     )
 })
 }
@@ -12826,7 +12826,7 @@ public func fallbackHarnesses() -> [HarnessInfo]  {
 public func fallbackModels(harness: String) -> [ModelInfo]  {
     return try!  FfiConverterSequenceTypeModelInfo.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_fallback_models(
+    uniffi_ensembyte_mobile_fn_func_fallback_models(
         FfiConverterString.lower(harness),uniffiCallStatus
     )
 })
@@ -12834,7 +12834,7 @@ public func fallbackModels(harness: String) -> [ModelInfo]  {
 public func harnessLabel(harness: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_harness_label(
+    uniffi_ensembyte_mobile_fn_func_harness_label(
         FfiConverterString.lower(harness),uniffiCallStatus
     )
 })
@@ -12845,7 +12845,7 @@ public func harnessLabel(harness: String) -> String  {
 public func jwtExpiry(jwt: String) -> Int64?  {
     return try!  FfiConverterOptionInt64.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_jwt_expiry(
+    uniffi_ensembyte_mobile_fn_func_jwt_expiry(
         FfiConverterString.lower(jwt),uniffiCallStatus
     )
 })
@@ -12856,26 +12856,26 @@ public func jwtExpiry(jwt: String) -> Int64?  {
 public func maxAttachmentBytes() -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_max_attachment_bytes(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_max_attachment_bytes(uniffiCallStatus
     )
 })
 }
 public func modelLabel(harness: String, model: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_model_label(
+    uniffi_ensembyte_mobile_fn_func_model_label(
         FfiConverterString.lower(harness),
         FfiConverterString.lower(model),uniffiCallStatus
     )
 })
 }
 /**
- * `code`/`state` (or the provider error) of a `orbit://callback?…` URL.
+ * `code`/`state` (or the provider error) of a `ensembyte://callback?…` URL.
  */
 public func parseAuthCallback(url: String) -> AuthCallback?  {
     return try!  FfiConverterOptionTypeAuthCallback.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_parse_auth_callback(
+    uniffi_ensembyte_mobile_fn_func_parse_auth_callback(
         FfiConverterString.lower(url),uniffiCallStatus
     )
 })
@@ -12886,7 +12886,7 @@ public func parseAuthCallback(url: String) -> AuthCallback?  {
 public func parseUserMessage(content: String) -> ParsedUserMessage  {
     return try!  FfiConverterTypeParsedUserMessage_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_parse_user_message(
+    uniffi_ensembyte_mobile_fn_func_parse_user_message(
         FfiConverterString.lower(content),uniffiCallStatus
     )
 })
@@ -12897,7 +12897,7 @@ public func parseUserMessage(content: String) -> ParsedUserMessage  {
 public func projectColorCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_project_color_count(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_project_color_count(uniffiCallStatus
     )
 })
 }
@@ -12907,7 +12907,7 @@ public func projectColorCount() -> UInt32  {
 public func projectColorIndex(spacePath: String) -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_project_color_index(
+    uniffi_ensembyte_mobile_fn_func_project_color_index(
         FfiConverterString.lower(spacePath),uniffiCallStatus
     )
 })
@@ -12915,7 +12915,7 @@ public func projectColorIndex(spacePath: String) -> UInt32  {
 public func reasoningLabel(level: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_reasoning_label(
+    uniffi_ensembyte_mobile_fn_func_reasoning_label(
         FfiConverterString.lower(level),uniffiCallStatus
     )
 })
@@ -12926,7 +12926,7 @@ public func reasoningLabel(level: String) -> String  {
 public func relativeTimeLabel(atMs: Int64, nowMs: Int64) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_relative_time_label(
+    uniffi_ensembyte_mobile_fn_func_relative_time_label(
         FfiConverterInt64.lower(atMs),
         FfiConverterInt64.lower(nowMs),uniffiCallStatus
     )
@@ -12938,18 +12938,18 @@ public func relativeTimeLabel(atMs: Int64, nowMs: Int64) -> String  {
 public func workosAuthorizeUrl(state: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_workos_authorize_url(
+    uniffi_ensembyte_mobile_fn_func_workos_authorize_url(
         FfiConverterString.lower(state),uniffiCallStatus
     )
 })
 }
 /**
- * The canonical mention link the host understands (`[name](orbit-file:path)`).
+ * The canonical mention link the host understands (`[name](ensembyte-file:path)`).
  */
 public func fileMentionLink(path: String, isDir: Bool) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_file_mention_link(
+    uniffi_ensembyte_mobile_fn_func_file_mention_link(
         FfiConverterString.lower(path),
         FfiConverterBool.lower(isDir),uniffiCallStatus
     )
@@ -12963,7 +12963,7 @@ public func fileMentionLink(path: String, isDir: Bool) -> String  {
 public func debugLineStarts(textSystem: TextSystem, face: FaceRole, size: Float, width: Float, text: String) -> [UInt32]  {
     return try!  FfiConverterSequenceUInt32.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_debug_line_starts(
+    uniffi_ensembyte_mobile_fn_func_debug_line_starts(
         FfiConverterTypeTextSystem_lower(textSystem),
         FfiConverterTypeFaceRole_lower(face),
         FfiConverterFloat.lower(size),
@@ -12978,7 +12978,7 @@ public func debugLineStarts(textSystem: TextSystem, face: FaceRole, size: Float,
 public func layoutFixtureMarkdown() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_layout_fixture_markdown(uniffiCallStatus
+    uniffi_ensembyte_mobile_fn_func_layout_fixture_markdown(uniffiCallStatus
     )
 })
 }
@@ -12989,7 +12989,7 @@ public func layoutFixtureMarkdown() -> String  {
 public func wallpaperRender(rgba: Data, width: UInt32, height: UInt32, effect: WallpaperEffect, light: Bool) -> Data  {
     return try!  FfiConverterData.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_wallpaper_render(
+    uniffi_ensembyte_mobile_fn_func_wallpaper_render(
         FfiConverterData.lower(rgba),
         FfiConverterUInt32.lower(width),
         FfiConverterUInt32.lower(height),
@@ -13008,7 +13008,7 @@ public func wallpaperRender(rgba: Data, width: UInt32, height: UInt32, effect: W
 public func wallpaperSafeOpacity(rgba: Data, width: UInt32, height: UInt32, textRgb: UInt32, backgroundRgb: UInt32, region: Float, minContrast: Float, maxOpacity: Float) -> Float  {
     return try!  FfiConverterFloat.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_orbit_mobile_fn_func_wallpaper_safe_opacity(
+    uniffi_ensembyte_mobile_fn_func_wallpaper_safe_opacity(
         FfiConverterData.lower(rgba),
         FfiConverterUInt32.lower(width),
         FfiConverterUInt32.lower(height),
@@ -13032,404 +13032,404 @@ private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 30
     // Get the scaffolding contract version by calling the into the dylib
-    let scaffolding_contract_version = ffi_orbit_mobile_uniffi_contract_version()
+    let scaffolding_contract_version = ffi_ensembyte_mobile_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_core_version() != 46096) {
+    if (uniffi_ensembyte_mobile_checksum_func_core_version() != 46096) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_auth_callback_scheme() != 8202) {
+    if (uniffi_ensembyte_mobile_checksum_func_auth_callback_scheme() != 8202) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_auth_exchange_code() != 47073) {
+    if (uniffi_ensembyte_mobile_checksum_func_auth_exchange_code() != 47073) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_auth_list_orgs() != 21299) {
+    if (uniffi_ensembyte_mobile_checksum_func_auth_list_orgs() != 21299) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_auth_production_edge_url() != 61532) {
+    if (uniffi_ensembyte_mobile_checksum_func_auth_production_edge_url() != 61532) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_auth_refresh() != 53630) {
+    if (uniffi_ensembyte_mobile_checksum_func_auth_refresh() != 53630) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_fallback_harnesses() != 7289) {
+    if (uniffi_ensembyte_mobile_checksum_func_fallback_harnesses() != 7289) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_fallback_models() != 37563) {
+    if (uniffi_ensembyte_mobile_checksum_func_fallback_models() != 37563) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_harness_label() != 26297) {
+    if (uniffi_ensembyte_mobile_checksum_func_harness_label() != 26297) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_jwt_expiry() != 29460) {
+    if (uniffi_ensembyte_mobile_checksum_func_jwt_expiry() != 29460) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_max_attachment_bytes() != 43171) {
+    if (uniffi_ensembyte_mobile_checksum_func_max_attachment_bytes() != 43171) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_model_label() != 26905) {
+    if (uniffi_ensembyte_mobile_checksum_func_model_label() != 26905) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_parse_auth_callback() != 22318) {
+    if (uniffi_ensembyte_mobile_checksum_func_parse_auth_callback() != 22318) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_parse_user_message() != 19553) {
+    if (uniffi_ensembyte_mobile_checksum_func_parse_user_message() != 19553) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_project_color_count() != 30925) {
+    if (uniffi_ensembyte_mobile_checksum_func_project_color_count() != 30925) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_project_color_index() != 14874) {
+    if (uniffi_ensembyte_mobile_checksum_func_project_color_index() != 14874) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_reasoning_label() != 22513) {
+    if (uniffi_ensembyte_mobile_checksum_func_reasoning_label() != 22513) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_relative_time_label() != 32740) {
+    if (uniffi_ensembyte_mobile_checksum_func_relative_time_label() != 32740) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_workos_authorize_url() != 35994) {
+    if (uniffi_ensembyte_mobile_checksum_func_workos_authorize_url() != 35994) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_file_mention_link() != 14340) {
+    if (uniffi_ensembyte_mobile_checksum_func_file_mention_link() != 14340) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_debug_line_starts() != 43822) {
+    if (uniffi_ensembyte_mobile_checksum_func_debug_line_starts() != 43822) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_layout_fixture_markdown() != 37734) {
+    if (uniffi_ensembyte_mobile_checksum_func_layout_fixture_markdown() != 37734) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_wallpaper_render() != 28318) {
+    if (uniffi_ensembyte_mobile_checksum_func_wallpaper_render() != 28318) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_func_wallpaper_safe_opacity() != 57056) {
+    if (uniffi_ensembyte_mobile_checksum_func_wallpaper_safe_opacity() != 57056) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_clientlistener_on_event() != 55106) {
+    if (uniffi_ensembyte_mobile_checksum_method_clientlistener_on_event() != 55106) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_archive_session() != 22530) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_archive_session() != 22530) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_archived_sessions() != 33517) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_archived_sessions() != 33517) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_assign_section() != 63363) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_assign_section() != 63363) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_child_sessions() != 10159) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_child_sessions() != 10159) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_close_session() != 11270) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_close_session() != 11270) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_connectivity() != 51284) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_connectivity() != 51284) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_create_project() != 59427) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_create_project() != 59427) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_create_section() != 53295) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_create_section() != 53295) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_create_session() != 13340) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_create_session() != 13340) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_create_worktree() != 42932) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_create_worktree() != 42932) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_delete_project() != 3844) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_delete_project() != 3844) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_delete_section() != 25270) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_delete_section() != 25270) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_delete_session() != 31581) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_delete_session() != 31581) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_device_id() != 9469) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_device_id() != 9469) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_devices() != 57985) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_devices() != 57985) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_execution_devices() != 15578) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_execution_devices() != 15578) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_front_page() != 3792) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_front_page() != 3792) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_is_demo() != 28119) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_is_demo() != 28119) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_list_folders() != 2324) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_list_folders() != 2324) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_list_harnesses() != 2345) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_list_harnesses() != 2345) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_list_models() != 23103) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_list_models() != 23103) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_list_refs() != 27606) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_list_refs() != 27606) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_mark_seen() != 64234) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_mark_seen() != 64234) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_move_pin() != 26081) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_move_pin() != 26081) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_on_background() != 34188) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_on_background() != 34188) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_on_foreground() != 37345) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_on_foreground() != 37345) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_open_session() != 32134) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_open_session() != 32134) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_org_id() != 50248) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_org_id() != 50248) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_pin_session() != 14361) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_pin_session() != 14361) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_preload_sessions() != 4026) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_preload_sessions() != 4026) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_project() != 50153) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_project() != 50153) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_projectless_sessions() != 26434) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_projectless_sessions() != 26434) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_projects() != 15952) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_projects() != 15952) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_pull_requests() != 6395) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_pull_requests() != 6395) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_read_attachment() != 50982) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_read_attachment() != 50982) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_register_push_target() != 33942) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_register_push_target() != 33942) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_rename_project() != 6571) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_rename_project() != 6571) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_rename_section() != 28642) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_rename_section() != 28642) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_rename_session() != 49666) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_rename_session() != 49666) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_search() != 33140) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_search() != 33140) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_search_files() != 31096) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_search_files() != 31096) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_session() != 12772) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_session() != 12772) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_session_config() != 4276) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_session_config() != 4276) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_session_row() != 10938) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_session_row() != 10938) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_set_network_online() != 33835) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_set_network_online() != 33835) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_set_section_collapsed() != 55017) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_set_section_collapsed() != 55017) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_set_session_config() != 56055) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_set_session_config() != 56055) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_shutdown() != 4352) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_shutdown() != 4352) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_switch_ref() != 45706) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_switch_ref() != 45706) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_switch_session_ref() != 42409) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_switch_session_ref() != 42409) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_unarchive_session() != 9932) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_unarchive_session() != 9932) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_unpin_session() != 9102) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_unpin_session() != 9102) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_unregister_push_target() != 55720) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_unregister_push_target() != 55720) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_update_tokens() != 39229) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_update_tokens() != 39229) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_upload_attachment() != 21501) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_upload_attachment() != 21501) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_user_id() != 27711) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_user_id() != 27711) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_workspace() != 42501) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_workspace() != 42501) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_coreclient_workspace_revision() != 48105) {
+    if (uniffi_ensembyte_mobile_checksum_method_coreclient_workspace_revision() != 48105) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_uploadprogress_on_progress() != 40458) {
+    if (uniffi_ensembyte_mobile_checksum_method_uploadprogress_on_progress() != 40458) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_begin_queued_edit() != 9014) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_begin_queued_edit() != 9014) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_chat_id() != 51345) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_chat_id() != 51345) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_clear_queue_error() != 4521) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_clear_queue_error() != 4521) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_composer() != 12678) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_composer() != 12678) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_deliver_queued_now() != 65003) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_deliver_queued_now() != 65003) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_enqueue() != 37832) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_enqueue() != 37832) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_finish_queued_edit() != 60901) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_finish_queued_edit() != 60901) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_interrupt() != 42793) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_interrupt() != 42793) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_mark_seen() != 7987) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_mark_seen() != 7987) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_message_text() != 60913) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_message_text() != 60913) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_move_queued() != 39105) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_move_queued() != 39105) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_move_queued_by() != 49631) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_move_queued_by() != 49631) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_remove_queued() != 25599) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_remove_queued() != 25599) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_renew_queued_edit() != 7655) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_renew_queued_edit() != 7655) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_respond_input() != 8132) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_respond_input() != 8132) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_retry_delivery() != 40707) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_retry_delivery() != 40707) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_send() != 6874) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_send() != 6874) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_send_queued_now() != 62831) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_send_queued_now() != 62831) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_set_view_attached() != 11843) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_set_view_attached() != 11843) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_sessionhandle_transcript_status() != 12910) {
+    if (uniffi_ensembyte_mobile_checksum_method_sessionhandle_transcript_status() != 12910) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_build_micros() != 17231) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_build_micros() != 17231) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_display() != 61509) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_display() != 61509) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_index_at() != 7764) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_index_at() != 7764) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_index_of() != 52386) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_index_of() != 52386) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_message_text() != 60311) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_message_text() != 60311) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_placement() != 14501) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_placement() != 14501) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_plain_text() != 48003) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_plain_text() != 48003) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_prepared_heap_bytes() != 13545) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_prepared_heap_bytes() != 13545) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_revision() != 35752) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_revision() != 35752) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_row_count() != 53856) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_row_count() != 53856) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_rows_in() != 18475) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_rows_in() != 18475) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_style_count() != 46371) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_style_count() != 46371) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_styles() != 21725) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_styles() != 21725) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_total_height() != 27147) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_total_height() != 27147) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutframe_width() != 16219) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutframe_width() != 16219) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_layoutlistener_frame_ready() != 31990) {
+    if (uniffi_ensembyte_mobile_checksum_method_layoutlistener_frame_ready() != 31990) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_platformmeasurer_measure() != 59931) {
+    if (uniffi_ensembyte_mobile_checksum_method_platformmeasurer_measure() != 59931) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_platformmeasurer_measure_run() != 60773) {
+    if (uniffi_ensembyte_mobile_checksum_method_platformmeasurer_measure_run() != 60773) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_attach() != 3138) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_attach() != 3138) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_close() != 21021) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_close() != 21021) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_frame() != 19133) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_frame() != 19133) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_set_debug_entries() != 54762) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_set_debug_entries() != 54762) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_set_viewport() != 43528) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_set_viewport() != 43528) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_toggle() != 51051) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_toggle() != 51051) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_method_transcriptview_toggle_detail() != 17098) {
+    if (uniffi_ensembyte_mobile_checksum_method_transcriptview_toggle_detail() != 17098) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_constructor_coreclient_new() != 27504) {
+    if (uniffi_ensembyte_mobile_checksum_constructor_coreclient_new() != 27504) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_constructor_textsystem_new() != 55727) {
+    if (uniffi_ensembyte_mobile_checksum_constructor_textsystem_new() != 55727) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_orbit_mobile_checksum_constructor_transcriptview_new() != 26914) {
+    if (uniffi_ensembyte_mobile_checksum_constructor_transcriptview_new() != 26914) {
         return InitializationResult.apiChecksumMismatch
     }
 

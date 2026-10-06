@@ -8,7 +8,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 fn resolve_data_dir(mut env: impl FnMut(&str) -> Option<OsString>) -> PathBuf {
-    if let Some(dir) = env("ENSEMBYTE_DATA_DIR").or_else(|| env("ORBIT_DATA_DIR")) {
+    if let Some(dir) = env("ENSEMBYTE_DATA_DIR").or_else(|| env("ENSEMBYTE_DATA_DIR")) {
         return PathBuf::from(dir);
     }
     #[cfg(windows)]
@@ -39,7 +39,7 @@ fn resolve_data_dir(mut env: impl FnMut(&str) -> Option<OsString>) -> PathBuf {
         let home = PathBuf::from(env("HOME").expect("HOME not set"));
         let dir = home.join(".ensembyte");
         if !dir.exists() {
-            let old = home.join(".orbit");
+            let old = home.join(".orbit"); // legacy dir name (pre-rename to .ensembyte)
             if old.exists() && std::fs::rename(&old, &dir).is_ok() {
                 eprintln!("migrated data dir {} -> {}", old.display(), dir.display());
             } else {
@@ -72,7 +72,7 @@ mod tests {
             PathBuf::from("custom data")
         );
         assert_eq!(
-            resolve(&[("ORBIT_DATA_DIR", "custom data legacy")]),
+            resolve(&[("ENSEMBYTE_DATA_DIR", "custom data legacy")]),
             PathBuf::from("custom data legacy")
         );
     }

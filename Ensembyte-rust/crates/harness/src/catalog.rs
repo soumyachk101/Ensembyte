@@ -5,7 +5,7 @@ use std::{
     future::Future,
     time::{Duration, Instant},
 };
-use orbit_proto::Model;
+use ensembyte_proto::Model;
 
 #[derive(Default)]
 pub(crate) struct Catalog {

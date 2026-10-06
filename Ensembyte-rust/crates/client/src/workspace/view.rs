@@ -5,7 +5,7 @@
 //! Ordering mirrors the desktop sidebar (`Shell::sidebar_visible_order`,
 //! "In one list" + "Last updated"): pinned sessions in their shared manual
 //! order, then the user's sections (each in recency order), then everything
-//! else by recency ([`orbit_proto::view::sort_active`] keys). Archived and
+//! else by recency ([`ensembyte_proto::view::sort_active`] keys). Archived and
 //! child (side/subagent) chats never appear in the active lists, and a chat
 //! pointing at a deleted project is hidden (projectless chats are first-class).
 
@@ -14,9 +14,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use orbit_doc::WorkspaceState;
-use orbit_proto::view::{attention_rank, display_status};
-use orbit_proto::{
+use ensembyte_doc::WorkspaceState;
+use ensembyte_proto::view::{attention_rank, display_status};
+use ensembyte_proto::{
     ChangeRequestState, ChangeRequestSummary, Chat, ChatIndicator, CheckoutChangeRequestStatus,
     Device, Session, SidebarPreferences, Space,
 };
@@ -472,7 +472,7 @@ fn build_row(chat: &Chat, rc: &RowContext<'_>, cx: &DeriveContext<'_>) -> Arc<Se
         preview: chat
             .last_message_preview
             .as_deref()
-            .map(orbit_proto::view::single_line)
+            .map(ensembyte_proto::view::single_line)
             .filter(|p| !p.is_empty()),
         project,
         device_id: chat.device_id.clone(),
@@ -528,7 +528,7 @@ pub(crate) fn derive(
 ) -> WorkspaceSnapshot {
     let now_ms = cx.now.timestamp_millis();
     let pinned_order: &[String] = prefs.map_or(&[], |p| p.pinned_session_ids.as_slice());
-    let sections: &[orbit_proto::SidebarSection] = prefs.map_or(&[], |p| p.sections.as_slice());
+    let sections: &[ensembyte_proto::SidebarSection] = prefs.map_or(&[], |p| p.sections.as_slice());
     let mut section_of: HashMap<&str, &str> = HashMap::new();
     for section in sections {
         for id in &section.session_ids {

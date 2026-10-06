@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::watch;
-use orbit_proto::{PREVIEW_PROXY_PORT, PreviewService, PreviewSnapshot};
+use ensembyte_proto::{PREVIEW_PROXY_PORT, PreviewService, PreviewSnapshot};
 
 #[derive(Clone)]
 pub struct Catalog(Arc<Inner>);
@@ -303,7 +303,7 @@ impl Catalog {
             (
                 root.clone(),
                 std::cmp::Reverse(framework(&l.args).1),
-                std::cmp::Reverse(l.orbit_owned),
+                std::cmp::Reverse(l.ensembyte_owned),
                 l.started_at,
                 l.pid,
                 l.address,
@@ -425,7 +425,7 @@ impl Catalog {
                 pid: listener.pid,
                 cwd: listener.cwd.to_string_lossy().into_owned(),
                 started_at: listener.started_at,
-                orbit_owned: listener.orbit_owned,
+                ensembyte_owned: listener.ensembyte_owned,
             };
             next.insert(id, LocalRoute { service, listener });
         }
@@ -476,7 +476,7 @@ mod tests {
             ],
             started_at: pid as u64,
             address: ([127, 0, 0, 1], port).into(),
-            orbit_owned: true,
+            ensembyte_owned: true,
         }
     }
     #[test]

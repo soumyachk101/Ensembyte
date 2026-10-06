@@ -101,11 +101,11 @@ xcodebuild -project Ensembyte-swift/Ensembyte.xcodeproj -scheme Ensembyte -confi
 Run the suites for the crates you touched before opening a PR. These mirror CI:
 
 ```sh
-cargo test --locked -p orbit-ui --lib -- --test-threads=1
-cargo test --locked -p orbit-engine --lib
-cargo test --locked -p orbit-harness            # includes tests/ fixtures
-cargo test --locked -p orbit-sync --lib
-cargo test --locked -p orbit-preview
+cargo test --locked -p ensembyte-ui --lib -- --test-threads=1
+cargo test --locked -p ensembyte-engine --lib
+cargo test --locked -p ensembyte-harness            # includes tests/ fixtures
+cargo test --locked -p ensembyte-sync --lib
+cargo test --locked -p ensembyte-preview
 ```
 
 Key principles:

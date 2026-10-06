@@ -773,7 +773,7 @@ mod tests {
             cx.simulate_mouse_down(position, MouseButton::Right, gpui::Modifiers::default());
             cx.simulate_mouse_up(position, MouseButton::Right, gpui::Modifiers::default());
             for selector in [
-                "link-menu-open-orbit",
+                "link-menu-open-ensembyte",
                 "link-menu-open-default",
                 "link-menu-show-in-folder",
                 "link-menu-copy-path",

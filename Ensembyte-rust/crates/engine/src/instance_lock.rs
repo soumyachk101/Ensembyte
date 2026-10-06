@@ -77,8 +77,8 @@ impl InstanceLock {
                         let holder = std::fs::read_to_string(&path).unwrap_or_default();
                         let holder = holder.trim();
                         return Err(EngineError::Other(format!(
-                            "another orbit engine is already running on {} (pid {}); \
-                             stop it or use a different data dir (ORBIT_DATA_DIR)",
+                            "another ensembyte engine is already running on {} (pid {}); \
+                             stop it or use a different data dir (ENSEMBYTE_DATA_DIR)",
                             data_dir.display(),
                             if holder.is_empty() { "unknown" } else { holder },
                         )));
@@ -122,7 +122,7 @@ impl InstanceLock {
 
     /// Best-effort liveness probe: the pid stamped by the engine currently holding
     /// this data dir's lock, `None` when no engine is running (or the platform
-    /// cannot test a lock without taking it). Used by `orbit status` and the
+    /// cannot test a lock without taking it). Used by `ensembyte status` and the
     /// login/logout guards; a single non-blocking try — no retry budget — so a
     /// starting engine's transient fork-window artifacts read as "running", which
     /// is the safe direction for those callers.
@@ -182,8 +182,8 @@ impl InstanceLock {
 #[cfg(windows)]
 fn already_running_error(data_dir: &Path, holder: &str) -> EngineError {
     EngineError::Other(format!(
-        "another orbit engine is already running on {} (pid {}); \
-         stop it or use a different data dir (ORBIT_DATA_DIR)",
+        "another ensembyte engine is already running on {} (pid {}); \
+         stop it or use a different data dir (ENSEMBYTE_DATA_DIR)",
         data_dir.display(),
         if holder.is_empty() { "unknown" } else { holder },
     ))
@@ -256,7 +256,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn subprocess_lock_holder() {
-        let Some(dir) = std::env::var_os("ORBIT_INSTANCE_LOCK_TEST_DIR") else {
+        let Some(dir) = std::env::var_os("ENSEMBYTE_INSTANCE_LOCK_TEST_DIR") else {
             return;
         };
         let dir = std::path::PathBuf::from(dir);
@@ -282,7 +282,7 @@ mod tests {
         let mut child = Command::new(std::env::current_exe().expect("current test executable"))
             .arg("subprocess_lock_holder")
             .arg("--nocapture")
-            .env("ORBIT_INSTANCE_LOCK_TEST_DIR", dir.path())
+            .env("ENSEMBYTE_INSTANCE_LOCK_TEST_DIR", dir.path())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())

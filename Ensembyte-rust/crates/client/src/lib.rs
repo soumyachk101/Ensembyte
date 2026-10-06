@@ -1,9 +1,9 @@
-//! orbit-client — the engine-free thin client ("viewer device").
+//! ensembyte-client — the engine-free thin client ("viewer device").
 //!
-//! A phone (or any frontend without an engine) is a *peer* on the orbit mesh:
+//! A phone (or any frontend without an engine) is a *peer* on the ensembyte mesh:
 //! it mirrors the workspace registry, joins per-chat chat2 rooms, renders the
 //! session docs, and drives remote engines through the durable command ledger
-//! (`orbit_doc::SessionDoc::queue_command`) plus host RPCs over the device
+//! (`ensembyte_doc::SessionDoc::queue_command`) plus host RPCs over the device
 //! relay. No agent ever runs here.
 //!
 //! # Shape
@@ -58,9 +58,9 @@ pub use workspace::{
 };
 
 /// Re-exported so consumers (the layout engine) name the exact doc types the
-/// transcript carries without a direct `orbit-doc` dependency.
-pub use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
-pub use orbit_proto::{
+/// transcript carries without a direct `ensembyte-doc` dependency.
+pub use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
+pub use ensembyte_proto::{
     ChangeRequestState, ChangeRequestSummary, ChatConfig, ChatIndicator, ContextUsage,
     UserInputAnswer, UserInputQuestion, WorktreeSpec,
 };

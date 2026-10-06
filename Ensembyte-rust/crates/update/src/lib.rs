@@ -330,7 +330,7 @@ pub const LATEST_RELEASE_PAGE: &str =
 
 fn release_base(edge_url: &str) -> anyhow::Result<String> {
     if let Ok(url) = std::env::var("ENSEMBYTE_RELEASES_URL")
-        .or_else(|_| std::env::var("ORBIT_RELEASES_URL"))
+        .or_else(|_| std::env::var("ENSEMBYTE_RELEASES_URL"))
         && !url.trim().is_empty()
     {
         return validate_release_override(&url);
@@ -339,7 +339,7 @@ fn release_base(edge_url: &str) -> anyhow::Result<String> {
     if let Some(url) = windows::release_url()? {
         return Ok(url.trim_end_matches('/').to_owned());
     }
-    if edge_url.is_empty() || edge_url == "https://edge.ensembyte.org" || edge_url == "https://edge.orbit.sh" {
+    if edge_url.is_empty() || edge_url == "https://edge.ensembyte.org" || edge_url == "https://edge.ensembyte.sh" {
         return Ok(DEFAULT_RELEASES_URL.to_owned());
     }
     Ok(format!("{}/releases", edge_url.trim_end_matches('/')))
@@ -471,7 +471,7 @@ impl InstallKind {
                     let binary = if app_root.join("current").join("ensembyte").exists() {
                         app_root.join("current").join("ensembyte")
                     } else {
-                        app_root.join("current").join("orbit")
+                        app_root.join("current").join("ensembyte")
                     };
                     relaunch_after_exit(&binary, Path::new(""));
                 }
@@ -554,7 +554,7 @@ fn detect_install_from_for_os(exe: &Path, home: Option<&Path>, os: &str) -> Inst
         if exe.starts_with(&app_root) {
             return InstallKind::Managed { app_root };
         }
-        let legacy_root = home.join(".orbit").join("app");
+        let legacy_root = home.join(".ensembyte").join("app"); // legacy data dir path (pre-rename)
         if exe.starts_with(&legacy_root) {
             return InstallKind::Managed { app_root: legacy_root };
         }
@@ -573,7 +573,7 @@ fn detect_install_from_for_os(exe: &Path, home: Option<&Path>, os: &str) -> Inst
 
 /// The version currently installed on disk for `kind`, read without executing
 /// anything. A long-running process compares it with its own version to notice
-/// that something else (the desktop app, `orbit update`, a re-run installer)
+/// that something else (the desktop app, `ensembyte update`, a re-run installer)
 /// has already replaced its binary.
 pub fn installed_version(kind: &InstallKind) -> Option<String> {
     let version = match kind {
@@ -689,7 +689,7 @@ async fn verify_staged_binary(binary: &Path, version: &str) -> anyhow::Result<()
     let reported = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     anyhow::ensure!(
         output.status.success()
-            && (reported == format!("ensembyte {version}") || reported == format!("orbit {version}")),
+            && (reported == format!("ensembyte {version}") || reported == format!("ensembyte {version}")),
         "staged binary reported {reported:?} (exit {}), expected \"ensembyte {version}\"",
         output.status
     );
@@ -715,7 +715,7 @@ pub async fn stage_headless(
         "invalid release version {version:?}"
     );
     let dest = app_root.join(version);
-    if dest.join("ensembyte").exists() || dest.join("orbit").exists() {
+    if dest.join("ensembyte").exists() || dest.join("ensembyte").exists() {
         return Ok(dest);
     }
     let file = headless_artifact(version);
@@ -741,8 +741,8 @@ pub async fn stage_headless(
         )?;
         let staged_binary = if unpacked.join("ensembyte").is_file() {
             unpacked.join("ensembyte")
-        } else if unpacked.join("orbit").is_file() {
-            unpacked.join("orbit")
+        } else if unpacked.join("ensembyte").is_file() {
+            unpacked.join("ensembyte")
         } else {
             bail!("tarball {file} did not contain an ensembyte binary");
         };
@@ -750,7 +750,7 @@ pub async fn stage_headless(
         match std::fs::rename(&unpacked, &dest) {
             Ok(()) => {}
             // Lost a race with another stager — the staged copy is equivalent.
-            Err(_) if dest.join("ensembyte").exists() || dest.join("orbit").exists() => {}
+            Err(_) if dest.join("ensembyte").exists() || dest.join("ensembyte").exists() => {}
             Err(err) => {
                 return Err(err).with_context(|| format!("moving {} into place", dest.display()));
             }
@@ -768,7 +768,7 @@ pub fn apply_headless(app_root: &Path, version: &str) -> anyhow::Result<()> {
     #[cfg(unix)]
     {
         let target = app_root.join(version);
-        if !target.join("ensembyte").exists() && !target.join("orbit").exists() {
+        if !target.join("ensembyte").exists() && !target.join("ensembyte").exists() {
             bail!("{} is not a staged install", target.display());
         }
         let tmp = app_root.join(format!(".current-{}", std::process::id()));
@@ -790,7 +790,7 @@ pub fn apply_headless(app_root: &Path, version: &str) -> anyhow::Result<()> {
 /// `XPC_SERVICE_NAME`.
 pub fn running_as_installed_service() -> bool {
     if cfg!(target_os = "macos") {
-        std::env::var("XPC_SERVICE_NAME").is_ok_and(|label| label == "org.ensembyte.app" || label == "sh.orbit.app")
+        std::env::var("XPC_SERVICE_NAME").is_ok_and(|label| label == "org.ensembyte.app" || label == "sh.ensembyte.app")
     } else if cfg!(target_os = "linux") {
         std::fs::read_to_string("/proc/self/cgroup")
             .is_ok_and(|cgroups| in_service_cgroup(&cgroups))
@@ -803,7 +803,7 @@ fn in_service_cgroup(cgroups: &str) -> bool {
     cgroups
         .lines()
         .filter_map(|line| line.rsplit(':').next())
-        .any(|path| path.split('/').any(|part| part == "ensembyte.service" || part == "orbit.service"))
+        .any(|path| path.split('/').any(|part| part == "ensembyte.service" || part == "ensembyte.service"))
 }
 
 /// Restart the installed engine service (the same units `ensembyte daemon` and the
@@ -822,7 +822,7 @@ pub fn restart_service() -> anyhow::Result<()> {
         .or_else(|_| {
             run(
                 "launchctl",
-                &["kickstart", "-k", &format!("gui/{uid}/sh.orbit.app")],
+                &["kickstart", "-k", &format!("gui/{uid}/sh.ensembyte.app")],
             )
         })?;
         Ok(())
@@ -834,7 +834,7 @@ pub fn restart_service() -> anyhow::Result<()> {
         .or_else(|_| {
             run(
                 "systemctl",
-                &["--user", "--no-block", "restart", "orbit.service"],
+                &["--user", "--no-block", "restart", "ensembyte.service"],
             )
         })?;
         Ok(())
@@ -865,15 +865,15 @@ pub async fn stage_mac_app(
     let dir = updates.join(version);
     let staged = if dir.join("Ensembyte.app").exists() {
         dir.join("Ensembyte.app")
-    } else if dir.join("Orbit.app").exists() {
-        dir.join("Orbit.app")
+    } else if dir.join("Ensembyte.app").exists() {
+        dir.join("Ensembyte.app")
     } else {
         dir.join("Ensembyte.app")
     };
     let staged_binary = if staged.join("Contents/MacOS/ensembyte").exists() {
         staged.join("Contents/MacOS/ensembyte")
     } else {
-        staged.join("Contents/MacOS/orbit")
+        staged.join("Contents/MacOS/ensembyte")
     };
     if staged_binary.exists() && verify_staged_binary(&staged_binary, version).await.is_ok() {
         return Ok(staged);
@@ -899,7 +899,7 @@ pub async fn stage_mac_app(
         if unpack.join("Ensembyte.app").exists() {
             unpack.join("Ensembyte.app")
         } else {
-            unpack.join("Orbit.app")
+            unpack.join("Ensembyte.app")
         }
     });
     std::fs::remove_file(&tarball).ok();
@@ -907,7 +907,7 @@ pub async fn stage_mac_app(
     let unpacked_binary = if unpacked.join("Contents/MacOS/ensembyte").exists() {
         unpacked.join("Contents/MacOS/ensembyte")
     } else {
-        unpacked.join("Contents/MacOS/orbit")
+        unpacked.join("Contents/MacOS/ensembyte")
     };
     if !unpacked_binary.exists() {
         let _ = std::fs::remove_dir_all(&dir);
@@ -1040,7 +1040,7 @@ impl UpdateStatus {
 /// `ENSEMBYTE_AUTO_UPDATE=1|true|yes` — headless daemons apply updates themselves.
 fn auto_update_enabled() -> bool {
     std::env::var("ENSEMBYTE_AUTO_UPDATE")
-        .or_else(|_| std::env::var("ORBIT_AUTO_UPDATE"))
+        .or_else(|_| std::env::var("ENSEMBYTE_AUTO_UPDATE"))
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false)
 }
@@ -1049,7 +1049,7 @@ fn auto_update_enabled() -> bool {
 /// background download and no install on quit. Unset means on.
 pub fn desktop_auto_update_enabled() -> bool {
     std::env::var("ENSEMBYTE_AUTO_UPDATE")
-        .or_else(|_| std::env::var("ORBIT_AUTO_UPDATE"))
+        .or_else(|_| std::env::var("ENSEMBYTE_AUTO_UPDATE"))
         .map(|v| !matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no"))
         .unwrap_or(true)
 }
@@ -1060,7 +1060,7 @@ pub type QuiescentCheck = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// Who runs the checker — decides what it may do beyond reporting.
 enum Role {
-    /// The engine: managed installs with `ORBIT_AUTO_UPDATE` apply themselves,
+    /// The engine: managed installs with `ENSEMBYTE_AUTO_UPDATE` apply themselves,
     /// and a service daemon restarts into a binary someone else installed.
     Engine { quiescent: Option<QuiescentCheck> },
     /// The desktop app: report only — downloading and installing are UI
@@ -1071,7 +1071,7 @@ enum Role {
 /// Background release checker: polls `{edge}/releases` hourly on a wall-clock
 /// schedule (so sleep/wake cannot stretch it), backs off on failure, and
 /// publishes [`UpdateStatus`] over a watch channel. In the engine, managed
-/// installs with `ORBIT_AUTO_UPDATE` set stage + apply + service restart on
+/// installs with `ENSEMBYTE_AUTO_UPDATE` set stage + apply + service restart on
 /// their own — but only in a quiet window: while `quiescent` reports activity,
 /// the apply defers and re-probes every [`IDLE_RECHECK`].
 #[derive(Clone)]
@@ -1083,7 +1083,7 @@ pub struct Updater {
     /// a fresh look at the wall clock.
     wake_tx: Arc<watch::Sender<u64>>,
     forced: Arc<AtomicBool>,
-    /// Set by `orbit headless`: this process is the installed service and may
+    /// Set by `ensembyte headless`: this process is the installed service and may
     /// restart itself into a newer installed binary.
     service: Arc<AtomicBool>,
     /// Flips to true exactly once; the check loop selects against it so
@@ -1166,9 +1166,9 @@ impl Updater {
             .send_modify(|epoch| *epoch = epoch.wrapping_add(1));
     }
 
-    /// Called by `orbit headless`: when this process is the installed engine
+    /// Called by `ensembyte headless`: when this process is the installed engine
     /// service and something else installs a newer binary, restart into it at
-    /// the next quiet moment. A hand-started `orbit headless` is left alone —
+    /// the next quiet moment. A hand-started `ensembyte headless` is left alone —
     /// restarting the service unit would start a second engine beside it.
     pub fn restart_when_superseded(&self) {
         if !running_as_installed_service() {
@@ -1411,7 +1411,7 @@ impl Schedule {
 }
 
 /// Restarts a service daemon into a newer binary that is already installed
-/// (the desktop app swapped the bundle, `orbit update` flipped the symlink).
+/// (the desktop app swapped the bundle, `ensembyte update` flipped the symlink).
 /// Waits for quiescence, and tries at most once per installed version so a
 /// broken service manager cannot turn into a restart loop.
 #[derive(Debug, Default)]
@@ -1666,13 +1666,13 @@ mod tests {
     }
 
     #[test]
-    fn release_base_defaults_to_orbitcode_release() {
+    fn release_base_defaults_to_ensembytecode_release() {
         assert_eq!(
             super::release_base("").unwrap(),
             super::DEFAULT_RELEASES_URL
         );
         assert_eq!(
-            super::release_base("https://edge.orbit.sh").unwrap(),
+            super::release_base("https://edge.ensembyte.sh").unwrap(),
             super::DEFAULT_RELEASES_URL
         );
         assert_eq!(
@@ -1699,32 +1699,32 @@ mod tests {
     fn install_kind_detection() {
         assert_eq!(
             detect_install_from_for_os(
-                Path::new("/home/u/.orbit/app/0.1.1/orbit"),
+                Path::new("/home/u/.ensembyte/app/0.1.1/ensembyte"),
                 Some(Path::new("/home/u")),
                 "linux",
             ),
             InstallKind::Managed {
-                app_root: PathBuf::from("/home/u/.orbit/app")
+                app_root: PathBuf::from("/home/u/.ensembyte/app")
             }
         );
         assert_eq!(
             detect_install_from_for_os(
-                Path::new("/Applications/Orbit.app/Contents/MacOS/orbit"),
+                Path::new("/Applications/Ensembyte.app/Contents/MacOS/ensembyte"),
                 Some(Path::new("/Users/u")),
                 "macos",
             ),
             InstallKind::MacApp {
-                bundle: PathBuf::from("/Applications/Orbit.app")
+                bundle: PathBuf::from("/Applications/Ensembyte.app")
             }
         );
         // A path merely containing `.app` without the bundle layout is not a bundle.
         assert_eq!(
-            detect_install_from_for_os(Path::new("/tmp/foo.app/orbit"), None, "macos"),
+            detect_install_from_for_os(Path::new("/tmp/foo.app/ensembyte"), None, "macos"),
             InstallKind::Unmanaged
         );
         assert_eq!(
             detect_install_from_for_os(
-                Path::new("/src/target/release/orbit"),
+                Path::new("/src/target/release/ensembyte"),
                 Some(Path::new("/home/u")),
                 "linux",
             ),
@@ -1807,12 +1807,12 @@ mod tests {
     #[test]
     fn manifest_parses_with_and_without_files() {
         let full: Manifest = serde_json::from_str(
-            r#"{"version":"0.1.1","files":{"orbit-0.1.1-linux-x86_64.tar.gz":{"sha256":"abc"}}}"#,
+            r#"{"version":"0.1.1","files":{"ensembyte-0.1.1-linux-x86_64.tar.gz":{"sha256":"abc"}}}"#,
         )
         .unwrap();
         assert_eq!(full.version, "0.1.1");
         assert_eq!(
-            full.files["orbit-0.1.1-linux-x86_64.tar.gz"]
+            full.files["ensembyte-0.1.1-linux-x86_64.tar.gz"]
                 .sha256
                 .as_deref(),
             Some("abc")
@@ -1828,7 +1828,7 @@ mod tests {
         let app_root = tmp.path().join("app");
         for ver in ["0.1.0", "0.1.1"] {
             std::fs::create_dir_all(app_root.join(ver)).unwrap();
-            std::fs::write(app_root.join(ver).join("orbit"), ver).unwrap();
+            std::fs::write(app_root.join(ver).join("ensembyte"), ver).unwrap();
         }
         apply_headless(&app_root, "0.1.0").unwrap();
         assert_eq!(

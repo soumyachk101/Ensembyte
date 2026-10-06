@@ -1,5 +1,5 @@
 use super::*;
-use orbit_proto::{SidebarPinChange, pin_order_key_between, valid_pin_order_key};
+use ensembyte_proto::{SidebarPinChange, pin_order_key_between, valid_pin_order_key};
 
 impl RegistryDoc {
     pub fn sidebar_pins_initialized(&self) -> bool {

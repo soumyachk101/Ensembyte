@@ -50,8 +50,8 @@ isolation and input restoration, visibility, resizing/takeover and
 teardown. It is gated behind an opt-in feature and is excluded from app builds.
 
 ```sh
-cargo test --locked -p orbit-ui --lib -- --test-threads=1
-cargo run --release --locked -p orbit-ui --example browser-fixture \
+cargo test --locked -p ensembyte-ui --lib -- --test-threads=1
+cargo run --release --locked -p ensembyte-ui --example browser-fixture \
   --features browser-fixture -- /tmp/browser-captures
 ```
 

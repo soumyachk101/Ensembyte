@@ -1,12 +1,12 @@
 //! Generates a session-doc snapshot fixture for the cross-language compat check
-//! (`edge/scripts/compat-check.mjs`). Usage: `cargo run -p orbit-doc --example gen_fixture -- <out>`
+//! (`edge/scripts/compat-check.mjs`). Usage: `cargo run -p ensembyte-doc --example gen_fixture -- <out>`
 
-use orbit_doc::{
+use ensembyte_doc::{
     MessagePart, MessageRole, MessageStatus, SegmentWriter, SessionCommandEntry,
     SessionCommandPayload, SessionCommandStatus, SessionDoc, SessionMessageEntry,
     fold_event_into_parts,
 };
-use orbit_proto::{AgentEvent, ToolCall};
+use ensembyte_proto::{AgentEvent, ToolCall};
 
 fn main() {
     let out = std::env::args()

@@ -5,13 +5,13 @@
 # dependency graph with different feature sets).
 #
 # Same coverage as the old invocations:
-#   orbit-harness  every test binary (cursor-compatibility ran `-p orbit-harness`
+#   ensembyte-harness  every test binary (cursor-compatibility ran `-p ensembyte-harness`
 #                  plus `--test pi_rpc` with native-fixture; native-fixture only
 #                  adds the pi_rpc fixture binaries, so it is on for the whole build)
-#   orbit-preview  every test binary (preview-tests)
-#   orbit-doc      lib + attachments_roundtrip (cursor-compatibility)
-#   orbit-sync, orbit-update   lib only (session-sync-regressions)
-#   orbit-engine   lib + the integration tests named below. Engine has many other
+#   ensembyte-preview  every test binary (preview-tests)
+#   ensembyte-doc      lib + attachments_roundtrip (cursor-compatibility)
+#   ensembyte-sync, ensembyte-update   lib only (session-sync-regressions)
+#   ensembyte-engine   lib + the integration tests named below. Engine has many other
 #                  integration binaries (live agents etc.) that no workflow ran, so
 #                  they are listed instead of globbed to avoid compiling them.
 # nextest does not run doctests; these crates have none (their doc comments
@@ -29,6 +29,6 @@ for t in session_publication restart_resume codex_subagents local_profiles messa
 done
 
 exec cargo nextest run --config-file scripts/ci/nextest.toml --locked --no-fail-fast \
-  -p orbit-harness -p orbit-engine -p orbit-sync -p orbit-update -p orbit-doc -p orbit-preview \
-  --features orbit-harness/native-fixture \
+  -p ensembyte-harness -p ensembyte-engine -p ensembyte-sync -p ensembyte-update -p ensembyte-doc -p ensembyte-preview \
+  --features ensembyte-harness/native-fixture \
   --lib --bins "${tests[@]}" "$@"

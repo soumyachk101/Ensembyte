@@ -6,8 +6,8 @@
 //! same geometry as primitives. One routine for both means a row's measured
 //! height and its painted content can never disagree.
 
-use orbit_markdown::parser::{Block, InlineRun, TableAlign};
-use orbit_text::{OverflowWrap, PrepareOptions, Prepared, Span, WhiteSpace, WidthCache};
+use ensembyte_markdown::parser::{Block, InlineRun, TableAlign};
+use ensembyte_text::{OverflowWrap, PrepareOptions, Prepared, Span, WhiteSpace, WidthCache};
 
 use super::display::{ColorRole, Decoration, DisplayBuilder, TextRun, WidgetKind};
 use super::style::{Family, Resolved, TYPE, Typography, Weight, baseline};
@@ -150,7 +150,7 @@ pub(crate) fn prepare_runs(ctx: &mut Ctx, runs: &[InlineRun], kind: TextKind, mu
             chip: s.code,
         });
     }
-    let p = orbit_text::prepare(
+    let p = ensembyte_text::prepare(
         &ctx.typo.book,
         ctx.cache,
         &text,
@@ -187,7 +187,7 @@ pub(crate) fn prepare_plain(
         pad_end: 0.0,
         atomic: false,
     }];
-    let p = orbit_text::prepare(
+    let p = ensembyte_text::prepare(
         &ctx.typo.book,
         ctx.cache,
         text,
@@ -283,8 +283,8 @@ pub(crate) fn prepare_block(ctx: &mut Ctx, block: &Block, depth: usize, muted: b
     }
 }
 
-fn syntax_color(kind: orbit_syntax::HighlightKind) -> ColorRole {
-    use orbit_syntax::HighlightKind as K;
+fn syntax_color(kind: ensembyte_syntax::HighlightKind) -> ColorRole {
+    use ensembyte_syntax::HighlightKind as K;
     match kind {
         K::Comment => ColorRole::SyntaxComment,
         K::Keyword => ColorRole::SyntaxKeyword,
@@ -310,7 +310,7 @@ fn highlight_cover(source: &str, language: Option<&str>) -> Vec<(std::ops::Range
     let mut cursor = 0usize;
     let doc = (source.len() <= 64 * 1024)
         .then(|| {
-            orbit_syntax::highlight(orbit_syntax::HighlightRequest {
+            ensembyte_syntax::highlight(ensembyte_syntax::HighlightRequest {
                 source,
                 path: None,
                 fence_tag: language,
@@ -359,7 +359,7 @@ fn prepare_code(ctx: &mut Ctx, language: Option<&str>, code: &str) -> PCode {
             atomic: false,
         })
         .collect();
-    let p = orbit_text::prepare(
+    let p = ensembyte_text::prepare(
         &ctx.typo.book,
         ctx.cache,
         source,

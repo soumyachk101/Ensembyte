@@ -13,10 +13,10 @@ use futures::StreamExt;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{broadcast, mpsc, oneshot};
-use orbit_harness::{
+use ensembyte_harness::{
     CancellationToken, Harness, HarnessError, OpencodeHarness, RunControls, SteerMessage,
 };
-use orbit_proto::{
+use ensembyte_proto::{
     AgentEvent, DoneStatus, ReasoningLevel, RunRequest, SandboxLevel, ToolCall, UserInputAnswer,
 };
 
@@ -1037,7 +1037,7 @@ async fn slash_command_rejects_attachments_instead_of_dropping_them() {
 
 #[tokio::test]
 async fn dollar_selected_skill_uses_opencode_native_command_with_arguments() {
-    use orbit_proto::{
+    use ensembyte_proto::{
         HarnessId,
         invocation::{Invocation, harness_prompt},
     };

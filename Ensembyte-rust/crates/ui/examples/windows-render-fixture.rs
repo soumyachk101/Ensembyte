@@ -5,7 +5,7 @@ use gpui::{
     Window, WindowBounds, WindowOptions, div, img, point, px, rgb, size,
 };
 use std::path::PathBuf;
-use orbit_ui::edge_fade::edge_faded;
+use ensembyte_ui::edge_fade::edge_faded;
 
 struct Fixture {
     image: PathBuf,

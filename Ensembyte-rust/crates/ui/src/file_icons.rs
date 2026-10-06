@@ -11,7 +11,7 @@ use std::{borrow::Cow, collections::HashMap, sync::LazyLock};
 use gpui::{AssetSource, Img, Result, SharedString, Styled as _, img};
 use rust_embed::RustEmbed;
 use serde::Deserialize;
-use orbit_syntax::LanguageId;
+use ensembyte_syntax::LanguageId;
 
 use crate::theme::{Appearance, Theme};
 

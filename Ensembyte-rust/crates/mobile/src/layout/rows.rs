@@ -11,11 +11,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use orbit_doc::parts::MessagePart;
-use orbit_doc::parts::MessageStatus;
-use orbit_doc::schema::{MessageRole, SessionMessageEntry};
-use orbit_markdown::parser::{IncrementalParser, TopBlock};
-use orbit_text::WhiteSpace;
+use ensembyte_doc::parts::MessagePart;
+use ensembyte_doc::parts::MessageStatus;
+use ensembyte_doc::schema::{MessageRole, SessionMessageEntry};
+use ensembyte_markdown::parser::{IncrementalParser, TopBlock};
+use ensembyte_text::WhiteSpace;
 
 use super::display::{ColorRole, DisplayBuilder, FadeEdge, TextRun, WidgetKind};
 use super::markdown::{Ctx, PBlock, PText, Px, place, place_text, prepare_block, prepare_plain};
@@ -475,7 +475,7 @@ impl RowBuilder {
     fn user_row(&mut self, ctx: &mut Ctx, id: &str, content: &str, pending: bool) -> RowCore {
         let key = row_key(&format!("{id}#u"));
         // Shared parser: strips the image trailer *and* hidden Appshot context.
-        let parsed = orbit_client::attachments::parse_user_message(content);
+        let parsed = ensembyte_client::attachments::parse_user_message(content);
         let body = parsed.text.as_str();
         let images: Vec<String> = parsed.images.into_iter().map(|i| i.path).collect();
         let (size, lh) = TYPE.body;
@@ -511,10 +511,10 @@ impl RowBuilder {
 
 }
 
-/// User prompt text with `[name](orbit-file:path)` mentions shown as atomic
+/// User prompt text with `[name](ensembyte-file:path)` mentions shown as atomic
 /// accent `@name` chips (the desktop's file-chip rendering).
 fn prepare_user_text(ctx: &mut Ctx, body: &str, style: super::style::Resolved, lh: f32) -> PText {
-    let links = orbit_proto::file_mentions::file_mention_links(body);
+    let links = ensembyte_proto::file_mentions::file_mention_links(body);
     if links.is_empty() {
         return prepare_plain(ctx, body, style, lh, ColorRole::Text, WhiteSpace::PreWrap);
     }
@@ -524,13 +524,13 @@ fn prepare_user_text(ctx: &mut Ctx, body: &str, style: super::style::Resolved, l
     let mut spans = Vec::new();
     let mut paints = Vec::new();
     let mut at = 0;
-    let mut push = |text: &mut String, piece: &str, style: orbit_text::StyleId, atomic: bool, color: ColorRole| {
+    let mut push = |text: &mut String, piece: &str, style: ensembyte_text::StyleId, atomic: bool, color: ColorRole| {
         if piece.is_empty() {
             return;
         }
         let start = text.len();
         text.push_str(piece);
-        spans.push(orbit_text::Span {
+        spans.push(ensembyte_text::Span {
             range: start..text.len(),
             style,
             pad_start: 0.0,
@@ -550,14 +550,14 @@ fn prepare_user_text(ctx: &mut Ctx, body: &str, style: super::style::Resolved, l
         at = link.range.end;
     }
     push(&mut text, &body[at..], style.id, false, ColorRole::Text);
-    let p = orbit_text::prepare(
+    let p = ensembyte_text::prepare(
         &ctx.typo.book,
         ctx.cache,
         &text,
         &spans,
-        &orbit_text::PrepareOptions {
+        &ensembyte_text::PrepareOptions {
             white_space: WhiteSpace::PreWrap,
-            overflow_wrap: orbit_text::OverflowWrap::Anywhere,
+            overflow_wrap: ensembyte_text::OverflowWrap::Anywhere,
             ..Default::default()
         },
     );

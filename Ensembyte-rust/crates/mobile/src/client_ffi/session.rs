@@ -1,10 +1,10 @@
 //! The per-chat FFI object: composer-facing state and every command.
 //! Transcript rows never cross here — the layout engine reads
-//! [`orbit_client::SessionSnapshot`] in Rust.
+//! [`ensembyte_client::SessionSnapshot`] in Rust.
 
 use std::sync::Arc;
 
-use orbit_client as zc;
+use ensembyte_client as zc;
 
 use super::types::{CoreResult, SendState};
 
@@ -27,7 +27,7 @@ pub struct OutgoingAttachment {
 pub struct WorktreeSpec {
     /// The repo to branch (the project's folder on the host).
     pub repo_path: String,
-    /// Base ref for the fresh `orbit/<name>` branch.
+    /// Base ref for the fresh `ensembyte/<name>` branch.
     pub base: String,
     pub space_id: Option<String>,
 }

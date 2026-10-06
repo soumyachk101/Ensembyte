@@ -57,8 +57,8 @@ laptop performance claims.
 ## Reproduce
 
 ```sh
-cargo test -p orbit-engine --lib -- --nocapture
-cargo test -p orbit-ui --lib --no-default-features -- --test-threads=1
+cargo test -p ensembyte-engine --lib -- --nocapture
+cargo test -p ensembyte-ui --lib --no-default-features -- --test-threads=1
 ```
 
 Initial revisit validation: 196 engine tests and 1,075 UI tests passed. The focused transcript view
@@ -113,7 +113,7 @@ or contaminate the full UI cache.
 Reproduce the read-only timing comparison with an exported snapshot:
 
 ```sh
-cargo run -p orbit-engine --example transcript_load_probe -- /path/to/session.bin
+cargo run -p ensembyte-engine --example transcript_load_probe -- /path/to/session.bin
 ```
 
 The new path removes the full-history barrier to initial content. It does not

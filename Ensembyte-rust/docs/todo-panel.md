@@ -84,13 +84,13 @@ the first todo.
 ## Testing
 
 ```sh
-cargo test --locked -p orbit-proto todo_item_tests
-cargo test --locked -p orbit-harness            # normalizers: claude, opencode, acp, codex, cursor
-cargo test --locked -p orbit-doc todo
-cargo test --locked -p orbit-ui --lib todo_panel
+cargo test --locked -p ensembyte-proto todo_item_tests
+cargo test --locked -p ensembyte-harness            # normalizers: claude, opencode, acp, codex, cursor
+cargo test --locked -p ensembyte-doc todo
+cargo test --locked -p ensembyte-ui --lib todo_panel
 ```
 
-Live: `ORBIT_HARNESS=mock ORBIT_MOCK_TODO=1 ORBIT_MOCK_DELAY_MS=900` (see
+Live: `ENSEMBYTE_HARNESS=mock ENSEMBYTE_MOCK_TODO=1 ENSEMBYTE_MOCK_DELAY_MS=900` (see
 `CONTRIBUTORS.md`) walks an 8-item list through every state.
 
 ## Not done

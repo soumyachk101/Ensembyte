@@ -18,7 +18,7 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
-use orbit_proto::{Model, ModelOption, ModelOptionChoice, ReasoningLevel};
+use ensembyte_proto::{Model, ModelOption, ModelOptionChoice, ReasoningLevel};
 
 use crate::HarnessError;
 use crate::jsonrpc::{Incoming, RpcClient};

@@ -1,5 +1,5 @@
 /**
- * The /auth/* HTTP surface absorbed from orbit's apps/server:
+ * The /auth/* HTTP surface absorbed from ensembyte's apps/server:
  *
  *  - POST /auth/exchange     — WorkOS code → tokens (see `workos.ts`).
  *  - POST /auth/refresh      — WorkOS refresh → fresh tokens (org-scopable).
@@ -161,7 +161,7 @@ const html = (body: string, status = 200): Response =>
 /**
  * The hosted OAuth callback for headless (paste-code) sign-in. Registered as a
  * WorkOS redirect URI; it does NOT exchange the code — it renders `state.code`
- * for the user to paste into the device that started the flow (`orbit login`),
+ * for the user to paste into the device that started the flow (`ensembyte login`),
  * where the exchange runs so the tokens land on that machine. The state half
  * must match the pending sign-in there, so the paste is CSRF-checked at the
  * same point the loopback flow is.

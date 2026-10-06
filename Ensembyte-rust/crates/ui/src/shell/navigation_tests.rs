@@ -84,7 +84,7 @@ fn setup(cx: &mut TestAppContext) -> (Entity<Shell>, &mut VisualTestContext) {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             );

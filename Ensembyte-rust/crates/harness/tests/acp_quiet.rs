@@ -10,8 +10,8 @@ use std::time::Duration;
 use futures::StreamExt;
 use tokio::sync::{mpsc, oneshot};
 
-use orbit_harness::{AcpHarness, CancellationToken, Harness, RunControls, SteerMessage};
-use orbit_proto::{
+use ensembyte_harness::{AcpHarness, CancellationToken, Harness, RunControls, SteerMessage};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, RunRequest, SandboxLevel, UserInputAnswer, UserInputQuestion,
 };
 
@@ -22,7 +22,7 @@ fn init_env() {
     ONCE.call_once(|| {
         // SAFETY: set before any harness runs in this test process; all
         // tests in this binary share the one value.
-        unsafe { std::env::set_var("ORBIT_ACP_QUIET_SETTLE_MS", QUIET_MS.to_string()) };
+        unsafe { std::env::set_var("ENSEMBYTE_ACP_QUIET_SETTLE_MS", QUIET_MS.to_string()) };
     });
 }
 
@@ -82,7 +82,7 @@ fn controls() -> (RunControls, mpsc::Sender<SteerMessage>, CancellationToken) {
 async fn collect_until_done(
     stream: &mut futures::stream::BoxStream<
         'static,
-        Result<AgentEvent, orbit_harness::HarnessError>,
+        Result<AgentEvent, ensembyte_harness::HarnessError>,
     >,
 ) -> Vec<AgentEvent> {
     tokio::time::timeout(Duration::from_secs(15), async {

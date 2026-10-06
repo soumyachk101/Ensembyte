@@ -4,8 +4,8 @@
 //! groups, questions, errors, attachments), the synthetic big transcripts
 //! for benchmarks, and the scripted streaming reply.
 
-use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, ToolDiffStat};
-use orbit_proto::{TodoItem, TodoStatus, ToolCall, UserInputQuestion};
+use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, ToolDiffStat};
+use ensembyte_proto::{TodoItem, TodoStatus, ToolCall, UserInputQuestion};
 
 pub(crate) const PHONE: &str = "ios-demo";
 
@@ -189,7 +189,7 @@ const VEIL_LIVE_PREFIX: &str = "All 14 veil tests pass. Pushing `veil-fade` and"
 /// The remainder `chat-veil`'s live entry streams when the session opens.
 pub(crate) const VEIL_LIVE_REST: &str = r#" opening the pull request against `main`:
 
-- [x] `cargo test -p orbit-ui veil` — 14 passed
+- [x] `cargo test -p ensembyte-ui veil` — 14 passed
 - [x] `xcodebuild -scheme Ensembyte build`
 - [ ] Screenshots for the PR description
 
@@ -213,7 +213,7 @@ fn veil(host: &str, now: i64) -> Vec<SessionMessageEntry> {
             text("t0", "Opening the PR now. Running the checks first:"),
             tool(
                 "k1",
-                exec("cargo test -p orbit-ui veil -- --nocapture"),
+                exec("cargo test -p ensembyte-ui veil -- --nocapture"),
                 false,
                 Some("test result: ok. 14 passed; 0 failed; 0 ignored"),
             ),
@@ -401,14 +401,14 @@ fn tabs(host: &str, now: i64) -> Vec<SessionMessageEntry> {
                 ),
                 tool(
                     "k2",
-                    exec("cargo test -p orbit-ui tool_group"),
+                    exec("cargo test -p ensembyte-ui tool_group"),
                     true,
                     Some("error[E0425]: cannot find value `danger_muted` in this scope"),
                 ),
                 edit("k3", "crates/ui/src/shell/transcript.rs", 6, 9),
                 tool(
                     "k4",
-                    exec("cargo test -p orbit-ui tool_group"),
+                    exec("cargo test -p ensembyte-ui tool_group"),
                     false,
                     Some("test result: ok. 9 passed"),
                 ),
@@ -759,7 +759,7 @@ pub(crate) fn reply(prompt: &str, long: bool) -> Vec<Step> {
             run_ms: 350,
         },
         Step::Tool {
-            call: exec("cargo test -p orbit-client transcript"),
+            call: exec("cargo test -p ensembyte-client transcript"),
             output: Some("test result: ok. 12 passed; 0 failed".into()),
             is_error: false,
             run_ms: 900,

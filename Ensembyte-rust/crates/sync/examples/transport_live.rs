@@ -8,8 +8,8 @@ use std::sync::{
     atomic::{AtomicU64, Ordering::Relaxed},
 };
 use std::time::{Duration, Instant};
-use orbit_sync::chat_client::{ChatTransport, RowImportOutcome};
-use orbit_sync::{ChatClient, ChatDocSink, CheckpointFetcher, DocsStore, StaticUrl, SyncError};
+use ensembyte_sync::chat_client::{ChatTransport, RowImportOutcome};
+use ensembyte_sync::{ChatClient, ChatDocSink, CheckpointFetcher, DocsStore, StaticUrl, SyncError};
 
 struct Sink {
     doc: Mutex<LoroDoc>,
@@ -207,7 +207,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (base, origin, mode) = (&args[1], &args[2], args[3].as_str());
     assert!(
-        origin.contains("orbit-transport-385-20260915"),
+        origin.contains("ensembyte-transport-385-20260915"),
         "only the isolated test worker is allowed"
     );
     let chat = format!("net-{}", uuid::Uuid::new_v4().simple());

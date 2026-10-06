@@ -587,7 +587,7 @@ mod tests {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -595,7 +595,7 @@ mod tests {
         (window, dir)
     }
 
-    fn chat(id: &str, parent: Option<&str>, archived: bool, age: i64) -> orbit_proto::Chat {
+    fn chat(id: &str, parent: Option<&str>, archived: bool, age: i64) -> ensembyte_proto::Chat {
         serde_json::from_value(serde_json::json!({
             "id": id, "title": id, "deviceId": "local", "archived": archived,
             "parentChatId": parent,

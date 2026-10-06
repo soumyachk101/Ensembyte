@@ -1,4 +1,4 @@
-//! orbit-ui — the gpui viewport. Shell, sidebar, conversation, composer, terminal,
+//! ensembyte-ui — the gpui viewport. Shell, sidebar, conversation, composer, terminal,
 //! diff pane.
 //!
 //! Design: ARCHITECTURE.md §4; animation catalog docs/research/feature-inventory.md
@@ -6,11 +6,11 @@
 //!
 //! M3a foundation:
 //! - [`theme`] — always-dark monochrome theme (oklch-derived neutrals), a gpui Global;
-//! - [`motion`] — the orbit animation catalog over gpui `Animation` + cubic-bezier;
+//! - [`motion`] — the ensembyte animation catalog over gpui `Animation` + cubic-bezier;
 //! - [`state`] — `AppState` entity + `EngineHandle` (connect-or-embed engine);
 //! - [`settings`] — persisted pane widths/collapse flags;
 //! - [`shell`] — sidebar + main panel + right-pane scaffold + gate;
-//! - [`loaders`] — orbit pulse loader, gradient spinner, boot splash.
+//! - [`loaders`] — ensembyte pulse loader, gradient spinner, boot splash.
 
 mod account_usage;
 pub mod app_menus;
@@ -73,10 +73,10 @@ use futures::{FutureExt as _, StreamExt as _};
 use gpui::{App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size};
 
 pub use state::EngineBootConfig;
-pub use orbit_proto::HarnessId;
+pub use ensembyte_proto::HarnessId;
 
 /// Everything the headed binary passes in (config/env resolution lives in
-/// `apps/orbit`, not here).
+/// `apps/ensembyte`, not here).
 #[derive(Debug, Clone)]
 pub struct UiConfig {
     /// Data directory — engine stores + `ui-settings.json`.
@@ -195,7 +195,7 @@ pub fn run_app(config: UiConfig) {
         terminal::panel::init(cx);
         app_menus::init(cx);
         app_update::AppUpdate::init(config.boot().edge_url, data_dir.clone(), cx);
-        cx.register_url_scheme("orbit").detach();
+        cx.register_url_scheme("ensembyte").detach();
 
         let state = cx.new(|_| state::AppState::new());
         let url_state = state.clone();
@@ -420,7 +420,7 @@ fn open_main_window(
                 // — if these two ever disagree, vibrancy dies on the first theme
                 // change and never comes back.
                 window_background: theme::Theme::of(cx).window_background_appearance(),
-                app_id: Some("orbit".into()),
+                app_id: Some("ensembyte".into()),
                 ..Default::default()
             },
             move |window, cx| {

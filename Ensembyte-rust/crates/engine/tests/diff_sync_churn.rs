@@ -13,8 +13,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use orbit_engine::{CheckoutDiffSync, EngineCore, HarnessRegistry};
-use orbit_proto::CheckoutDiff;
+use ensembyte_engine::{CheckoutDiffSync, EngineCore, HarnessRegistry};
+use ensembyte_proto::CheckoutDiff;
 
 async fn git(cwd: &Path, args: &[&str]) {
     let output = tokio::process::Command::new("git")
@@ -50,7 +50,7 @@ fn assemble(dir: &Path) -> EngineCore {
     EngineCore::assemble(
         dir,
         Arc::new(HarnessRegistry::new()),
-        orbit_proto::HarnessId::Mock,
+        ensembyte_proto::HarnessId::Mock,
         None,
     )
     .expect("engine assembles")

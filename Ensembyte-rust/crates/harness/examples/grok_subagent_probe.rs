@@ -2,12 +2,12 @@
 //! event stream, verifying subagent spawn correlation + the disk-tailed
 //! transcript end-to-end. Needs a logged-in `grok` on PATH.
 //!
-//!     cargo run -p orbit-harness --example grok_subagent_probe -- /tmp/probe-dir
+//!     cargo run -p ensembyte-harness --example grok_subagent_probe -- /tmp/probe-dir
 
 use futures::StreamExt;
 use tokio::sync::{mpsc, oneshot};
-use orbit_harness::{AcpHarness, CancellationToken, Harness, RunControls};
-use orbit_proto::{AgentEvent, RunRequest, SandboxLevel, UserInputAnswer};
+use ensembyte_harness::{AcpHarness, CancellationToken, Harness, RunControls};
+use ensembyte_proto::{AgentEvent, RunRequest, SandboxLevel, UserInputAnswer};
 
 #[tokio::main]
 async fn main() {

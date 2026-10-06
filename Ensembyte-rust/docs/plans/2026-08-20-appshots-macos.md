@@ -47,9 +47,9 @@ boundary so existing local and remote attachment delivery remains intact.
 - Existing settings round-trip tests extended for backward-compatible defaults.
 - Composer send/failure tests extended where practical for Appshot state.
 - `cargo fmt --all -- --check`.
-- `cargo check -p orbit-ui`.
-- `cargo test -p orbit-ui`.
-- A headed macOS smoke run with an isolated `ORBIT_DATA_DIR` to validate global
+- `cargo check -p ensembyte-ui`.
+- `cargo test -p ensembyte-ui`.
+- A headed macOS smoke run with an isolated `ENSEMBYTE_DATA_DIR` to validate global
   shortcut delivery, permission recovery, frontmost-window ordering,
   screenshot preview, accessibility degradation, and local send. Remote-path
   behavior is covered by the existing queued attachment transport plus focused

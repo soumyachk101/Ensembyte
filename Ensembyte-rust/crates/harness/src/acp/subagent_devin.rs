@@ -11,7 +11,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde_json::Value;
-use orbit_proto::{AgentEvent, DoneStatus};
+use ensembyte_proto::{AgentEvent, DoneStatus};
 
 use super::normalize::map_update;
 
@@ -206,7 +206,7 @@ fn tag(parent: &str, event: AgentEvent) -> AgentEvent {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use orbit_proto::{AgentEvent, DoneStatus, ToolCall};
+    use ensembyte_proto::{AgentEvent, DoneStatus, ToolCall};
 
     use super::DevinTracker;
 

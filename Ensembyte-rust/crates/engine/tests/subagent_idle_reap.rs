@@ -15,10 +15,10 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use tokio::sync::{Mutex, mpsc};
 
-use orbit_doc::{MessagePart, SessionMessageEntry, SubagentStatus};
-use orbit_engine::{EngineCore, HarnessRegistry};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_doc::{MessagePart, SessionMessageEntry, SubagentStatus};
+use ensembyte_engine::{EngineCore, HarnessRegistry};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SessionStatus, SteeringMode, ToolCall,
 };
@@ -34,7 +34,7 @@ fn init_env() {
     ONCE.call_once(|| {
         // SAFETY: called before any engine (and thus any reader of the var)
         // exists in this test process; all tests share the one value.
-        unsafe { std::env::set_var("ORBIT_SESSION_IDLE_MS", IDLE_MS.to_string()) };
+        unsafe { std::env::set_var("ENSEMBYTE_SESSION_IDLE_MS", IDLE_MS.to_string()) };
     });
 }
 

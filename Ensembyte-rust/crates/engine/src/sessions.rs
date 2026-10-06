@@ -1,7 +1,7 @@
 //! SessionsEngine — per-chat agent runs: dispatch, steering, interrupts, input bridging,
 //! journal + broadcast fan-out, and 120ms coalesced doc streaming.
 //!
-//! Pragmatic port of orbit's `sessions.ts` (spec: feature-inventory §3.2):
+//! Pragmatic port of ensembyte's `sessions.ts` (spec: feature-inventory §3.2):
 //! - every `AgentEvent` is (a) appended to the on-disk run journal, (b) broadcast to
 //!   in-process subscribers, (c) folded via `fold_event_into_parts` and diffed into the
 //!   chat's `SessionDoc` through `SegmentWriter` on a coalesced `STREAM_COMMIT_MS` timer;
@@ -24,12 +24,12 @@ use chrono::Utc;
 use futures::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
-use orbit_doc::{
+use ensembyte_doc::{
     DocError, MessagePart, MessageRole, MessageStatus, STREAM_COMMIT_MS, SegmentWriter, SessionDoc,
     SessionMessageEntry, fold_event_into_parts, sanitize_tool_call,
 };
-use orbit_harness::{CancellationToken, Harness, RunControls, SteerMessage};
-use orbit_proto::{
+use ensembyte_harness::{CancellationToken, Harness, RunControls, SteerMessage};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, RunRequest, Session, SessionStatus, UserInputAnswer,
     UserInputQuestion,
 };
@@ -61,7 +61,7 @@ type PendingInputs = Arc<Mutex<HashMap<String, oneshot::Sender<Vec<UserInputAnsw
 
 /// A harness-native session id plus the cwd it was created under. Harness
 /// session stores are cwd-scoped (claude keys conversations by project
-/// directory — orbit sessions.ts:563 "harness session stores are keyed by
+/// directory — ensembyte sessions.ts:563 "harness session stores are keyed by
 /// cwd"), so resume is only injected for runs launched from the same cwd.
 #[derive(Debug, Clone)]
 struct HarnessSessionRef {
@@ -77,12 +77,12 @@ struct HarnessSessionRef {
 struct RuntimeConfig {
     harness_id: HarnessId,
     model: Option<String>,
-    reasoning: Option<orbit_proto::ReasoningLevel>,
+    reasoning: Option<ensembyte_proto::ReasoningLevel>,
     model_options: serde_json::Map<String, serde_json::Value>,
     cwd: String,
-    sandbox: orbit_proto::SandboxLevel,
+    sandbox: ensembyte_proto::SandboxLevel,
     auto_approve: bool,
-    worktree: Option<orbit_proto::WorktreeSpec>,
+    worktree: Option<ensembyte_proto::WorktreeSpec>,
 }
 
 impl RuntimeConfig {
@@ -142,7 +142,7 @@ struct RoutedSteer {
 struct Inner {
     device_id: String,
     /// Loopback IPC port this engine serves, once known (0 = not serving):
-    /// what the injected `orbit mcp` server dials back into.
+    /// what the injected `ensembyte mcp` server dials back into.
     ipc_port: std::sync::atomic::AtomicU16,
     journal: Arc<RunJournal>,
     registry: Arc<HarnessRegistry>,
@@ -161,7 +161,7 @@ struct Inner {
     last_requests: Mutex<HashMap<String, RunRequest>>,
     /// Harness-native session ids per chat (resume continuity across turns) —
     /// the live-process cache over the durable copy on the workspace chat row
-    /// (orbit kept the same pair on `chats.harness_session_id`). An empty
+    /// (ensembyte kept the same pair on `chats.harness_session_id`). An empty
     /// session id is the "do not resume" tombstone after a rejected resume.
     harness_sessions: Mutex<HashMap<String, HarnessSessionRef>>,
     /// Auto-titler for untitled chats (wired at engine assembly; absent in bare tests).
@@ -213,7 +213,7 @@ impl SessionsEngine {
     }
 
     /// Record the loopback IPC port this engine serves. Runs started after
-    /// this carry Orbit's MCP server (see [`Inner::orbit_mcp`]); until then —
+    /// this carry Orbit's MCP server (see [`Inner::ensembyte_mcp`]); until then —
     /// or with 0 — agents get no Orbit tools rather than a dead server.
     pub fn set_ipc_port(&self, port: u16) {
         self.inner
@@ -382,7 +382,7 @@ impl SessionsEngine {
     ///
     /// - The user message entry is written to the doc immediately (id = `message_id`).
     /// - A live steerable run receives the prompt as its next turn via the mailbox
-    ///   (orbit's persistent-session routing); otherwise any live run is interrupted
+    ///   (ensembyte's persistent-session routing); otherwise any live run is interrupted
     ///   first — never two runtimes driving one chat.
     pub async fn dispatch(
         &self,
@@ -425,7 +425,7 @@ impl SessionsEngine {
             .map_err(|error| EngineError::Other(error.to_string()))?;
         // Native-only catalog entries have no portable file fallback. Reject
         // cross-harness delivery before recording or routing the user turn.
-        orbit_proto::invocation::validate_harness_invocations(&request.prompt, harness_id)
+        ensembyte_proto::invocation::validate_harness_invocations(&request.prompt, harness_id)
             .map_err(EngineError::Other)?;
         let routed = lock(&self.inner.runs).get(chat_id).map(|h| {
             (
@@ -453,7 +453,7 @@ impl SessionsEngine {
                     prompt: if harness_id == HarnessId::Opencode {
                         delivered.to_owned()
                     } else {
-                        orbit_proto::invocation::harness_prompt(delivered, harness_id)
+                        ensembyte_proto::invocation::harness_prompt(delivered, harness_id)
                     },
                     message_id: Some(user_id.clone()),
                 };
@@ -530,7 +530,7 @@ impl SessionsEngine {
         let user_id = message_id.unwrap_or_else(new_id);
         handle.write_user_message(&user_id, &request.prompt, now_ms())?;
 
-        // Engine-owned resume (orbit sessions.ts:736 — every dispatch read the
+        // Engine-owned resume (ensembyte sessions.ts:736 — every dispatch read the
         // chat's stored harness session): callers always send `resume: None`;
         // the engine threads the chat's prior harness session back in so a new
         // process (app restart) continues the same harness conversation. The
@@ -699,7 +699,7 @@ impl SessionsEngine {
         let Some((run_id, harness_id, steer_tx, ledger, history_sent)) = target else {
             return Ok(SteerOutcome::NotSteerable);
         };
-        orbit_proto::invocation::validate_harness_invocations(prompt, harness_id)
+        ensembyte_proto::invocation::validate_harness_invocations(prompt, harness_id)
             .map_err(EngineError::Other)?;
         let user_id = message_id.unwrap_or_else(new_id);
         let bootstrap = self.warm_fork_history(chat_id, harness_id, prompt, &history_sent);
@@ -708,7 +708,7 @@ impl SessionsEngine {
             prompt: if harness_id == HarnessId::Opencode {
                 delivered.to_owned()
             } else {
-                orbit_proto::invocation::harness_prompt(delivered, harness_id)
+                ensembyte_proto::invocation::harness_prompt(delivered, harness_id)
             },
             message_id: Some(user_id.clone()),
         };
@@ -830,7 +830,7 @@ impl SessionsEngine {
     /// with a VISIBLE "Run interrupted by engine restart" error part, close the
     /// journal with a synthetic `Done{interrupted}` — and then PICK THE RUN BACK
     /// UP: a fresh crashed turn with revival budget left is re-dispatched against
-    /// the remembered harness session (orbit: "not just eulogized";
+    /// the remembered harness session (ensembyte: "not just eulogized";
     /// `MAX_AUTO_RESUME` = 3 consecutive revivals, fresh = crashed < 12h ago).
     pub fn recover_stale(&self) -> Result<usize, EngineError> {
         const MAX_AUTO_RESUME: u32 = 3;
@@ -846,7 +846,7 @@ impl SessionsEngine {
             // Harness continuity first: the crashed run's session id may only
             // exist in the journal (the debounced workspace-row write may
             // never have landed) — remember it so the revived run resumes the
-            // same harness conversation (orbit recoverDraft, sessions.ts:538).
+            // same harness conversation (ensembyte recoverDraft, sessions.ts:538).
             if let Some((session_id, cwd)) = self.inner.journal_harness_session(&chat_id) {
                 self.inner
                     .remember_harness_session(&chat_id, &session_id, &cwd);
@@ -911,7 +911,7 @@ impl SessionsEngine {
                 let request = sessions
                     .last_request(&chat_id)
                     .or_else(|| host.request_from_chat_row(&chat_id, &prompt_text))
-                    // Last resort: the journal's own cwd (orbit's draft config)
+                    // Last resort: the journal's own cwd (ensembyte's draft config)
                     // — a crash can predate the debounced workspace-row write.
                     .or_else(|| {
                         let (_, cwd) = sessions.inner.journal_harness_session(&chat_id)?;
@@ -923,7 +923,7 @@ impl SessionsEngine {
                             reasoning: None,
                             model_options: Default::default(),
                             cwd,
-                            sandbox: orbit_proto::SandboxLevel::WorkspaceWrite,
+                            sandbox: ensembyte_proto::SandboxLevel::WorkspaceWrite,
                             auto_approve: false,
                             attachments: Vec::new(),
                             resume: None,
@@ -1190,24 +1190,24 @@ impl Inner {
         lock(&self.doc_host).clone()
     }
 
-    /// Orbit's own MCP server for a run of `chat_id`: this binary's `orbit
+    /// Orbit's own MCP server for a run of `chat_id`: this binary's `ensembyte
     /// mcp` subcommand, dialing the engine's IPC port and stamped with the
     /// originating chat + device so the agent's side chats link back here.
     /// None when the engine serves no port or its executable is unknown.
-    fn orbit_mcp(&self, chat_id: &str) -> Option<orbit_proto::McpServer> {
+    fn ensembyte_mcp(&self, chat_id: &str) -> Option<ensembyte_proto::McpServer> {
         let port = self.ipc_port.load(std::sync::atomic::Ordering::Relaxed);
         if port == 0 {
             return None;
         }
         let command = std::env::current_exe().ok()?.to_str()?.to_owned();
-        Some(orbit_proto::McpServer {
-            name: "orbit".into(),
+        Some(ensembyte_proto::McpServer {
+            name: "ensembyte".into(),
             command,
             args: vec!["mcp".into()],
             env: [
-                ("ORBIT_IPC_PORT".to_owned(), port.to_string()),
-                ("ORBIT_CHAT_ID".to_owned(), chat_id.to_owned()),
-                ("ORBIT_DEVICE_ID".to_owned(), self.device_id.clone()),
+                ("ENSEMBYTE_IPC_PORT".to_owned(), port.to_string()),
+                ("ENSEMBYTE_CHAT_ID".to_owned(), chat_id.to_owned()),
+                ("ENSEMBYTE_DEVICE_ID".to_owned(), self.device_id.clone()),
             ]
             .into_iter()
             .collect(),
@@ -1230,7 +1230,7 @@ impl Inner {
 
     /// Record the chat's harness-native session id (and its cwd): live-process
     /// cache plus the durable workspace chat row — the row is what survives an
-    /// engine restart (orbit sessions.ts:1039).
+    /// engine restart (ensembyte sessions.ts:1039).
     fn remember_harness_session(&self, chat_id: &str, session_id: &str, cwd: &str) {
         if session_id.is_empty() {
             return;
@@ -1255,7 +1255,7 @@ impl Inner {
     // yields a fresh session whose SessionStarted overwrites the row.
 
     /// The session id to resume for a run in `chat_id` launching from `cwd`
-    /// (orbit sessions.ts:736, looked up on every dispatch):
+    /// (ensembyte sessions.ts:736, looked up on every dispatch):
     /// live-process cache → workspace chat row → journal scan (the crash path
     /// where the debounced row write never landed — SessionStarted/Done events
     /// are journaled per event, flushed immediately). Cwd-gated throughout:
@@ -1382,7 +1382,7 @@ impl Inner {
                     entry
                         .parts
                         .iter()
-                        .any(|part| matches!(part, orbit_doc::MessagePart::Fork { .. }))
+                        .any(|part| matches!(part, ensembyte_doc::MessagePart::Fork { .. }))
                 })?
             }
         };
@@ -1393,8 +1393,8 @@ impl Inner {
                     .parts
                     .iter()
                     .filter_map(|part| match part {
-                        orbit_doc::MessagePart::Text { text, .. } => Some(text.clone()),
-                        orbit_doc::MessagePart::Tool { call, output, .. } => Some(format!(
+                        ensembyte_doc::MessagePart::Text { text, .. } => Some(text.clone()),
+                        ensembyte_doc::MessagePart::Tool { call, output, .. } => Some(format!(
                             "Tool: {}\n{}",
                             serde_json::to_string(call).unwrap_or_default(),
                             output.clone().unwrap_or_default()
@@ -1423,11 +1423,11 @@ impl Inner {
 /// slash commands). Anything put in front of it would make it model input.
 fn native_command(prompt: &str, harness: HarnessId) -> bool {
     let delivered = if harness == HarnessId::Codex {
-        orbit_proto::invocation::invocation_prompt(prompt)
+        ensembyte_proto::invocation::invocation_prompt(prompt)
     } else {
-        orbit_proto::invocation::harness_prompt(prompt, harness)
+        ensembyte_proto::invocation::harness_prompt(prompt, harness)
     };
-    orbit_proto::invocation::leading_command(&delivered).is_some()
+    ensembyte_proto::invocation::leading_command(&delivered).is_some()
 }
 
 /// A turn is in flight: streaming, or parked on a question it is still owed an
@@ -1594,7 +1594,7 @@ impl SubagentSink {
         if let Err(err) = finished {
             tracing::warn!(doc = %self.doc_id, error = %err, "subagent sink finish failed");
         }
-        let entries = orbit_doc::join_continuation_entries(self.doc.read_entries().ok()?);
+        let entries = ensembyte_doc::join_continuation_entries(self.doc.read_entries().ok()?);
         serde_json::to_string(&entries).ok()
     }
 }
@@ -1729,7 +1729,7 @@ fn cursor_unstarted_history(
     // Convert each message before JSON encoding. Rewriting canonical chips in
     // the encoded envelope can introduce unescaped quotes or newlines and can
     // cause Cursor's current message to be converted twice.
-    let prompt = orbit_proto::invocation::harness_prompt(prompt, HarnessId::Cursor);
+    let prompt = ensembyte_proto::invocation::harness_prompt(prompt, HarnessId::Cursor);
     let entries = doc.read_entries()?;
     let preceding: Vec<_> = entries
         .iter()
@@ -1771,7 +1771,7 @@ fn cursor_unstarted_history(
                 .join("\n")
         })
         .filter(|text| !text.is_empty())
-        .map(|text| orbit_proto::invocation::harness_prompt(&text, HarnessId::Cursor))
+        .map(|text| ensembyte_proto::invocation::harness_prompt(&text, HarnessId::Cursor))
         .collect();
     if previous.is_empty() {
         return Ok(prompt);
@@ -1806,7 +1806,7 @@ async fn drive_run(
     // The host stamps its own MCP server onto every run it drives, so the
     // agent can spawn and talk to side chats through the engine it runs in.
     if request.mcp.is_none() {
-        request.mcp = inner.orbit_mcp(&chat_id);
+        request.mcp = inner.ensembyte_mcp(&chat_id);
     }
     // Kept whole for the startup-crash retry (same user entry; dispatch
     // re-injects the stored resume id). Option so the retry branch (inside
@@ -1847,7 +1847,7 @@ async fn drive_run(
             request.resume.is_some(),
         )
         .map(|prompt| request.prompt = prompt)
-        .map_err(|e| orbit_harness::HarnessError::Protocol(e.to_string()))
+        .map_err(|e| ensembyte_harness::HarnessError::Protocol(e.to_string()))
     } else {
         Ok(())
     };
@@ -1871,7 +1871,7 @@ async fn drive_run(
                 let mut wire_request = request;
                 if !matches!(harness_id, HarnessId::Cursor | HarnessId::Opencode) {
                     wire_request.prompt =
-                        orbit_proto::invocation::harness_prompt(&wire_request.prompt, harness_id);
+                        ensembyte_proto::invocation::harness_prompt(&wire_request.prompt, harness_id);
                 }
                 harness.run(wire_request, controls).await
             } else {
@@ -1975,14 +1975,14 @@ async fn drive_run(
     // so the gate still catches real crashes. touch_session throttles at 10s.
     let mut live_heartbeat = tokio::time::interval(std::time::Duration::from_secs(15));
     live_heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    // PERSISTENT SESSION (orbit runsBySession): a completed turn on a
+    // PERSISTENT SESSION (ensembyte runsBySession): a completed turn on a
     // steerable harness parks here instead of ending the run — the child and
     // its steering mailbox stay warm, and the next user message (dispatch
     // routes into a live run) starts the next turn with zero respawn/resume
     // latency. `Some(when)` = idle since then; the 30-min reaper below ends
-    // a session nobody comes back to (orbit SESSION_IDLE_MS).
-    // `ORBIT_SESSION_IDLE_MS` overrides the window (tests).
-    let session_idle = std::env::var("ORBIT_SESSION_IDLE_MS")
+    // a session nobody comes back to (ensembyte SESSION_IDLE_MS).
+    // `ENSEMBYTE_SESSION_IDLE_MS` overrides the window (tests).
+    let session_idle = std::env::var("ENSEMBYTE_SESSION_IDLE_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .map(std::time::Duration::from_millis)
@@ -2008,7 +2008,7 @@ async fn drive_run(
     // segment finalized Complete, status Idle, child and mailbox warm. A
     // false trip (the agent was quietly waiting on something invisible)
     // costs a status dip: the parked-resume path below re-arms Working the
-    // moment output flows again, and nothing is lost. `ORBIT_TURN_QUIESCE_MS`
+    // moment output flows again, and nothing is lost. `ENSEMBYTE_TURN_QUIESCE_MS`
     // overrides the window; 0 disables.
     // RETIRED for native drivers: a harness whose every turn shape ends with
     // a deterministic wire Done (claude/codex/cursor native) needs no
@@ -2018,7 +2018,7 @@ async fn drive_run(
     // ACP retains the watchdog only for unowned self-continued activity.
     let deterministic_turn_end = harness.deterministic_turn_end();
     let authoritative_prompt_end = harness.authoritative_prompt_end();
-    let quiesce_after: Option<std::time::Duration> = match std::env::var("ORBIT_TURN_QUIESCE_MS")
+    let quiesce_after: Option<std::time::Duration> = match std::env::var("ENSEMBYTE_TURN_QUIESCE_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
     {
@@ -2037,11 +2037,11 @@ async fn drive_run(
     // so the default 120s window read as 2min of stuck-Working after every
     // background notification (user report 2026-08-13). The in-flight
     // fold gate below still protects running tools; reasoning heartbeats
-    // push the window during real thinking. `ORBIT_SELF_TURN_QUIESCE_MS`
+    // push the window during real thinking. `ENSEMBYTE_SELF_TURN_QUIESCE_MS`
     // overrides; 0 falls back to the normal window. An explicit
-    // `ORBIT_TURN_QUIESCE_MS=0` still disables the watchdog entirely.
+    // `ENSEMBYTE_TURN_QUIESCE_MS=0` still disables the watchdog entirely.
     let self_quiesce_after: Option<std::time::Duration> =
-        match std::env::var("ORBIT_SELF_TURN_QUIESCE_MS")
+        match std::env::var("ENSEMBYTE_SELF_TURN_QUIESCE_MS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
         {
@@ -2107,7 +2107,7 @@ async fn drive_run(
                     }
                     break SessionStatus::Idle;
                 }
-                // Idle reaper (orbit SESSION_IDLE_MS): a parked persistent session
+                // Idle reaper (ensembyte SESSION_IDLE_MS): a parked persistent session
                 // nobody returned to in 30 minutes releases its child. The turn
                 // was finalized at Done, so this end is clean — no aborted stamp.
                 // A live background subagent is somebody still using the child:
@@ -2209,7 +2209,7 @@ async fn drive_run(
                     && steerable
                     && !folded.iter().any(|p| match p {
                         MessagePart::Tool { id, resolved: false, .. } => {
-                            id != orbit_proto::LIVE_PLAN_TOOL_ID
+                            id != ensembyte_proto::LIVE_PLAN_TOOL_ID
                         }
                         MessagePart::Input { resolved: false, .. } => true,
                         _ => false,
@@ -2326,7 +2326,7 @@ async fn drive_run(
                         }
                     }
                 }
-                orbit_doc::fold_event_into_parts(&mut folded, &event);
+                ensembyte_doc::fold_event_into_parts(&mut folded, &event);
                 if !dirty {
                     dirty = true;
                     flush_at = tokio::time::Instant::now()
@@ -2389,7 +2389,7 @@ async fn drive_run(
                     continue;
                 }
                 let was_clean = !sink.dirty;
-                orbit_doc::fold_event_into_parts(&mut sink.folded, sub_event);
+                ensembyte_doc::fold_event_into_parts(&mut sink.folded, sub_event);
                 sink.dirty = true;
                 // A sink waking on its own must arm the same commit window
                 // the parent's dirty flag does — `flush_at` is otherwise only
@@ -2424,7 +2424,7 @@ async fn drive_run(
                     {
                         host.upload_tool_sidecar(
                             &chat_id,
-                            orbit_doc::SidecarPayload {
+                            ensembyte_doc::SidecarPayload {
                                 part_id: doc_id,
                                 output: Some(json),
                                 diff: None,
@@ -2506,7 +2506,7 @@ async fn drive_run(
                 ) || matches!(
                     &event,
                     AgentEvent::ToolCall { id, .. }
-                        if id == orbit_proto::LIVE_PLAN_TOOL_ID || !seen_tools.contains(id)
+                        if id == ensembyte_proto::LIVE_PLAN_TOOL_ID || !seen_tools.contains(id)
                 ));
             if self_continued {
                 tracing::info!(
@@ -2575,8 +2575,8 @@ async fn drive_run(
             // treating its reappearance after a park/steer reset as a stale
             // echo dropped the todo list for the rest of the run — from the
             // first boundary on, plans never rendered again.
-            AgentEvent::ToolCall { id, .. } if id == orbit_proto::LIVE_PLAN_TOOL_ID => {}
-            AgentEvent::ToolResult { id, .. } if id == orbit_proto::LIVE_PLAN_TOOL_ID => {}
+            AgentEvent::ToolCall { id, .. } if id == ensembyte_proto::LIVE_PLAN_TOOL_ID => {}
+            AgentEvent::ToolResult { id, .. } if id == ensembyte_proto::LIVE_PLAN_TOOL_ID => {}
             AgentEvent::ToolCall { id, .. } => {
                 if !in_segment(&folded, id) && seen_tools.contains(id) {
                     continue;
@@ -2723,7 +2723,7 @@ async fn drive_run(
 
         inner.publish(&chat_id, &event);
 
-        // Defensive rule from orbit: a mid-run SessionStarted re-emission (Claude SDK
+        // Defensive rule from ensembyte: a mid-run SessionStarted re-emission (Claude SDK
         // background re-invocations) must not wipe the segment being written.
         let skip_fold = matches!(&event, AgentEvent::SessionStarted { .. }) && !folded.is_empty();
         if !skip_fold {
@@ -2731,7 +2731,7 @@ async fn drive_run(
             // R2 sidecar PARKED (2026-08-10, product call): the fold's
             // summary/stats ARE the doc's whole record — no refs stamped, no
             // uploads. Full outputs survive only in the host's local run
-            // journal. To reintroduce: `orbit_doc::sidecar_payload(&event)`
+            // journal. To reintroduce: `ensembyte_doc::sidecar_payload(&event)`
             // → `apply_sidecar_refs` → `doc_host.upload_tool_sidecar`, all
             // still in place and tested.
         }
@@ -2858,7 +2858,7 @@ async fn drive_run(
         {
             host.upload_tool_sidecar(
                 &chat_id,
-                orbit_doc::SidecarPayload {
+                ensembyte_doc::SidecarPayload {
                     part_id: doc_id,
                     output: Some(json),
                     diff: None,
@@ -2929,18 +2929,18 @@ mod tests {
 
     #[test]
     fn cursor_recovery_converts_rich_messages_before_json_encoding() {
-        let doc = orbit_doc::SessionDoc::init("cursor-rich-recovery").unwrap();
-        let skill = orbit_proto::invocation::Invocation::Skill {
+        let doc = ensembyte_doc::SessionDoc::init("cursor-rich-recovery").unwrap();
+        let skill = ensembyte_proto::invocation::Invocation::Skill {
             name: "review \"quoted\"".into(),
             path: "/repo/quoted \"path\"/SKILL.md".into(),
             command: None,
         }
         .link();
         let previous = format!("Previous {skill}\nSecond line with \\ and \"quotes\"");
-        doc.push_message(&orbit_doc::SessionMessageEntry {
+        doc.push_message(&ensembyte_doc::SessionMessageEntry {
             id: "u1".into(),
-            role: orbit_doc::MessageRole::User,
-            parts: vec![orbit_doc::MessagePart::Text {
+            role: ensembyte_doc::MessageRole::User,
+            parts: vec![ensembyte_doc::MessagePart::Text {
                 id: "u1-text".into(),
                 text: previous.clone(),
             }],
@@ -2957,31 +2957,31 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(json).unwrap();
         assert_eq!(
             parsed["currentUserMessage"],
-            orbit_proto::invocation::harness_prompt(&current, orbit_proto::HarnessId::Cursor)
+            ensembyte_proto::invocation::harness_prompt(&current, ensembyte_proto::HarnessId::Cursor)
         );
         assert_eq!(
             parsed["previousUserMessages"][0],
-            orbit_proto::invocation::harness_prompt(&previous, orbit_proto::HarnessId::Cursor)
+            ensembyte_proto::invocation::harness_prompt(&previous, ensembyte_proto::HarnessId::Cursor)
         );
     }
 
     #[test]
     fn cursor_without_a_session_id_retains_only_preceding_user_messages() {
-        let doc = orbit_doc::SessionDoc::init("cursor-unstarted").unwrap();
+        let doc = ensembyte_doc::SessionDoc::init("cursor-unstarted").unwrap();
         for (id, role, text) in [
             (
                 "u1",
-                orbit_doc::MessageRole::User,
+                ensembyte_doc::MessageRole::User,
                 "first interrupted request",
             ),
-            ("a1", orbit_doc::MessageRole::Assistant, "partial output"),
-            ("u2", orbit_doc::MessageRole::User, "current request"),
-            ("u3", orbit_doc::MessageRole::User, "future pending request"),
+            ("a1", ensembyte_doc::MessageRole::Assistant, "partial output"),
+            ("u2", ensembyte_doc::MessageRole::User, "current request"),
+            ("u3", ensembyte_doc::MessageRole::User, "future pending request"),
         ] {
-            doc.push_message(&orbit_doc::SessionMessageEntry {
+            doc.push_message(&ensembyte_doc::SessionMessageEntry {
                 id: id.into(),
                 role,
-                parts: vec![orbit_doc::MessagePart::Text {
+                parts: vec![ensembyte_doc::MessagePart::Text {
                     id: format!("{id}-text"),
                     text: text.into(),
                 }],
@@ -3019,7 +3019,7 @@ mod tests {
     }
 
     use super::{RuntimeConfig, subagent_doc_id};
-    use orbit_proto::{HarnessId, RunRequest, SandboxLevel};
+    use ensembyte_proto::{HarnessId, RunRequest, SandboxLevel};
 
     #[tokio::test]
     async fn generated_image_failure_is_sanitized_even_inside_subagents() {
@@ -3050,7 +3050,7 @@ mod tests {
             &mut parts,
             &AgentEvent::ToolCall {
                 id: "i".into(),
-                call: orbit_proto::ToolCall::Unknown {
+                call: ensembyte_proto::ToolCall::Unknown {
                     name: "Generate image".into(),
                     input: None,
                 },
@@ -3089,7 +3089,7 @@ mod tests {
             prompt: "first".into(),
             harness: None,
             model: Some("grok-4.6".into()),
-            reasoning: Some(orbit_proto::ReasoningLevel::High),
+            reasoning: Some(ensembyte_proto::ReasoningLevel::High),
             model_options: serde_json::Map::new(),
             cwd: "/tmp".into(),
             sandbox: SandboxLevel::WorkspaceWrite,
@@ -3114,7 +3114,7 @@ mod tests {
         assert!(!config.can_route(HarnessId::Grok, &follow_up));
         follow_up.model = initial.model.clone();
 
-        follow_up.reasoning = Some(orbit_proto::ReasoningLevel::Medium);
+        follow_up.reasoning = Some(ensembyte_proto::ReasoningLevel::Medium);
         assert!(!config.can_route(HarnessId::Grok, &follow_up));
         follow_up.reasoning = initial.reasoning;
 
@@ -3157,7 +3157,7 @@ mod tests {
     async fn subagent_sink_flush_clears_dirty_when_nothing_folded() {
         use super::*;
         let dir = tempfile::tempdir().unwrap();
-        let store = Arc::new(orbit_sync::DocsStore::open(dir.path()).unwrap());
+        let store = Arc::new(ensembyte_sync::DocsStore::open(dir.path()).unwrap());
         let host = DocHost::new(
             store,
             crate::doc_host::DocHostConfig {
@@ -3200,13 +3200,13 @@ mod tests {
         fn supports_steering(&self) -> bool {
             true
         }
-        fn steering_mode(&self) -> orbit_proto::SteeringMode {
-            orbit_proto::SteeringMode::StepBoundary
+        fn steering_mode(&self) -> ensembyte_proto::SteeringMode {
+            ensembyte_proto::SteeringMode::StepBoundary
         }
-        fn reasoning_levels(&self) -> &[orbit_proto::ReasoningLevel] {
-            &[orbit_proto::ReasoningLevel::Medium]
+        fn reasoning_levels(&self) -> &[ensembyte_proto::ReasoningLevel] {
+            &[ensembyte_proto::ReasoningLevel::Medium]
         }
-        async fn models(&self) -> Result<Vec<orbit_proto::Model>, orbit_harness::HarnessError> {
+        async fn models(&self) -> Result<Vec<ensembyte_proto::Model>, ensembyte_harness::HarnessError> {
             Ok(vec![])
         }
         async fn run(
@@ -3214,8 +3214,8 @@ mod tests {
             _request: RunRequest,
             _controls: RunControls,
         ) -> Result<
-            futures::stream::BoxStream<'static, Result<AgentEvent, orbit_harness::HarnessError>>,
-            orbit_harness::HarnessError,
+            futures::stream::BoxStream<'static, Result<AgentEvent, ensembyte_harness::HarnessError>>,
+            ensembyte_harness::HarnessError,
         > {
             let mut feed = self
                 .feed

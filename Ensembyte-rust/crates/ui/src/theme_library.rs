@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, anyhow};
 use gpui::{App, Global};
-use orbit_theme::vscode::SourceCompilation;
-use orbit_theme::{
+use ensembyte_theme::vscode::SourceCompilation;
+use ensembyte_theme::{
     CustomThemeEntry, CustomThemeLibrary, InstallMode, ThemeRegistry, replace_custom_families,
 };
 
@@ -164,9 +164,9 @@ fn reconcile_and_refresh(cx: &mut App) {
     let selected = appearance::themes(cx);
     for appearance_kind in [Appearance::Light, Appearance::Dark] {
         let model = if appearance_kind.is_light() {
-            orbit_theme::Appearance::Light
+            ensembyte_theme::Appearance::Light
         } else {
-            orbit_theme::Appearance::Dark
+            ensembyte_theme::Appearance::Dark
         };
         let selected_id = selected.variant_id(model);
         if registry.variant(selected_id).is_none()
@@ -197,17 +197,17 @@ mod tests {
         next.entries.push(CustomThemeEntry {
             id: "unpersisted".into(),
             name: "Unpersisted".into(),
-            source: orbit_theme::CustomThemeSource::ImportedSnapshot {
+            source: ensembyte_theme::CustomThemeSource::ImportedSnapshot {
                 imported_from: None,
             },
-            family: orbit_theme::ThemeFamily {
+            family: ensembyte_theme::ThemeFamily {
                 id: "unpersisted".into(),
                 name: "Unpersisted".into(),
                 variants: Vec::new(),
             },
             reports: Default::default(),
             selected_variant_ids: Vec::new(),
-            status: orbit_theme::CustomThemeStatus::Ready,
+            status: ensembyte_theme::CustomThemeStatus::Ready,
         });
 
         assert!(persist_and_activate(&mut state, next).is_err());

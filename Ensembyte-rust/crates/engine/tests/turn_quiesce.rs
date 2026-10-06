@@ -6,7 +6,7 @@
 //! 2. The agent re-invokes ITSELF on a background-task notification and
 //!    streams real output with no prompt behind it. The old parked gate
 //!    dropped that output on the floor ("Build finished successfully…"
-//!    existed in the agent's session data, was absent from orbit's doc).
+//!    existed in the agent's session data, was absent from ensembyte's doc).
 //! 3. A steer ("what about now") becomes the next turn — the agent answers,
 //!    and the turn-end reply is LOST upstream. No Done ever arrives; the
 //!    session read Working forever (the live heartbeat defeats the 45s
@@ -25,10 +25,10 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use tokio::sync::{Mutex, mpsc};
 
-use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
-use orbit_engine::{EngineCore, HarnessRegistry, SteerOutcome};
-use orbit_harness::{Harness, HarnessError, RunControls};
-use orbit_proto::{
+use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
+use ensembyte_engine::{EngineCore, HarnessRegistry, SteerOutcome};
+use ensembyte_harness::{Harness, HarnessError, RunControls};
+use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SessionStatus, SteeringMode, ToolCall,
 };
@@ -43,7 +43,7 @@ fn init_quiesce_env() {
     ONCE.call_once(|| {
         // SAFETY: called before any engine (and thus any reader of the var)
         // exists in this test process; all tests share the one value.
-        unsafe { std::env::set_var("ORBIT_TURN_QUIESCE_MS", QUIESCE_MS.to_string()) };
+        unsafe { std::env::set_var("ENSEMBYTE_TURN_QUIESCE_MS", QUIESCE_MS.to_string()) };
     });
 }
 

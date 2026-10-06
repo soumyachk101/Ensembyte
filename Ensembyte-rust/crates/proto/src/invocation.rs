@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-pub const INVOCATION_SCHEME: &str = "orbit-invoke:";
+pub const INVOCATION_SCHEME: &str = "ensembyte-invoke:";
 
 fn escape_label(label: &str) -> String {
     label
@@ -584,7 +584,7 @@ mod tests {
             "first /compact then [$review](/repo/a%20b/SKILL.md) finally"
         );
         assert_eq!(invocation_prompt("/$not-a-chip"), "/$not-a-chip");
-        assert!(invocation_links("[x](orbit-invoke:bad)").is_empty());
+        assert!(invocation_links("[x](ensembyte-invoke:bad)").is_empty());
         for code in [
             format!("`{}`", command.link()),
             format!("```\n{}\n```", command.link()),

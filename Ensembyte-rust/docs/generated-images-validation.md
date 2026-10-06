@@ -22,13 +22,13 @@ placeholder and uses the existing 2–15 second retry ladder.
 ## Automated checks
 
 ```sh
-cargo test -p orbit-proto -p orbit-doc
-cargo test -p orbit-engine generated_image
-cargo test -p orbit-engine --test e2e --test device_routing --test workspace_sync
-cargo test -p orbit-harness codex
-cargo test -p orbit-harness --test codex
-cargo test -p orbit-ui transcript
-cargo test -p orbit-ui attachments
+cargo test -p ensembyte-proto -p ensembyte-doc
+cargo test -p ensembyte-engine generated_image
+cargo test -p ensembyte-engine --test e2e --test device_routing --test workspace_sync
+cargo test -p ensembyte-harness codex
+cargo test -p ensembyte-harness --test codex
+cargo test -p ensembyte-ui transcript
+cargo test -p ensembyte-ui attachments
 cd edge && npm test
 ```
 
@@ -52,8 +52,8 @@ These tests stay ignored in normal runs. They require an authenticated Codex
 installation and a model/account provisioned for image generation.
 
 ```sh
-cargo test -p orbit-harness --test codex real_image_generation_smoke -- --ignored
-cargo test -p orbit-engine --test e2e real_image_generation_profile_smoke -- --ignored
+cargo test -p ensembyte-harness --test codex real_image_generation_smoke -- --ignored
+cargo test -p ensembyte-engine --test e2e real_image_generation_profile_smoke -- --ignored
 ```
 
 The harness smoke checks that the real provider returns an existing saved file;
@@ -92,7 +92,7 @@ image Base64. Other user-authored content may legitimately contain those strings
 - `cargo fmt --all -- --check` reports pre-existing formatting differences in
   10 files; each affected file also fails formatting in the original checkout.
 - Strict `cargo clippy --workspace --all-targets -- -D warnings` stops on
-  pre-existing `orbit-theme` lints. A full run with `--cap-lints warn` completes
+  pre-existing `ensembyte-theme` lints. A full run with `--cap-lints warn` completes
   and preserves the existing warnings for review.
 
 The full workspace command used to continue past the confirmed baseline failure:
@@ -142,7 +142,7 @@ and dark appearances and a portrait image whose displayed height reaches the cap
 
 ## Desktop security regressions
 
-`cargo test --locked -p orbit-ui --lib generated_image -- --test-threads=1`
+`cargo test --locked -p ensembyte-ui --lib generated_image -- --test-threads=1`
 includes policy/alias/load-claim isolation, MIME corrections, actual format
 validation, static-frame downsampling, and a 100-image cache-history budget test.
 Existing transcript tests verify that generated history is not protected from

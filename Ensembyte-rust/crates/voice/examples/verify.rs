@@ -2,11 +2,11 @@ use std::{path::PathBuf, sync::atomic::AtomicBool, time::Instant};
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let dir = PathBuf::from(args.next().expect("model directory"));
-    if !orbit_voice::installed(&dir) {
-        orbit_voice::download(&dir, &AtomicBool::new(false), |_| {})?;
+    if !ensembyte_voice::installed(&dir) {
+        ensembyte_voice::download(&dir, &AtomicBool::new(false), |_| {})?;
     }
     let start = Instant::now();
-    let mut model = orbit_voice::Recognizer::load(&dir)?;
+    let mut model = ensembyte_voice::Recognizer::load(&dir)?;
     println!("load_ms={}", start.elapsed().as_millis());
     for file in args {
         let mut wav = hound::WavReader::open(&file)?;

@@ -20,8 +20,8 @@ use gpui::{
     StatefulInteractiveElement as _, Styled, Window, div, prelude::*, px,
 };
 
-use orbit_doc::{MessagePart, MessageRole, SessionMessageEntry};
-use orbit_proto::{TodoItem, TodoStatus, ToolCall};
+use ensembyte_doc::{MessagePart, MessageRole, SessionMessageEntry};
+use ensembyte_proto::{TodoItem, TodoStatus, ToolCall};
 
 use crate::composer::{Composer, QUEUE_COMPOSER_OVERLAP};
 use crate::icons::{self, icon};
@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn acp_plan_reusing_one_id_resolves_to_the_newest_segment() {
-        let plan = orbit_proto::LIVE_PLAN_TOOL_ID;
+        let plan = ensembyte_proto::LIVE_PLAN_TOOL_ID;
         let old = entry(MessageRole::Assistant, vec![todo_part(plan, items(">.."))]);
         let new = entry(MessageRole::Assistant, vec![todo_part(plan, items("x>."))]);
         assert_eq!(latest_todo(&[old, new]), Some(items("x>.")));

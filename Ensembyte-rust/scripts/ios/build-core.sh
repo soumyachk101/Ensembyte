@@ -6,9 +6,9 @@
 #   scripts/ios/build-core.sh [iphonesimulator|iphoneos]
 #
 # Outputs (target/ios-core/<platform>/):
-#   liborbit_mobile.a            linked via LIBRARY_SEARCH_PATHS
-#   include/module.modulemap     `import orbit_coreFFI` (SWIFT_INCLUDE_PATHS)
-# and refreshes apps/ios/Orbit/Core/Generated/orbit_core.swift — committed so
+#   libensembyte_mobile.a            linked via LIBRARY_SEARCH_PATHS
+#   include/module.modulemap     `import ensembyte_coreFFI` (SWIFT_INCLUDE_PATHS)
+# and refreshes apps/ios/Orbit/Core/Generated/ensembyte_core.swift — committed so
 # Xcode's synchronized folder always sees it; CI fails if it drifts.
 set -euo pipefail
 
@@ -26,8 +26,8 @@ OUT="$ROOT/target/ios-core/$PLATFORM"
 mkdir -p "$OUT/include"
 
 # Iterating on Swift while the core is mid-edit: reuse the last good build.
-if [[ "${ORBIT_SKIP_CORE:-}" == "1" && -f "$OUT/liborbit_mobile.a" ]]; then
-  echo "note: ORBIT_SKIP_CORE=1 — reusing $OUT/liborbit_mobile.a"
+if [[ "${ENSEMBYTE_SKIP_CORE:-}" == "1" && -f "$OUT/libensembyte_mobile.a" ]]; then
+  echo "note: ENSEMBYTE_SKIP_CORE=1 — reusing $OUT/libensembyte_mobile.a"
   exit 0
 fi
 
@@ -42,17 +42,17 @@ run_cargo() {
 }
 
 cd "$ROOT"
-run_cargo build --locked -p orbit-mobile --lib --profile "$PROFILE" --target "$TARGET"
-run_cargo build --locked -p orbit-mobile --bin uniffi-bindgen --features bindgen --profile mobile
+run_cargo build --locked -p ensembyte-mobile --lib --profile "$PROFILE" --target "$TARGET"
+run_cargo build --locked -p ensembyte-mobile --bin uniffi-bindgen --features bindgen --profile mobile
 
-LIB="$ROOT/target/$TARGET/$PROFILE/liborbit_mobile.a"
-cp -p "$LIB" "$OUT/liborbit_mobile.a"
+LIB="$ROOT/target/$TARGET/$PROFILE/libensembyte_mobile.a"
+cp -p "$LIB" "$OUT/libensembyte_mobile.a"
 
 GEN="$OUT/gen"
 "$ROOT/target/mobile/uniffi-bindgen" generate --library "$LIB" --language swift --out-dir "$GEN" >/dev/null
-cp "$GEN/orbit_coreFFI.h" "$OUT/include/orbit_coreFFI.h"
-cp "$GEN/orbit_coreFFI.modulemap" "$OUT/include/module.modulemap"
+cp "$GEN/ensembyte_coreFFI.h" "$OUT/include/ensembyte_coreFFI.h"
+cp "$GEN/ensembyte_coreFFI.modulemap" "$OUT/include/module.modulemap"
 # Only touch the Swift file when it changed so Xcode doesn't recompile it.
-SWIFT_OUT="$ROOT/apps/ios/Ensembyte/Core/Generated/orbit_core.swift"
+SWIFT_OUT="$ROOT/apps/ios/Ensembyte/Core/Generated/ensembyte_core.swift"
 mkdir -p "$(dirname "$SWIFT_OUT")"
-cmp -s "$GEN/orbit_core.swift" "$SWIFT_OUT" || cp "$GEN/orbit_core.swift" "$SWIFT_OUT"
+cmp -s "$GEN/ensembyte_core.swift" "$SWIFT_OUT" || cp "$GEN/ensembyte_core.swift" "$SWIFT_OUT"

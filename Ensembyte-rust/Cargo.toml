@@ -35,22 +35,22 @@ publish = false
 
 [workspace.dependencies]
 ensembyte-voice = { path = "crates/voice" }
-orbit-proto = { path = "crates/proto" }
-orbit-preview = { path = "crates/preview" }
-orbit-doc = { path = "crates/doc" }
-orbit-sync = { path = "crates/sync" }
-orbit-harness = { path = "crates/harness" }
-orbit-engine = { path = "crates/engine" }
-orbit-rpc = { path = "crates/rpc" }
-orbit-update = { path = "crates/update" }
-orbit-ui = { path = "crates/ui" }
-orbit-syntax = { path = "crates/syntax" }
-orbit-markdown = { path = "crates/markdown" }
-orbit-mobile = { path = "crates/mobile" }
-orbit-client = { path = "crates/client" }
-orbit-theme = { path = "crates/theme" }
-orbit-mcp = { path = "crates/mcp" }
-orbit-text = { path = "crates/text" }
+ensembyte-proto = { path = "crates/proto" }
+ensembyte-preview = { path = "crates/preview" }
+ensembyte-doc = { path = "crates/doc" }
+ensembyte-sync = { path = "crates/sync" }
+ensembyte-harness = { path = "crates/harness" }
+ensembyte-engine = { path = "crates/engine" }
+ensembyte-rpc = { path = "crates/rpc" }
+ensembyte-update = { path = "crates/update" }
+ensembyte-ui = { path = "crates/ui" }
+ensembyte-syntax = { path = "crates/syntax" }
+ensembyte-markdown = { path = "crates/markdown" }
+ensembyte-mobile = { path = "crates/mobile" }
+ensembyte-client = { path = "crates/client" }
+ensembyte-theme = { path = "crates/theme" }
+ensembyte-mcp = { path = "crates/mcp" }
+ensembyte-text = { path = "crates/text" }
 
 # CRDT
 loro = "1.13"

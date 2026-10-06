@@ -1,5 +1,5 @@
 //! Live probe: real cursor model discovery through the harness path.
-use orbit_harness::{CursorHarness, Harness};
+use ensembyte_harness::{CursorHarness, Harness};
 
 #[tokio::main]
 async fn main() {

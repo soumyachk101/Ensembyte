@@ -17,12 +17,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use tokio::sync::watch;
-use orbit_doc::{
+use ensembyte_doc::{
     CommandBasedOn, MessagePart, MessageRole, MessageStatus, QueueDeliveryGate, QueuedMessage,
     SessionCommandEntry, SessionCommandPayload, SessionCommandStatus, SessionDoc,
     SessionMessageEntry,
 };
-use orbit_proto::{
+use ensembyte_proto::{
     ChatIndicator, ContextUsage, RunRequest, SandboxLevel, UserInputAnswer, WorktreeSpec,
 };
 
@@ -377,7 +377,7 @@ impl SessionCore {
     /// Serialized doc write, then an incremental refresh.
     pub(crate) fn write<R>(
         &self,
-        f: impl FnOnce(&SessionDoc) -> std::result::Result<R, orbit_doc::DocError>,
+        f: impl FnOnce(&SessionDoc) -> std::result::Result<R, ensembyte_doc::DocError>,
     ) -> Result<R> {
         let result = {
             let _gate = lock(&self.write_gate);
@@ -581,7 +581,7 @@ impl SessionCore {
                 turn_id: Some(turn_id),
                 frontier: None,
             }),
-            expires_at: Some(now + orbit_doc::COMMAND_DEFAULT_TTL_MS),
+            expires_at: Some(now + ensembyte_doc::COMMAND_DEFAULT_TTL_MS),
             status: SessionCommandStatus::Pending,
             resolution: None,
         };
@@ -1199,7 +1199,7 @@ impl SessionHandle {
         };
         let reply = self
             .queue_rpc(
-                orbit_rpc::methods::BEGIN_QUEUED_MESSAGE_EDIT,
+                ensembyte_rpc::methods::BEGIN_QUEUED_MESSAGE_EDIT,
                 serde_json::json!({
                     "chatId": self.core.chat_id,
                     "id": id,
@@ -1238,7 +1238,7 @@ impl SessionHandle {
 
     pub async fn renew_queued_edit(&self, lease: &QueueEditLease) -> bool {
         self.queue_rpc(
-            orbit_rpc::methods::RENEW_QUEUED_MESSAGE_EDIT,
+            ensembyte_rpc::methods::RENEW_QUEUED_MESSAGE_EDIT,
             serde_json::json!({
                 "chatId": self.core.chat_id,
                 "id": lease.row_id,
@@ -1266,7 +1266,7 @@ impl SessionHandle {
             params["text"] = serde_json::Value::String(text);
         }
         match self
-            .queue_rpc(orbit_rpc::methods::FINISH_QUEUED_MESSAGE_EDIT, params)
+            .queue_rpc(ensembyte_rpc::methods::FINISH_QUEUED_MESSAGE_EDIT, params)
             .await
         {
             Ok(value) => match value.get("outcome").and_then(|o| o.as_str()) {
@@ -1298,9 +1298,9 @@ impl SessionHandle {
             self.core.recompute_composer(&client);
         }
         let method = match action {
-            QueueAction::SendNow => orbit_rpc::methods::SEND_QUEUED_MESSAGE_NOW,
-            QueueAction::Steer => orbit_rpc::methods::STEER_QUEUED_MESSAGE_NOW,
-            QueueAction::Remove => orbit_rpc::methods::REMOVE_QUEUED_MESSAGE,
+            QueueAction::SendNow => ensembyte_rpc::methods::SEND_QUEUED_MESSAGE_NOW,
+            QueueAction::Steer => ensembyte_rpc::methods::STEER_QUEUED_MESSAGE_NOW,
+            QueueAction::Remove => ensembyte_rpc::methods::REMOVE_QUEUED_MESSAGE,
         };
         let result = self
             .queue_rpc(

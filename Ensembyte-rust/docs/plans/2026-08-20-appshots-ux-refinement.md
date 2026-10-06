@@ -13,8 +13,8 @@
    checklist. Do not request permissions merely because the feature toggle was
    enabled, and label Accessibility as optional.
 4. Update pure layout tests and permission-facing copy. Validate with
-   `cargo test -p orbit-ui --lib`, `cargo check -p orbit-ui`,
-   `cargo build -p orbit`, and `git diff --check`.
+   `cargo test -p ensembyte-ui --lib`, `cargo check -p ensembyte-ui`,
+   `cargo build -p ensembyte`, and `git diff --check`.
 
 ## Composer visual normalization follow-up
 
@@ -28,5 +28,5 @@
    horizontally scrolling tray. Capture, removal, preview, persistence,
    transport, and permission controls remain unchanged.
 4. Add dimension-parser and landscape/portrait/square sizing tests, run the
-   `orbit-ui` test suite and macOS build checks, then inspect the result in the
+   `ensembyte-ui` test suite and macOS build checks, then inspect the result in the
    signed `Orbit Dev.app`.

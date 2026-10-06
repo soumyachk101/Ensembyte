@@ -1,7 +1,7 @@
-//! The app shell (orbit `__root.tsx`): sidebar column + main panel + optional
+//! The app shell (ensembyte `__root.tsx`): sidebar column + main panel + optional
 //! right "Changes" pane, plus the boot splash and the connection gate.
 //!
-//! Layout is orbit's: collapsible drag-resizable sidebar (224–400px, default
+//! Layout is ensembyte's: collapsible drag-resizable sidebar (224–400px, default
 //! 256) with a 200ms ease-out width transition; main panel with an h-11 header,
 //! content outlet, and a reserved h-6 status strip so later content never
 //! shifts; right pane scaffold (360px floor, default 520), hidden by default.
@@ -23,9 +23,9 @@ use gpui::{
 };
 
 use gpui_tokio::Tokio;
-use orbit_engine::InstanceLock;
-use orbit_proto::{AuthState, WorkspaceScope};
-use orbit_rpc::methods;
+use ensembyte_engine::InstanceLock;
+use ensembyte_proto::{AuthState, WorkspaceScope};
+use ensembyte_rpc::methods;
 
 use crate::changes::{Changes, ChangesEvent, DiscardWorkingTreeRequest};
 use crate::composer::{Composer, ComposerEvent, ComposerInput, ComposerInputEvent};
@@ -84,8 +84,8 @@ use spaces::{AddSpaceFlow, RenameSpaceDialog};
 /// `connected` already includes the engine's degradation grace. A brief
 /// focus-triggered dial needs no sidebar status; queued changes or a sustained
 /// outage still deserve one.
-fn chat_sync_pill_caption(chat: &orbit_proto::ChatConnectivity) -> Option<&'static str> {
-    use orbit_proto::ChatSyncState as S;
+fn chat_sync_pill_caption(chat: &ensembyte_proto::ChatConnectivity) -> Option<&'static str> {
+    use ensembyte_proto::ChatSyncState as S;
     let sustained_or_queued = !chat.connected || chat.pending_pushes > 0;
     match chat.sync_state {
         S::Waiting if sustained_or_queued => Some("Sync queued — changes are saved"),
@@ -271,7 +271,7 @@ fn conversation_width(viewport: f32, sidebar: f32, right: f32) -> f32 {
 /// harness runs in (a worktree chat's worktree). Projectless `~` chats have
 /// none. Deliberately not `source_context.repo_root`: that is canonicalized
 /// (symlinks resolved, `\\?\` verbatim prefix on Windows hosts).
-fn chat_copy_path(chat: &orbit_proto::Chat) -> Option<&str> {
+fn chat_copy_path(chat: &ensembyte_proto::Chat) -> Option<&str> {
     chat.cwd
         .as_deref()
         .map(str::trim)
@@ -321,7 +321,7 @@ pub struct JumpSession(pub usize);
 // ---------------------------------------------------------------------------
 
 /// Where the top-left window-control cluster starts, in px from the window's
-/// left edge (orbit window-controls.tsx: `left: fullscreen ? 12 : 88`). The
+/// left edge (ensembyte window-controls.tsx: `left: fullscreen ? 12 : 88`). The
 /// frameless hiddenInset chrome puts the macOS traffic lights at {14,15};
 /// fullscreen hides them and the cluster reclaims the inset.
 pub fn titlebar_cluster_start(fullscreen: bool) -> f32 {
@@ -370,7 +370,7 @@ pub fn caption_buttons_width(count: usize) -> f32 {
 }
 
 /// Where the cluster's first button starts, from the window's left edge.
-/// `linux_left_captions` is the number of caption buttons orbit draws at the
+/// `linux_left_captions` is the number of caption buttons ensembyte draws at the
 /// top-left on Linux (GNOME `close:…` layouts) — the app cluster follows them
 /// at the shared 2px rhythm.
 pub fn cluster_buttons_start(is_macos: bool, fullscreen: bool, linux_left_captions: usize) -> f32 {
@@ -583,7 +583,7 @@ impl SettingsSection {
         }
     }
 
-    /// Stable name shared by `ui-settings.json` and `ORBIT_OPEN_ROUTE`.
+    /// Stable name shared by `ui-settings.json` and `ENSEMBYTE_OPEN_ROUTE`.
     fn slug(self) -> &'static str {
         match self {
             SettingsSection::Devices => "devices",
@@ -624,7 +624,7 @@ impl SettingsSection {
         matches!(self, Self::Harnesses | Self::Files)
     }
 
-    /// Sidebar + header label (orbit settings-sidebar.tsx SECTIONS / __root.tsx
+    /// Sidebar + header label (ensembyte settings-sidebar.tsx SECTIONS / __root.tsx
     /// `settingsTitle` — the same strings in both places).
     pub fn label(self) -> &'static str {
         match self {
@@ -659,7 +659,7 @@ impl<'de> serde::Deserialize<'de> for SettingsSection {
     }
 }
 
-/// The section a `ORBIT_OPEN_ROUTE` value opens: bare `settings` reopens the
+/// The section a `ENSEMBYTE_OPEN_ROUTE` value opens: bare `settings` reopens the
 /// remembered section, `settings/<slug>` names one (and so becomes the
 /// remembered one). `None` for anything else, including unknown slugs.
 fn settings_open_route(route: &str, remembered: SettingsSection) -> Option<SettingsSection> {
@@ -723,7 +723,7 @@ fn workspace_file_title(path: &str) -> SharedString {
     path.rsplit('/').next().unwrap_or(path).to_string().into()
 }
 
-/// Per-chat panel open flags (orbit parity: `sessionPanels` — the terminal and
+/// Per-chat panel open flags (ensembyte parity: `sessionPanels` — the terminal and
 /// changes panels open *per session*, in memory only; heights and every other
 /// persisted setting stay global).
 ///
@@ -817,7 +817,7 @@ impl SessionPanels {
     }
 }
 
-/// One route-history entry (orbit parity: the renderer's TanStack memory
+/// One route-history entry (ensembyte parity: the renderer's TanStack memory
 /// history — every route the user visited, browser-style).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NavEntry {
@@ -827,7 +827,7 @@ pub enum NavEntry {
 }
 
 /// Browser-style navigation history for the titlebar back/forward buttons
-/// (orbit window-controls.tsx semantics): every route change pushes an entry;
+/// (ensembyte window-controls.tsx semantics): every route change pushes an entry;
 /// Back/Forward walk the stack without changing it; pushing while behind the
 /// tip truncates the entries ahead (a new branch, exactly like a browser).
 #[derive(Debug)]
@@ -861,7 +861,7 @@ impl NavHistory {
     }
 
     /// Swap the current entry in place without growing the stack — the native
-    /// equivalent of a `replace: true` navigation (orbit's boot redirect from
+    /// equivalent of a `replace: true` navigation (ensembyte's boot redirect from
     /// `/` into the last-used chat leaves no dead Back target behind).
     pub fn replace(&mut self, entry: NavEntry) {
         self.entries[self.index] = entry;
@@ -872,7 +872,7 @@ impl NavHistory {
     }
 
     /// Memory history keeps every entry, so "behind the last entry" is exactly
-    /// "can go forward" (orbit window-controls.tsx).
+    /// "can go forward" (ensembyte window-controls.tsx).
     pub fn can_forward(&self) -> bool {
         self.index + 1 < self.entries.len()
     }
@@ -1684,7 +1684,7 @@ fn account_menu_action(scope: Option<WorkspaceScope>, flow: SyncFlow) -> Option<
 fn sidebar_account_identity(
     scope: Option<WorkspaceScope>,
     flow: SyncFlow,
-    user: Option<&orbit_proto::UserProfile>,
+    user: Option<&ensembyte_proto::UserProfile>,
 ) -> (SharedString, SharedString) {
     match scope {
         Some(WorkspaceScope::Local) => {
@@ -2050,8 +2050,8 @@ pub struct Shell {
     /// Last observed `window.is_window_active()` — rising edge fires a
     /// ProbeSync so a broadcast-deaf room heals as the user looks at the app.
     was_window_active: bool,
-    /// Dev/testing knobs (`ORBIT_OPEN_DIALOG`, `ORBIT_FORCE_GATE`,
-    /// `ORBIT_DEMO_UPLOAD`) — see [`Shell::new`].
+    /// Dev/testing knobs (`ENSEMBYTE_OPEN_DIALOG`, `ENSEMBYTE_FORCE_GATE`,
+    /// `ENSEMBYTE_DEMO_UPLOAD`) — see [`Shell::new`].
     debug_dialog: Option<String>,
     debug_gate: Option<GatePhase>,
     debug_upload: Option<String>,
@@ -2094,7 +2094,7 @@ pub struct Shell {
     /// Armed by mouse-down on a titlebar strip; the next mouse-move hands the
     /// drag to the compositor (zed's platform-titlebar pattern).
     titlebar_should_move: bool,
-    /// The caption buttons orbit itself draws on Linux under client-side
+    /// The caption buttons ensembyte itself draws on Linux under client-side
     /// decorations, per side, already filtered to what the compositor
     /// supports — `None` off Linux or under server decorations (where the WM
     /// draws real buttons). Re-resolved every frame at the top of `render`.
@@ -2223,8 +2223,8 @@ impl Shell {
                             // same per-second refresh while degraded.
                             || matches!(
                                 s.connectivity.state,
-                                orbit_proto::ConnectivityState::Offline
-                                    | orbit_proto::ConnectivityState::Reconnecting
+                                ensembyte_proto::ConnectivityState::Offline
+                                    | ensembyte_proto::ConnectivityState::Reconnecting
                             )
                     };
                     // Relative sidebar times still advance when unchanged
@@ -2247,12 +2247,12 @@ impl Shell {
         crate::appshots::set_capture_sound_enabled(settings.appshot_sound_enabled);
         // Bind the customizable shortcuts from the persisted keymap.
         apply_keymap(cx, &settings.keymap, settings.composer_send_behavior);
-        // Dev/testing knob: `ORBIT_OPEN_ROUTE=settings[/<section>]` boots
+        // Dev/testing knob: `ENSEMBYTE_OPEN_ROUTE=settings[/<section>]` boots
         // straight into a settings section — these pages have no deep link and
         // synthetic input can't reach them on headless compositors. Bare
         // `settings` reopens the remembered section; a named one is
         // remembered like any other link to a section.
-        let open_route = std::env::var("ORBIT_OPEN_ROUTE").ok();
+        let open_route = std::env::var("ENSEMBYTE_OPEN_ROUTE").ok();
         let route = match open_route.as_deref() {
             Some(route) if route == "settings" || route.starts_with("settings/") => {
                 match settings_open_route(route, settings.settings_section) {
@@ -2275,21 +2275,21 @@ impl Shell {
             }
             _ => Route::Chat,
         };
-        // More capture knobs of the same kind: `ORBIT_OPEN_DIALOG=rename|delete`
+        // More capture knobs of the same kind: `ENSEMBYTE_OPEN_DIALOG=rename|delete`
         // opens that dialog for the first chat once chats land; `=model` pops
         // the combined harness/model menu once the shell is Ready;
-        // `ORBIT_FORCE_GATE=signin|org|failed` renders that gate regardless of
+        // `ENSEMBYTE_FORCE_GATE=signin|org|failed` renders that gate regardless of
         // real auth state (display-only — for styling passes).
-        let debug_dialog = std::env::var("ORBIT_OPEN_DIALOG").ok();
-        // `ORBIT_DEMO_UPLOAD=<pct>:<image path>` fabricates an in-flight image
+        let debug_dialog = std::env::var("ENSEMBYTE_OPEN_DIALOG").ok();
+        // `ENSEMBYTE_DEMO_UPLOAD=<pct>:<image path>` fabricates an in-flight image
         // send on the selected chat (echo bubble + frozen thumbnail progress
         // ring) — display-only; a real upload can't be paused for a capture.
-        let debug_upload = std::env::var("ORBIT_DEMO_UPLOAD").ok();
-        let debug_gate = match std::env::var("ORBIT_FORCE_GATE").ok().as_deref() {
+        let debug_upload = std::env::var("ENSEMBYTE_DEMO_UPLOAD").ok();
+        let debug_gate = match std::env::var("ENSEMBYTE_FORCE_GATE").ok().as_deref() {
             Some("signin") => Some(GatePhase::SignIn),
             Some("org") => Some(GatePhase::OrgGate),
             Some("failed") => Some(GatePhase::Failed(
-                "Could not reach the orbit engine on port 27901".into(),
+                "Could not reach the ensembyte engine on port 27901".into(),
             )),
             _ => None,
         };
@@ -2602,7 +2602,7 @@ impl Shell {
                 _ => {}
             }
         }
-        // Capture knob: `ORBIT_DEMO_UPLOAD=<pct>:<image path>` — once a chat
+        // Capture knob: `ENSEMBYTE_DEMO_UPLOAD=<pct>:<image path>` — once a chat
         // is selected, push a fake sending echo carrying that image as a
         // pending attachment and freeze upload progress at <pct>, so the
         // thumbnail progress ring can be styled/screenshotted (a real upload
@@ -2637,10 +2637,10 @@ impl Shell {
                     "Here is the screenshot of the bug.",
                     std::slice::from_ref(&pending_path),
                 );
-                let echo = orbit_doc::SessionMessageEntry {
+                let echo = ensembyte_doc::SessionMessageEntry {
                     id: "demo-upload-echo".into(),
-                    role: orbit_doc::MessageRole::User,
-                    parts: vec![orbit_doc::MessagePart::Text {
+                    role: ensembyte_doc::MessageRole::User,
+                    parts: vec![ensembyte_doc::MessagePart::Text {
                         id: "t0".into(),
                         text,
                     }],
@@ -2745,7 +2745,7 @@ impl Shell {
                     && !(self.settings.notifications_background_only && app_focused)
                 {
                     let body = match connectivity {
-                        orbit_proto::ConnectivityState::Offline => "Your device is offline",
+                        ensembyte_proto::ConnectivityState::Offline => "Your device is offline",
                         _ => "Ensembyte is trying to reconnect",
                     };
                     crate::notify::post("Connection unavailable", body, None);
@@ -2763,8 +2763,8 @@ impl Shell {
             for status in &state.harness_updates {
                 if matches!(
                     status.phase,
-                    orbit_proto::HarnessUpdatePhase::Current
-                        | orbit_proto::HarnessUpdatePhase::Updated
+                    ensembyte_proto::HarnessUpdatePhase::Current
+                        | ensembyte_proto::HarnessUpdatePhase::Updated
                 ) {
                     self.harness_update_seen.remove(
                         &harness_updates::versionless_notification_key(device, status.harness),
@@ -2895,7 +2895,7 @@ impl Shell {
             self.active_chat = selected;
             // Route history: a chat switch is a navigation. The very first
             // selection off the untouched boot canvas REPLACES that entry —
-            // orbit's `/` route redirected into the last-used chat, leaving no
+            // ensembyte's `/` route redirected into the last-used chat, leaving no
             // dead Back target. Walking history lands here too, but the
             // destination already equals `current()`, so the push dedups.
             if matches!(self.route, Route::Chat) {
@@ -3502,7 +3502,7 @@ impl Shell {
         }
         let mut resolved = activation.clone();
         if resolved.action == LinkAction::Primary {
-            resolved.action = if crate::settings::current(cx).open_web_links_in_orbit {
+            resolved.action = if crate::settings::current(cx).open_web_links_in_ensembyte {
                 LinkAction::Internal
             } else {
                 LinkAction::External
@@ -3859,7 +3859,7 @@ impl Shell {
     /// (user request).
     fn add_commit_diff_surface(
         &mut self,
-        commit: orbit_proto::GitHistoryCommit,
+        commit: ensembyte_proto::GitHistoryCommit,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -4043,17 +4043,17 @@ impl Shell {
                 .background_executor()
                 .spawn(async move {
                     let value = reply.ok()?;
-                    let entries: Vec<orbit_doc::SessionMessageEntry> =
+                    let entries: Vec<ensembyte_doc::SessionMessageEntry> =
                         serde_json::from_str(value.get("text")?.as_str()?).ok()?;
-                    let update = orbit_doc::TranscriptUpdate {
-                        replay_baseline: Some(orbit_doc::TranscriptBaseline::capture(&entries)),
-                        frame: orbit_doc::TranscriptFrame::Reset { reset: entries },
+                    let update = ensembyte_doc::TranscriptUpdate {
+                        replay_baseline: Some(ensembyte_doc::TranscriptBaseline::capture(&entries)),
+                        frame: ensembyte_doc::TranscriptFrame::Reset { reset: entries },
                         context_usage: None,
                     };
                     let prepared = crate::transcript::TranscriptPreparation::default()
                         .prepare(&update)
                         .ok()?;
-                    let orbit_doc::TranscriptFrame::Reset { reset } = update.frame else {
+                    let ensembyte_doc::TranscriptFrame::Reset { reset } = update.frame else {
                         unreachable!()
                     };
                     Some((reset, prepared))
@@ -4357,7 +4357,7 @@ impl Shell {
 
     /// Cmd/Ctrl+J and the header button (feature-inventory §1.10). Height
     /// animates 200 ms; closing detaches (PTYs stay alive), opening restores.
-    /// The flag is per chat (orbit `sessionPanels`).
+    /// The flag is per chat (ensembyte `sessionPanels`).
     fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let from = self.terminal_geometry.get().height;
         let key = self.panel_key(cx);
@@ -4370,7 +4370,7 @@ impl Shell {
                 .update(cx, |composer, _| composer.focus_pending = false);
             panel.update(cx, |panel, cx| panel.request_focus(cx));
             // Opening lands keyboard focus IN the shell — typing goes straight
-            // to the prompt, no click needed (orbit terminal-panel.tsx: the
+            // to the prompt, no click needed (ensembyte terminal-panel.tsx: the
             // visible+active effect calls `terminal.focus()` on every open).
             // The handle is focusable before the panel's first paint; once the
             // terminal body mounts with `track_focus` it receives the keys.
@@ -4379,7 +4379,7 @@ impl Shell {
             // Hiding the panel removes the (likely focused) terminal view;
             // with nothing focused, window key bindings stop dispatching, so
             // hand focus to the composer. (Cmd+J is a pure toggle — a second
-            // press closes even while the terminal is focused, as in orbit's
+            // press closes even while the terminal is focused, as in ensembyte's
             // `useHotkey(toggleShortcut, ... setOpenScoped(!open))`.)
             window.focus(&self.composer.focus_handle(cx), cx);
         }
@@ -4581,7 +4581,7 @@ impl Shell {
         }
     }
 
-    fn copy_orbit_conversation_link(&mut self, chat_id: &str, cx: &mut Context<Self>) {
+    fn copy_ensembyte_conversation_link(&mut self, chat_id: &str, cx: &mut Context<Self>) {
         let link = {
             let state = self.state.read(cx);
             crate::links::workspace_locator(
@@ -4589,7 +4589,7 @@ impl Shell {
                 state.auth.as_ref(),
                 state.local_device_id.as_deref(),
             )
-            .map(|workspace| crate::links::orbit_conversation_link(chat_id, &workspace))
+            .map(|workspace| crate::links::ensembyte_conversation_link(chat_id, &workspace))
         };
         if let Some(link) = link {
             cx.write_to_clipboard(ClipboardItem::new_string(link));
@@ -5355,7 +5355,7 @@ impl Shell {
             Err("Pins are still syncing")
         } else {
             let current = self.active_sidebar_pins(cx);
-            orbit_proto::validate_sidebar_pin_update(&current, pins)
+            ensembyte_proto::validate_sidebar_pin_update(&current, pins)
         };
         if let Err(message) = result {
             self.sidebar_notice = Some(message.into());
@@ -5368,7 +5368,7 @@ impl Shell {
     fn apply_sidebar_pin_change(
         &mut self,
         profile_key: String,
-        change: orbit_proto::SidebarPinChange,
+        change: ensembyte_proto::SidebarPinChange,
         cx: &mut Context<Self>,
     ) -> bool {
         let mut pinned_session_ids = self.raw_sidebar_pins(cx);
@@ -5424,13 +5424,13 @@ impl Shell {
             return;
         }
         let change = if pinned {
-            orbit_proto::SidebarPinChange::Pin {
+            ensembyte_proto::SidebarPinChange::Pin {
                 session_id: chat_id.clone(),
                 after: pins.last().cloned(),
                 before: None,
             }
         } else {
-            orbit_proto::SidebarPinChange::Unpin {
+            ensembyte_proto::SidebarPinChange::Unpin {
                 session_id: chat_id.clone(),
             }
         };
@@ -5674,7 +5674,7 @@ impl Shell {
                         shell.org = None;
                         // An explicit sign-out returns to the workspace. The
                         // boot-time fallback from a signed-out synced runtime
-                        // keeps an open Settings page (and `ORBIT_OPEN_ROUTE`).
+                        // keeps an open Settings page (and `ENSEMBYTE_OPEN_ROUTE`).
                         if sign_out {
                             shell.route = Route::Chat;
                         }
@@ -6195,7 +6195,7 @@ impl Shell {
     /// Evaluate a width tween at the frame time (see [`WidthTween`]).
     /// Mid-flight: eased 200ms lerp, and `motion_active` is flagged so render
     /// schedules the next animation frame. Finished, stale, absent, or under
-    /// reduced motion: exactly `target`. Honors `ORBIT_MOTION_SCALE`.
+    /// reduced motion: exactly `target`. Honors `ENSEMBYTE_MOTION_SCALE`.
     fn eval_tween(&self, tween: Option<WidthTween>, target: f32) -> f32 {
         let Some(WidthTween { from, to, started }) = tween else {
             return target;
@@ -6318,11 +6318,11 @@ impl Shell {
     }
 
     /// The header's content row with the animated left inset — the native port
-    /// of orbit __root.tsx `transition-[padding-left] duration-200 ease-out` +
+    /// of ensembyte __root.tsx `transition-[padding-left] duration-200 ease-out` +
     /// `style={{ paddingLeft: headerInset }}`: on sidebar toggles (and macOS
     /// fullscreen flips) the SAME element's padding tweens, so the title
     /// glides to its new x-position. Route changes SNAP: the tween is killed
-    /// by every route transition (orbit remounts the keyed header variants —
+    /// by every route transition (ensembyte remounts the keyed header variants —
     /// instant swap, zero horizontal motion).
     /// Where unified-titlebar content (tabs / the settings label) starts: past
     /// the traffic lights + control cluster, riding the fullscreen inset tween.
@@ -6342,7 +6342,7 @@ impl Shell {
     }
 
     /// Make a titlebar strip drag the window — zed's platform-titlebar
-    /// pattern (orbit's `.drag` region): mark it a [`WindowControlArea::Drag`]
+    /// pattern (ensembyte's `.drag` region): mark it a [`WindowControlArea::Drag`]
     /// (macOS app-owned titlebar), hand the drag to the compositor once the
     /// pointer moves with the button down, and double-click zooms.
     fn titlebar_drag_region(
@@ -6394,7 +6394,7 @@ impl Shell {
     }
 
     /// The ONE top-left window-control cluster (sidebar toggle + back/forward —
-    /// orbit window-controls.tsx): rendered once, in a paint-only overlay layer
+    /// ensembyte window-controls.tsx): rendered once, in a paint-only overlay layer
     /// pinned at the window's top-left, ABOVE the sidebar and headers. The
     /// sidebar width animates *beneath* it, so the buttons keep their element
     /// identity and never move or remount on collapse/expand; only the
@@ -6581,7 +6581,7 @@ impl Shell {
         )
     }
 
-    /// Which caption buttons orbit itself must draw on Linux: under
+    /// Which caption buttons ensembyte itself must draw on Linux: under
     /// client-side decorations (the Wayland default) nobody else will —
     /// without these the window has NO minimize/maximize/close at all.
     /// Server-side decorations (X11 WMs, KDE with SSD) already draw real
@@ -6642,7 +6642,7 @@ impl Shell {
     }
 
     /// Right padding titlebar content needs to clear the platform's caption
-    /// controls (native Windows cluster / orbit-drawn Linux buttons).
+    /// controls (native Windows cluster / ensembyte-drawn Linux buttons).
     pub(super) fn titlebar_right_pad(&self, base: f32) -> f32 {
         titlebar_right_padding(
             cfg!(target_os = "windows"),
@@ -7165,9 +7165,9 @@ impl Shell {
         time_ago: SharedString,
         space_name: SharedString,
         branch: Option<SharedString>,
-        change_request: Option<orbit_proto::ChangeRequestSummary>,
-        harness: Option<orbit_proto::HarnessId>,
-        status: orbit_proto::ChatIndicator,
+        change_request: Option<ensembyte_proto::ChangeRequestSummary>,
+        harness: Option<ensembyte_proto::HarnessId>,
+        status: ensembyte_proto::ChatIndicator,
         selected: bool,
         archived: bool,
         preview: bool,
@@ -7242,16 +7242,16 @@ impl Shell {
             Some("Queued")
         } else {
             match status {
-                orbit_proto::ChatIndicator::Working => Some("Working"),
-                orbit_proto::ChatIndicator::AwaitingInput => Some("Input"),
-                orbit_proto::ChatIndicator::Errored => Some("Failed"),
-                orbit_proto::ChatIndicator::Completed => Some("Done"),
-                orbit_proto::ChatIndicator::Idle => None,
+                ensembyte_proto::ChatIndicator::Working => Some("Working"),
+                ensembyte_proto::ChatIndicator::AwaitingInput => Some("Input"),
+                ensembyte_proto::ChatIndicator::Errored => Some("Failed"),
+                ensembyte_proto::ChatIndicator::Completed => Some("Done"),
+                ensembyte_proto::ChatIndicator::Idle => None,
             }
         };
         let shows_metadata = branch.is_some() || change_request.is_some();
         let queued = queued && !undelivered;
-        let working = status == orbit_proto::ChatIndicator::Working && !queued && !undelivered;
+        let working = status == ensembyte_proto::ChatIndicator::Working && !queued && !undelivered;
         let compact_status = compact.then(|| {
             let glyph = if working {
                 loaders::mini_glyph_spinner(
@@ -7262,7 +7262,7 @@ impl Shell {
                     cx,
                 )
                 .into_any_element()
-            } else if status == orbit_proto::ChatIndicator::Completed && !queued && !undelivered {
+            } else if status == ensembyte_proto::ChatIndicator::Completed && !queued && !undelivered {
                 icon(icons::CHECK)
                     .size(px(11.0))
                     .text_color(status_color)
@@ -7372,7 +7372,7 @@ impl Shell {
                     // Glyph slot: Working wears the preset's animated pixel
                     // glyph beside its label, Done wears the check, and the
                     // remaining statuses use a compact dot.
-                    let glyph: AnyElement = if status == orbit_proto::ChatIndicator::Completed {
+                    let glyph: AnyElement = if status == ensembyte_proto::ChatIndicator::Completed {
                         icon(icons::CHECK)
                             .size(px(11.0))
                             .flex_none()
@@ -7482,7 +7482,7 @@ impl Shell {
         let rename_input = (search_query_none && !preview)
             .then(|| self.rename_input_for(&id, ChatRenameSurface::Sidebar))
             .flatten();
-        // Hover fades over transition-colors (orbit session-row.tsx) — both
+        // Hover fades over transition-colors (ensembyte session-row.tsx) — both
         // the wash and the title brighten ride the same 150ms blend.
         let fade_key = format!("{row_id}-hover");
         let rest_bg = if selected {
@@ -7934,14 +7934,14 @@ impl Shell {
     /// reconnecting; an amber dot only when the OS says offline. The
     /// transport error belongs in logs, not the sidebar.
     fn render_connection_pill(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        use orbit_proto::ConnectivityState as S;
+        use ensembyte_proto::ConnectivityState as S;
         let conn = self.state.read(cx).connectivity.clone();
         let selected = self.state.read(cx).selected_chat.as_deref();
         let chat = conn.chats.iter()
             .find(|c| Some(c.chat_id.as_str()) == selected);
         let chat_state = chat.map(|c| c.sync_state);
         let (label, glyph): (SharedString, AnyElement) = match conn.state {
-            _ if chat_state == Some(orbit_proto::ChatSyncState::StorageError) => (
+            _ if chat_state == Some(ensembyte_proto::ChatSyncState::StorageError) => (
                 "Changes could not be saved".into(),
                 div().size(px(5.0)).rounded_full().bg(theme.warning).into_any_element(),
             ),
@@ -8509,7 +8509,7 @@ impl Shell {
     /// installs (macOS bundles, Windows installs, Linux managed installs) show
     /// the background download and then "restart to apply"; installs that
     /// can't replace themselves explain why; advisory installs point at
-    /// `orbit update` or the GitHub releases page and dismiss per version.
+    /// `ensembyte update` or the GitHub releases page and dismiss per version.
     fn render_update_strip(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let update = crate::app_update::AppUpdate::global(cx)?;
         let (label, action) = update.read(cx).strip()?;
@@ -8576,7 +8576,7 @@ impl Shell {
             StripAction::Explain => update.update(cx, |update, cx| update.show_result(cx)),
             StripAction::Advise { open_releases } => {
                 if open_releases {
-                    cx.open_url(orbit_update::RELEASES_PAGE);
+                    cx.open_url(ensembyte_update::RELEASES_PAGE);
                 }
                 update.update(cx, |update, cx| update.dismiss_advisory(cx));
             }
@@ -8611,7 +8611,7 @@ impl Shell {
         use crate::app_update::{AppUpdate, Flow, Prompt};
         let update = AppUpdate::global(cx)?;
         let theme = Theme::of(cx).for_popup();
-        let current = orbit_update::current_version();
+        let current = ensembyte_update::current_version();
         let (title, body, buttons): (SharedString, SharedString, Vec<UpdatePromptButton>) = {
             let update = update.read(cx);
             match update.prompt()? {
@@ -8681,7 +8681,7 @@ impl Shell {
                             }
                         } else if matches!(
                             update.install(),
-                            orbit_update::InstallKind::Managed { .. }
+                            ensembyte_update::InstallKind::Managed { .. }
                         ) {
                             (
                                 title,
@@ -8750,7 +8750,7 @@ impl Shell {
                     popover::btn_primary(&theme, "Open download page")
                         .id("update-prompt-downloads")
                         .on_click(cx.listener(|_, _, _, cx| {
-                            cx.open_url(orbit_update::LATEST_RELEASE_PAGE);
+                            cx.open_url(ensembyte_update::LATEST_RELEASE_PAGE);
                             if let Some(update) = crate::app_update::AppUpdate::global(cx) {
                                 update.update(cx, |update, cx| update.dismiss_prompt(cx));
                             }
@@ -8851,7 +8851,7 @@ impl Shell {
                 cx.notify();
             }))
             .child(
-                // Avatar: white circle, initial in near-black (orbit user-menu.tsx).
+                // Avatar: white circle, initial in near-black (ensembyte user-menu.tsx).
                 div()
                     .size(px(SIDEBAR_FOOTER_AVATAR_SIZE))
                     .flex_none()
@@ -9717,7 +9717,7 @@ impl Shell {
                         .and_then(|chat| chat.harness_session_id.as_deref())
                         .is_some_and(|id| !id.trim().is_empty());
                     let has_path = chat.as_ref().and_then(chat_copy_path).is_some();
-                    let orbit_id = chat_id.clone();
+                    let ensembyte_id = chat_id.clone();
                     let harness_id = chat_id.clone();
                     let session_chat_id = chat_id.clone();
                     let path_chat_id = chat_id.clone();
@@ -9754,10 +9754,10 @@ impl Shell {
                         )
                     })
                     .child(
-                        popover::menu_row(&theme, false, format!("chat-copy-orbit-{chat_id}"))
-                            .id("chat-copy-orbit")
+                        popover::menu_row(&theme, false, format!("chat-copy-ensembyte-{chat_id}"))
+                            .id("chat-copy-ensembyte")
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.copy_orbit_conversation_link(&orbit_id, cx)
+                                this.copy_ensembyte_conversation_link(&ensembyte_id, cx)
                             }))
                             .child(
                                 icon(icons::COPY)
@@ -10237,7 +10237,7 @@ impl Shell {
                         .flex_col()
                         .items_center()
                         .child(
-                            icon(icons::ORBIT_LOGO)
+                            icon(icons::ENSEMBYTE_LOGO)
                                 .w(px(41.9))
                                 .h(px(48.0))
                                 .text_color(theme.text.opacity(0.09)),
@@ -11015,7 +11015,7 @@ impl Shell {
             .items_center()
             .text_center()
             .child(
-                icon(icons::ORBIT_LOGO)
+                icon(icons::ENSEMBYTE_LOGO)
                     .w(px(31.4))
                     .h(px(36.0))
                     .text_color(theme.text),
@@ -11215,7 +11215,7 @@ impl Shell {
                         .read(cx)
                         .sub_transcript(&tab.doc_id)
                         .last()
-                        .is_some_and(|e| e.status == Some(orbit_doc::MessageStatus::Streaming))
+                        .is_some_and(|e| e.status == Some(ensembyte_doc::MessageStatus::Streaming))
                 }),
                 _ => false,
             };
@@ -11695,7 +11695,7 @@ impl Shell {
     fn render_gate_card(&mut self, phase: &GatePhase, cx: &mut Context<Self>) -> AnyElement {
         let theme = Theme::of(cx).clone();
         let content: AnyElement = match phase {
-            // Backend unreachable: quiet centered copy (orbit Gate `Failed`),
+            // Backend unreachable: quiet centered copy (ensembyte Gate `Failed`),
             // plus a Retry affordance (the native engine doesn't self-redial).
             GatePhase::Failed(error) => div()
                 .flex()
@@ -11724,8 +11724,8 @@ impl Shell {
                         .child(SharedString::from("Retry")),
                 )
                 .into_any_element(),
-            // Login card (orbit App.tsx Gate): centered card on the grid —
-            // logo, "Log in to Orbit", copy, full-width white Log in button.
+            // Login card (ensembyte App.tsx Gate): centered card on the grid —
+            // logo, "Log in to Ensembyte", copy, full-width white Log in button.
             _ => div()
                 .w(px(360.0))
                 .px(px(32.0))
@@ -11740,7 +11740,7 @@ impl Shell {
                 .items_center()
                 .text_center()
                 .child(
-                    icon(icons::ORBIT_LOGO)
+                    icon(icons::ENSEMBYTE_LOGO)
                         .w(px(31.4))
                         .h(px(36.0))
                         .text_color(theme.text),
@@ -11796,7 +11796,7 @@ impl Shell {
                     .flex()
                     .items_center()
                     .justify_center()
-                    // Keyed per phase (orbit App.tsx `<div key={phase}
+                    // Keyed per phase (ensembyte App.tsx `<div key={phase}
                     // className="animate-in">`): every gate swap replays the
                     // 0.5s entrance instead of mutating one animated element.
                     .child(motion::fade_in(
@@ -11901,7 +11901,7 @@ impl Shell {
                     .into_any_element(),
             };
 
-        // orbit App.tsx OrgGate: w-400 card on the grid — logo, headline,
+        // ensembyte App.tsx OrgGate: w-400 card on the grid — logo, headline,
         // explainer (+ signed-in email), name form with a white Create button,
         // then existing memberships and the account escape hatch.
         let blurb: SharedString = match email {
@@ -11926,7 +11926,7 @@ impl Shell {
             .flex()
             .flex_col()
             .child(
-                icon(icons::ORBIT_LOGO)
+                icon(icons::ENSEMBYTE_LOGO)
                     .w(px(24.4))
                     .h(px(28.0))
                     .text_color(theme.text),
@@ -12038,7 +12038,7 @@ impl Shell {
     }
 }
 
-/// The sign-in gate's faint grid backdrop (orbit styles.css `.bg-grid`):
+/// The sign-in gate's faint grid backdrop (ensembyte styles.css `.bg-grid`):
 /// 44px hairlines at white 3.5%, with the radial mask approximated by edge
 /// gradients back into the page background (gpui has no mask-image).
 fn grid_backdrop(theme: &Theme) -> AnyElement {
@@ -12127,7 +12127,7 @@ fn grid_backdrop(theme: &Theme) -> AnyElement {
         .into_any_element()
 }
 
-/// A size-6 icon button for the titlebar strip (orbit window-controls.tsx:
+/// A size-6 icon button for the titlebar strip (ensembyte window-controls.tsx:
 /// `grid size-6 place-items-center rounded-md text-muted-foreground`).
 fn window_control_button(
     id: &'static str,
@@ -12147,7 +12147,7 @@ fn window_control_button(
         .justify_center()
         .rounded(px(6.0))
         .cursor_pointer()
-        // orbit window-controls.tsx: `transition-colors` — the wash fades.
+        // ensembyte window-controls.tsx: `transition-colors` — the wash fades.
         .bg(motion::hover_blend(
             &fade_key,
             theme.glass_hover().opacity(0.0),
@@ -12180,7 +12180,7 @@ const WINDOWS_CAPTION_BUTTON_WIDTH: f32 = 36.0;
 const WINDOWS_CAPTION_WIDTH: f32 = WINDOWS_CAPTION_BUTTON_WIDTH * 3.0;
 
 /// Right padding for titlebar content: past the native Windows caption
-/// cluster, or past orbit's own Linux caption buttons (10px edge inset +
+/// cluster, or past ensembyte's own Linux caption buttons (10px edge inset +
 /// the button row) when the layout puts any on the right.
 fn titlebar_right_padding(is_windows: bool, linux_right_captions: usize, base: f32) -> f32 {
     base + if is_windows {
@@ -12234,7 +12234,7 @@ fn windows_caption_button(
         .child(glyph)
 }
 
-/// A Linux caption button in orbit's own cluster style (24px, rounded-6,
+/// A Linux caption button in ensembyte's own cluster style (24px, rounded-6,
 /// 16px linear icon). gpui's `WindowControlArea` hit-testing is inert on
 /// Linux, so unlike the Windows cluster these carry explicit click handlers
 /// (`minimize_window` / `zoom_window` / `remove_window`), the same calls
@@ -12282,7 +12282,7 @@ fn linux_caption_button(
         )
 }
 
-/// A titlebar history button (orbit window-controls.tsx): enabled it is a
+/// A titlebar history button (ensembyte window-controls.tsx): enabled it is a
 /// normal window-control button; disabled it dims to 35% opacity and ignores
 /// the pointer (`disabled:pointer-events-none disabled:opacity-35`).
 fn nav_history_button(
@@ -12313,7 +12313,7 @@ fn nav_history_button(
     window_control_button(id, icon_path, label, theme, on_click).into_any_element()
 }
 
-/// A size-7 icon button for the main-panel header (orbit __root.tsx:
+/// A size-7 icon button for the main-panel header (ensembyte __root.tsx:
 /// `grid size-7 place-items-center rounded-md text-muted-foreground`).
 fn header_icon_button(
     id: &'static str,
@@ -12333,7 +12333,7 @@ fn header_icon_button(
         .justify_center()
         .rounded(px(6.0))
         .cursor_pointer()
-        // orbit __root.tsx header buttons: `transition-colors`.
+        // ensembyte __root.tsx header buttons: `transition-colors`.
         .bg(motion::hover_blend(
             &fade_key,
             crate::theme::wash(0.0),
@@ -12646,7 +12646,7 @@ impl Render for Shell {
             .on_drag_move(cx.listener(Self::on_files_panel_drag))
             .on_drag_move(cx.listener(Self::on_terminal_drag))
             // The panel shortcuts are chat-scoped chrome: in Settings they are
-            // no-ops (orbit __root.tsx gates the hotkey on `!isSettings`, and
+            // no-ops (ensembyte __root.tsx gates the hotkey on `!isSettings`, and
             // the terminal panel is only mounted on session routes). The
             // sidebar toggle stays live everywhere, as in the original.
             .on_action(cx.listener(|this, _: &ToggleTerminal, window, cx| {
@@ -12785,7 +12785,7 @@ impl Render for Shell {
                             .update(cx, |s, cx| s.mark_chat_seen(&chat_id, cx));
                     }
                 }
-                // Capture knob: `ORBIT_OPEN_DIALOG=model` pops the combined
+                // Capture knob: `ENSEMBYTE_OPEN_DIALOG=model` pops the combined
                 // harness/model menu (needs `window`, so it fires here rather
                 // than in `on_state_changed`).
                 if self.debug_dialog.as_deref() == Some("model") {
@@ -12890,7 +12890,7 @@ impl Render for Shell {
                 );
                 let main = self.render_main(window, main_content_width, transcript_width, cx);
                 // The Changes pane is chat-scoped chrome: the Settings route
-                // never renders it (orbit __root.tsx `!isSettings && activeChat`
+                // never renders it (ensembyte __root.tsx `!isSettings && activeChat`
                 // around the diff column) — the per-session open flags stay
                 // intact for the return trip.
                 let right_open = on_chat && self.right_pane_open(cx);
@@ -12947,7 +12947,7 @@ impl Render for Shell {
                     .overflow_hidden()
                     .child(main)
                     .into_any_element();
-                // The whole app page is one keyed `animate-in` entrance (orbit
+                // The whole app page is one keyed `animate-in` entrance (ensembyte
                 // App.tsx `<div key={phase} className="animate-in h-full">`):
                 // arriving from the splash or any gate fades the page in; the
                 // splash-out crossfades over it on boot.
@@ -13108,8 +13108,8 @@ mod tests {
     pub(super) fn chat_with_path(
         cwd: Option<&str>,
         source: Option<(&str, &str)>,
-    ) -> orbit_proto::Chat {
-        orbit_proto::Chat {
+    ) -> ensembyte_proto::Chat {
+        ensembyte_proto::Chat {
             id: "chat".into(),
             device_id: "remote-device".into(),
             title: None,
@@ -13118,7 +13118,7 @@ mod tests {
             branch: None,
             checkout_id: None,
             source_context: source.map(|(source_cwd, repo_root)| {
-                orbit_proto::ConversationSourceContext {
+                ensembyte_proto::ConversationSourceContext {
                     checkout_id: "checkout".into(),
                     repo_root: repo_root.into(),
                     cwd: source_cwd.into(),
@@ -13186,7 +13186,7 @@ mod tests {
 
     #[test]
     fn sidebar_sync_status_waits_for_grace_or_queued_changes() {
-        use orbit_proto::{ChatConnectivity, ChatSyncState as S};
+        use ensembyte_proto::{ChatConnectivity, ChatSyncState as S};
 
         let mut chat = ChatConnectivity {
             chat_id: "remote".into(),
@@ -13610,7 +13610,7 @@ mod tests {
             edge_token: None,
             org_id: None,
             workos_client_id: Some("client_test".into()),
-            default_harness: orbit_proto::HarnessId::Mock,
+            default_harness: ensembyte_proto::HarnessId::Mock,
         };
         let synced = crate::state::EngineHandle::bootstrap(boot.clone())
             .await
@@ -13689,12 +13689,12 @@ mod tests {
 
     #[test]
     fn sidebar_footer_names_the_account_or_falls_back_to_local() {
-        let named = orbit_proto::UserProfile {
+        let named = ensembyte_proto::UserProfile {
             id: "u".into(),
             email: "wing@example.com".into(),
             name: Some("Wing".into()),
         };
-        let unnamed = orbit_proto::UserProfile {
+        let unnamed = ensembyte_proto::UserProfile {
             name: Some("  ".into()),
             ..named.clone()
         };
@@ -13713,7 +13713,7 @@ mod tests {
     #[test]
     fn local_sign_in_offers_the_in_place_switch() {
         let signed_in = AuthState::SignedIn {
-            user: orbit_proto::UserProfile {
+            user: ensembyte_proto::UserProfile {
                 id: "user-1".into(),
                 email: "user@example.com".into(),
                 name: None,
@@ -13825,7 +13825,7 @@ mod tests {
     #[test]
     fn dismissed_import_failure_stays_reachable_on_a_synced_runtime() {
         let signed_in = AuthState::SignedIn {
-            user: orbit_proto::UserProfile {
+            user: ensembyte_proto::UserProfile {
                 id: "user-1".into(),
                 email: "user@example.com".into(),
                 name: None,
@@ -13868,7 +13868,7 @@ mod tests {
     #[test]
     fn switch_lifecycle_survives_the_runtime_replacement_window() {
         let signed_in = AuthState::SignedIn {
-            user: orbit_proto::UserProfile {
+            user: ensembyte_proto::UserProfile {
                 id: "user-1".into(),
                 email: "user@example.com".into(),
                 name: None,
@@ -13903,7 +13903,7 @@ mod tests {
     #[test]
     fn synced_sign_out_blocks_every_viewport_and_cannot_switch_accounts() {
         let signed_in_as_another_user = AuthState::SignedIn {
-            user: orbit_proto::UserProfile {
+            user: ensembyte_proto::UserProfile {
                 id: "user-2".into(),
                 email: "other@example.com".into(),
                 name: None,
@@ -13941,8 +13941,8 @@ mod tests {
     }
 
     #[test]
-    fn titlebar_cluster_matches_orbit_window_controls() {
-        // orbit window-controls.tsx: `left: fullscreen ? 12 : 88` — the
+    fn titlebar_cluster_matches_ensembyte_window_controls() {
+        // ensembyte window-controls.tsx: `left: fullscreen ? 12 : 88` — the
         // cluster clears the {14,15} traffic lights, and reclaims the inset
         // when fullscreen hides them.
         assert_eq!(titlebar_cluster_start(false), 88.0);
@@ -14021,7 +14021,7 @@ mod tests {
         );
     }
 
-    // ---- per-session panel flags (§1.10/1.11 parity: orbit sessionPanels) ----
+    // ---- per-session panel flags (§1.10/1.11 parity: ensembyte sessionPanels) ----
 
     #[test]
     fn session_panels_default_closed_per_chat() {
@@ -14161,7 +14161,7 @@ mod tests {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -14368,7 +14368,7 @@ mod tests {
     #[test]
     fn nav_push_truncates_the_forward_branch() {
         // a → b → c, back to a, then push d: the b/c branch is gone (browser
-        // semantics — orbit's memory history PUSH truncates entries ahead).
+        // semantics — ensembyte's memory history PUSH truncates entries ahead).
         let mut nav = NavHistory::new(chat("a"));
         nav.push(chat("b"));
         nav.push(chat("c"));
@@ -14444,7 +14444,7 @@ mod exit_regressions {
             edge_token: None,
             org_id: None,
             workos_client_id: None,
-            default_harness: orbit_proto::HarnessId::Mock,
+            default_harness: ensembyte_proto::HarnessId::Mock,
         };
         for (connection, expected) in [
             (ConnectionStatus::Connecting, SplashPhase::Visible),
@@ -14497,7 +14497,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -14569,7 +14569,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -14673,7 +14673,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -14682,13 +14682,13 @@ mod exit_regressions {
             .into_iter()
             .enumerate()
         {
-            let open_links_in_orbit = index % 2 == 0;
-            let terminal_family = if open_links_in_orbit {
+            let open_links_in_ensembyte = index % 2 == 0;
+            let terminal_family = if open_links_in_ensembyte {
                 crate::typography::UiFontFamily::System
             } else {
                 crate::typography::UiFontFamily::Geist
             };
-            let code_family = if open_links_in_orbit {
+            let code_family = if open_links_in_ensembyte {
                 crate::typography::UiFontFamily::Geist
             } else {
                 crate::typography::UiFontFamily::System
@@ -14715,16 +14715,16 @@ mod exit_regressions {
                         settings.wallpaper_source = Some(dir.path().join("wallpapers/current.png"));
                         settings.wallpaper_history = vec![dir.path().join("wallpapers/current.png")];
                         settings.window_geometry = geometry;
-                        settings.open_web_links_in_orbit = open_links_in_orbit;
+                        settings.open_web_links_in_ensembyte = open_links_in_ensembyte;
                         settings.terminal_font_family = terminal_family.clone();
                         settings.terminal_font_size = terminal_size;
                         settings.code_font_family = code_family.clone();
                         settings.code_font_size = code_size;
                         settings.transcript_width = transcript_width;
                         settings.skill_completion_by_harness.insert(
-                            orbit_proto::HarnessId::ClaudeCode,
+                            ensembyte_proto::HarnessId::ClaudeCode,
                             settings::SkillCompletionSettings {
-                                dollar: open_links_in_orbit,
+                                dollar: open_links_in_ensembyte,
                                 separate_from_slash: true,
                             },
                         );
@@ -14743,7 +14743,7 @@ mod exit_regressions {
                         );
                         assert_eq!(current.window_geometry, geometry);
                         assert_eq!(current.new_thread_background_effect, effect);
-                        assert_eq!(current.open_web_links_in_orbit, open_links_in_orbit);
+                        assert_eq!(current.open_web_links_in_ensembyte, open_links_in_ensembyte);
                         assert_eq!(current.terminal_font_family, terminal_family);
                         assert_eq!(current.terminal_font_size, terminal_size);
                         assert_eq!(current.code_font_family, code_family);
@@ -14751,13 +14751,13 @@ mod exit_regressions {
                         assert_eq!(current.transcript_width, transcript_width);
                         assert_eq!(
                             current
-                                .skill_completion(orbit_proto::HarnessId::ClaudeCode)
+                                .skill_completion(ensembyte_proto::HarnessId::ClaudeCode)
                                 .dollar,
-                            open_links_in_orbit
+                            open_links_in_ensembyte
                         );
                         assert!(
                             current
-                                .skill_completion(orbit_proto::HarnessId::ClaudeCode)
+                                .skill_completion(ensembyte_proto::HarnessId::ClaudeCode)
                                 .separate_from_slash
                         );
                     }
@@ -14771,7 +14771,7 @@ mod exit_regressions {
                         Some(dir.path().join("wallpapers/current.png"))
                     );
                     assert_eq!(loaded.new_thread_background_effect, effect);
-                    assert_eq!(loaded.open_web_links_in_orbit, open_links_in_orbit);
+                    assert_eq!(loaded.open_web_links_in_ensembyte, open_links_in_ensembyte);
                     assert_eq!(loaded.terminal_font_family, terminal_family);
                     assert_eq!(loaded.terminal_font_size, terminal_size);
                     assert_eq!(loaded.code_font_family, code_family);
@@ -14812,7 +14812,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -14854,7 +14854,7 @@ mod exit_regressions {
     }
 
     #[gpui::test]
-    fn workspace_slash_commands_open_existing_orbit_surfaces(cx: &mut TestAppContext) {
+    fn workspace_slash_commands_open_existing_ensembyte_surfaces(cx: &mut TestAppContext) {
         use crate::composer::WorkspaceCommand;
         let dir = tempfile::tempdir().unwrap();
         cx.update(|cx| {
@@ -14881,7 +14881,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -14955,7 +14955,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15005,7 +15005,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15083,7 +15083,7 @@ mod exit_regressions {
                         edge_token: None,
                         org_id: None,
                         workos_client_id: None,
-                        default_harness: orbit_proto::HarnessId::Mock,
+                        default_harness: ensembyte_proto::HarnessId::Mock,
                     },
                     cx,
                 )
@@ -15135,7 +15135,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15220,7 +15220,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15301,7 +15301,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15309,7 +15309,7 @@ mod exit_regressions {
         window
             .update(cx, |shell, _, cx| {
                 shell.state.update(cx, |state, _| {
-                    state.apply_spaces(vec![orbit_proto::Space {
+                    state.apply_spaces(vec![ensembyte_proto::Space {
                         id: "repo".into(),
                         device_id: "local".into(),
                         path: "/repo".into(),
@@ -15372,12 +15372,12 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
         });
-        let space = |id: &str, device: &str| orbit_proto::Space {
+        let space = |id: &str, device: &str| ensembyte_proto::Space {
             id: id.into(),
             device_id: device.into(),
             path: format!("/{id}"),
@@ -15391,7 +15391,7 @@ mod exit_regressions {
             .update(cx, |shell, _, cx| {
                 shell.state.update(cx, |state, cx| {
                     state.apply_spaces(vec![space("mine", "local"), space("other", "remote")]);
-                    state.apply_chats(vec![orbit_proto::Chat {
+                    state.apply_chats(vec![ensembyte_proto::Chat {
                         id: "elsewhere".into(),
                         device_id: "remote".into(),
                         title: None,
@@ -15446,7 +15446,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15483,7 +15483,7 @@ mod exit_regressions {
                 shell.activate_session_link(&activation, window, cx);
                 assert_eq!(shell.browsers.len(), 2);
                 settings::update(settings::SavePolicy::Immediate, cx, |settings| {
-                    settings.open_web_links_in_orbit = false;
+                    settings.open_web_links_in_ensembyte = false;
                 });
                 assert_eq!(
                     shell.activate_session_link(&activation, window, cx),
@@ -15596,7 +15596,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15665,7 +15665,7 @@ mod exit_regressions {
                 // different file under the linking chat's checkout.
                 let project = dir.path().join("other-project");
                 shell.state.update(cx, |state, _| {
-                    state.apply_spaces(vec![orbit_proto::Space {
+                    state.apply_spaces(vec![ensembyte_proto::Space {
                         id: "other".into(),
                         device_id: "local".into(),
                         path: project.to_string_lossy().into_owned(),
@@ -15714,7 +15714,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15810,7 +15810,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15888,7 +15888,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -15986,7 +15986,7 @@ mod exit_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -16164,7 +16164,7 @@ mod right_tab_mouse_regressions {
                         edge_token: None,
                         org_id: None,
                         workos_client_id: None,
-                        default_harness: orbit_proto::HarnessId::Mock,
+                        default_harness: ensembyte_proto::HarnessId::Mock,
                     },
                     cx,
                 );
@@ -16218,8 +16218,8 @@ mod right_tab_mouse_regressions {
         });
         // Rechecks and repeated versionless availability remain deduplicated.
         for phase in [
-            orbit_proto::HarnessUpdatePhase::Checking,
-            orbit_proto::HarnessUpdatePhase::Available,
+            ensembyte_proto::HarnessUpdatePhase::Checking,
+            ensembyte_proto::HarnessUpdatePhase::Available,
         ] {
             shell.update(cx, |shell, cx| {
                 shell
@@ -16233,12 +16233,12 @@ mod right_tab_mouse_regressions {
         // another commit-only update to notify even if the version is unchanged.
         shell.update(cx, |shell, cx| {
             shell.state.update(cx, |state, _| {
-                state.harness_updates[1].phase = orbit_proto::HarnessUpdatePhase::Current
+                state.harness_updates[1].phase = ensembyte_proto::HarnessUpdatePhase::Current
             });
             shell.on_state_changed(&shell.state.clone(), cx);
             assert_eq!(shell.harness_update_seen.len(), 1);
             shell.state.update(cx, |state, _| {
-                state.harness_updates[1].phase = orbit_proto::HarnessUpdatePhase::Available
+                state.harness_updates[1].phase = ensembyte_proto::HarnessUpdatePhase::Available
             });
             shell.on_state_changed(&shell.state.clone(), cx);
         });
@@ -16674,7 +16674,7 @@ mod settings_modal_regressions {
                     edge_token: None,
                     org_id: None,
                     workos_client_id: None,
-                    default_harness: orbit_proto::HarnessId::Mock,
+                    default_harness: ensembyte_proto::HarnessId::Mock,
                 },
                 cx,
             )
@@ -16735,7 +16735,7 @@ mod settings_modal_regressions {
                 edge_token: None,
                 org_id: None,
                 workos_client_id: None,
-                default_harness: orbit_proto::HarnessId::Mock,
+                default_harness: ensembyte_proto::HarnessId::Mock,
             },
             cx,
         )

@@ -919,7 +919,7 @@ mod switch_tests {
 
     #[test]
     fn switch_material_keeps_dark_accent_and_opaque_fills() {
-        use orbit_theme::SurfaceTreatment;
+        use ensembyte_theme::SurfaceTreatment;
 
         let mut dark = Theme::dark();
         dark.surface_treatment = SurfaceTreatment::Opaque;

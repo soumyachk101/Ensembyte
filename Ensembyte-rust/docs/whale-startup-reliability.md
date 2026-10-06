@@ -74,13 +74,13 @@ emits its Vitest shutdown-state diagnostic; the focused checkpoint run is clean.
 ## Reproduction
 
 ```sh
-cargo test -p orbit-sync -p orbit-rpc --features orbit-sync/mock-server
-cargo test -p orbit-engine --lib --test session_publication --test restart_resume --test local_profiles --test codex_subagents
-cargo test -p orbit-update
-cargo test -p orbit-ui --lib -- --test-threads=1
+cargo test -p ensembyte-sync -p ensembyte-rpc --features ensembyte-sync/mock-server
+cargo test -p ensembyte-engine --lib --test session_publication --test restart_resume --test local_profiles --test codex_subagents
+cargo test -p ensembyte-update
+cargo test -p ensembyte-ui --lib -- --test-threads=1
 npm --prefix edge run typecheck
 npm --prefix edge test
-ORBIT_WHALE_SNAPSHOT=/path/to/private-copy.bin cargo test -p orbit-engine --lib real_whale_replay_keeps_146_heartbeats_running_on_two_workers -- --ignored --nocapture
+ENSEMBYTE_WHALE_SNAPSHOT=/path/to/private-copy.bin cargo test -p ensembyte-engine --lib real_whale_replay_keeps_146_heartbeats_running_on_two_workers -- --ignored --nocapture
 ```
 
 ## Rollout

@@ -10,11 +10,11 @@ name = "ensembyte"
 path = "src/main.rs"
 
 [dependencies]
-orbit-engine.workspace = true
-orbit-rpc.workspace = true
-orbit-ui.workspace = true
-orbit-update.workspace = true
-orbit-mcp.workspace = true
+ensembyte-engine.workspace = true
+ensembyte-rpc.workspace = true
+ensembyte-ui.workspace = true
+ensembyte-update.workspace = true
+ensembyte-mcp.workspace = true
 tokio.workspace = true
 clap.workspace = true
 anyhow.workspace = true

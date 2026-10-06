@@ -2,7 +2,7 @@
 
 The **transcript** is laid out _analytically_: every row's height is known
 before it is shown, so scrolling never guesses. Inline `code spans` get chips,
-[links](https://orbit.sh/docs) are tappable, and ~~old ideas~~ are struck.
+[links](https://ensembyte.sh/docs) are tappable, and ~~old ideas~~ are struck.
 
 ## Steps
 
@@ -29,9 +29,9 @@ fn main() {
 
 | Crate | Role | Lines |
 |:------|:----:|------:|
-| orbit-text | measurement + line breaking | 3,100 |
-| orbit-markdown | incremental parse | 1,700 |
-| orbit-mobile | layout + FFI | 1,400 |
+| ensembyte-text | measurement + line breaking | 3,100 |
+| ensembyte-markdown | incremental parse | 1,700 |
+| ensembyte-mobile | layout + FFI | 1,400 |
 
 ---
 

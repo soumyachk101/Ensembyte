@@ -7,8 +7,8 @@
 
 use serde::Serialize;
 use serde_json::{Value, json};
-use orbit_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
-use orbit_proto::ToolCall;
+use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry};
+use ensembyte_proto::ToolCall;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
