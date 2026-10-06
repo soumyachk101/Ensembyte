@@ -28,7 +28,7 @@ jobs:
   codeql-rust:
     name: CodeQL Analysis (Rust)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read
@@ -39,23 +39,23 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: rust
           queries: +security-extended
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:rust"
 
   codeql-swift:
     name: CodeQL Analysis (Swift)
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read
@@ -81,7 +81,7 @@ jobs:
             -scheme Ensembyte
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: swift
           queries: +security-extended
@@ -93,8 +93,14 @@ jobs:
             -project Ensembyte.xcodeproj \
             -scheme Ensembyte \
             -configuration Debug \
+            -destination "generic/platform=macOS" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            SWIFT_ENABLE_COMPILE_CACHE=NO \
             -skipPackagePluginValidation \
             -skipMacroValidation \
+            -disableAutomaticPackageResolution \
             MACOSX_DEPLOYMENT_TARGET=15.0 \
             OTHER_SWIFT_FLAGS="-DCOMPILER_PRE_MACOS26" \
             CODE_SIGNING_ALLOWED=NO \
@@ -102,6 +108,6 @@ jobs:
             build
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:swift"
