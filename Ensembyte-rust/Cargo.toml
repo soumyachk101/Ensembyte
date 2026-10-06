@@ -95,7 +95,7 @@ gpui_tokio = { git = "https://github.com/zeronsh/zui", rev = "667d0aaf9531d2d1b2
 gpui-base = { git = "https://github.com/zeronsh/gpui-component", rev = "2f73e5c2bc03d6768cb5fcc92442c4cf4b963b70" }
 
 # diffs
-similar = "2"
+similar = "3"
 
 # async / net
 tokio = { version = "1", features = ["full"] }
