@@ -2728,7 +2728,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "ensembyte-doc",
  "ensembyte-harness",
@@ -2769,7 +2769,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "deser-hjson",
  "ensembyte-proto",
  "futures",
@@ -2989,7 +2989,7 @@ dependencies = [
  "async-io",
  "async-trait",
  "atspi 0.30.0",
- "base64 0.22.1",
+ "base64 0.23.1",
  "block",
  "block2 0.6.2",
  "chrono",

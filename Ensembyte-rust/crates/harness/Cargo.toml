@@ -23,7 +23,7 @@ required-features = ["native-fixture"]
 
 [dependencies]
 ensembyte-proto.workspace = true
-base64 = "0.22"
+base64 = "0.23"
 reqwest.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["io-util"] }
