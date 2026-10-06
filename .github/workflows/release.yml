@@ -31,7 +31,7 @@ jobs:
         shell: pwsh
         working-directory: Ensembyte-rust
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -92,7 +92,7 @@ jobs:
       run:
         working-directory: Ensembyte-rust
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
