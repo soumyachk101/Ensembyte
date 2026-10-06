@@ -12,7 +12,7 @@ icu_segmenter = { version = "~2.3", default-features = false, features = ["compi
 icu_properties = "2.3"
 unicode-segmentation.workspace = true
 unicode-bidi = "0.3"
-hashbrown = { version = "0.15", default-features = false, features = ["inline-more"] }
+hashbrown = { version = "0.17", default-features = false, features = ["inline-more"] }
 rustc-hash = "2"
 
 [dev-dependencies]
