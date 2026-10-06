@@ -83,13 +83,13 @@ const DEFAULT_EDGE_URL: &str = "https://edge.ensembyte.org";
 
 /// Production WorkOS AuthKit client id — public knowledge (it appears in every
 /// authorize URL), so baking it in is safe. Overridden by `ENSEMBYTE_WORKOS_CLIENT_ID` /
-/// `ENSEMBYTE_WORKOS_CLIENT_ID`; set it to the empty string — or set a dev bearer via
-/// `ENSEMBYTE_EDGE_TOKEN` / `ENSEMBYTE_EDGE_TOKEN` — to force dev-mode auth instead.
+/// `ORBIT_WORKOS_CLIENT_ID`; set it to the empty string — or set a dev bearer via
+/// `ENSEMBYTE_EDGE_TOKEN` / `ORBIT_EDGE_TOKEN` — to force dev-mode auth instead.
 const DEFAULT_WORKOS_CLIENT_ID: &str = "client_01KWD0EAKZKD50YCQJNYSRE4BY";
 
 fn edge_url_from_env() -> String {
     std::env::var("ENSEMBYTE_EDGE_URL")
-        .or_else(|_| std::env::var("ENSEMBYTE_EDGE_URL"))
+        .or_else(|_| std::env::var("ORBIT_EDGE_URL"))
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_EDGE_URL.into())
@@ -100,7 +100,7 @@ fn edge_url_from_env() -> String {
 /// local wrangler); otherwise the baked production client id makes optional
 /// sync available while a bare start remains local-only.
 fn workos_client_id_from_env(edge_token: &Option<String>) -> Option<String> {
-    match std::env::var("ENSEMBYTE_WORKOS_CLIENT_ID").or_else(|_| std::env::var("ENSEMBYTE_WORKOS_CLIENT_ID")) {
+    match std::env::var("ENSEMBYTE_WORKOS_CLIENT_ID").or_else(|_| std::env::var("ORBIT_WORKOS_CLIENT_ID")) {
         Ok(v) if v.trim().is_empty() => None,
         Ok(v) => Some(v),
         Err(_) if edge_token.is_some() => None,
@@ -279,14 +279,14 @@ fn main() -> anyhow::Result<()> {
         },
         None => {
             let edge_token = std::env::var("ENSEMBYTE_EDGE_TOKEN")
-                .or_else(|_| std::env::var("ENSEMBYTE_EDGE_TOKEN"))
+                .or_else(|_| std::env::var("ORBIT_EDGE_TOKEN"))
                 .ok();
-            // Headed: the UI probes ENSEMBYTE_IPC_PORT / ENSEMBYTE_IPC_PORT and connects to a running
+            // Headed: the UI probes ENSEMBYTE_IPC_PORT / ORBIT_IPC_PORT and connects to a running
             // daemon, or embeds the engine in-process (ARCHITECTURE §1).
             ensembyte_ui::run_app(ensembyte_ui::UiConfig {
                 data_dir: paths::data_dir(),
                 ipc_port: std::env::var("ENSEMBYTE_IPC_PORT")
-                    .or_else(|_| std::env::var("ENSEMBYTE_IPC_PORT"))
+                    .or_else(|_| std::env::var("ORBIT_IPC_PORT"))
                     .ok()
                     .and_then(|p| p.parse().ok())
                     .unwrap_or(27654),
@@ -294,7 +294,7 @@ fn main() -> anyhow::Result<()> {
                 workos_client_id: workos_client_id_from_env(&edge_token),
                 edge_token,
                 org_id: std::env::var("ENSEMBYTE_ORG_ID")
-                    .or_else(|_| std::env::var("ENSEMBYTE_ORG_ID"))
+                    .or_else(|_| std::env::var("ORBIT_ORG_ID"))
                     .ok(),
                 default_harness: ensembyte_ui::HarnessId::ClaudeCode,
                 initial_url: cli.open_url,
@@ -335,21 +335,21 @@ fn attach_parent_console() {
 fn engine_config_from_env() -> ensembyte_engine::EngineConfig {
     // Dev-mode bearer (no WorkOS): an explicit token enables sync.
     let edge_token = std::env::var("ENSEMBYTE_EDGE_TOKEN")
-        .or_else(|_| std::env::var("ENSEMBYTE_EDGE_TOKEN"))
+        .or_else(|_| std::env::var("ORBIT_EDGE_TOKEN"))
         .ok();
     ensembyte_engine::EngineConfig {
         data_dir: paths::data_dir(),
         edge_url: edge_url_from_env(),
         ipc_port: std::env::var("ENSEMBYTE_IPC_PORT")
-            .or_else(|_| std::env::var("ENSEMBYTE_IPC_PORT"))
+            .or_else(|_| std::env::var("ORBIT_IPC_PORT"))
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(27654),
         default_harness: harness_from_env(),
-        // WorkOS mode: the signed-in session's org wins; ENSEMBYTE_ORG_ID / ENSEMBYTE_ORG_ID (dev
+        // WorkOS mode: the signed-in session's org wins; ENSEMBYTE_ORG_ID / ORBIT_ORG_ID (dev
         // default "dev-org") scopes the workspace room otherwise.
         org_id: std::env::var("ENSEMBYTE_ORG_ID")
-            .or_else(|_| std::env::var("ENSEMBYTE_ORG_ID"))
+            .or_else(|_| std::env::var("ORBIT_ORG_ID"))
             .ok(),
         // Real auth against production by default; see
         // `workos_client_id_from_env` for the dev-mode escape hatches.
@@ -358,11 +358,11 @@ fn engine_config_from_env() -> ensembyte_engine::EngineConfig {
     }
 }
 
-/// `ENSEMBYTE_HARNESS` / `ENSEMBYTE_HARNESS` (kebab-case id) picks the default harness for chats without a
+/// `ENSEMBYTE_HARNESS` / `ORBIT_HARNESS` (kebab-case id) picks the default harness for chats without a
 /// config row — `mock` powers the e2e smoke; default `claude-code`.
 fn harness_from_env() -> ensembyte_engine::HarnessId {
     match std::env::var("ENSEMBYTE_HARNESS")
-        .or_else(|_| std::env::var("ENSEMBYTE_HARNESS"))
+        .or_else(|_| std::env::var("ORBIT_HARNESS"))
         .as_deref()
         .map(str::trim)
     {

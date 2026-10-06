@@ -624,7 +624,7 @@ impl Engine {
         let mut auth_config = AuthConfig::new(config.edge_url.clone(), config.data_dir.clone());
         auth_config.workos_client_id = config.workos_client_id.clone();
         let workos_api_base = std::env::var("ENSEMBYTE_WORKOS_API_BASE")
-            .or_else(|_| std::env::var("ENSEMBYTE_WORKOS_API_BASE"));
+            .or_else(|_| std::env::var("ORBIT_WORKOS_API_BASE"));
         if let Ok(base) = workos_api_base
             && !base.trim().is_empty()
         {
@@ -632,7 +632,7 @@ impl Engine {
         }
         auth_config.callback_port = Some(
             std::env::var("ENSEMBYTE_CALLBACK_PORT")
-                .or_else(|_| std::env::var("ENSEMBYTE_CALLBACK_PORT"))
+                .or_else(|_| std::env::var("ORBIT_CALLBACK_PORT"))
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(27641),

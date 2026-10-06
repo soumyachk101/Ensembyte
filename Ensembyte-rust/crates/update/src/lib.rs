@@ -330,7 +330,7 @@ pub const LATEST_RELEASE_PAGE: &str =
 
 fn release_base(edge_url: &str) -> anyhow::Result<String> {
     if let Ok(url) = std::env::var("ENSEMBYTE_RELEASES_URL")
-        .or_else(|_| std::env::var("ENSEMBYTE_RELEASES_URL"))
+        .or_else(|_| std::env::var("ORBIT_RELEASES_URL"))
         && !url.trim().is_empty()
     {
         return validate_release_override(&url);
@@ -715,7 +715,7 @@ pub async fn stage_headless(
         "invalid release version {version:?}"
     );
     let dest = app_root.join(version);
-    if dest.join("ensembyte").exists() || dest.join("ensembyte").exists() {
+    if dest.join("ensembyte").exists() || dest.join("orbit").exists() {
         return Ok(dest);
     }
     let file = headless_artifact(version);
@@ -741,8 +741,8 @@ pub async fn stage_headless(
         )?;
         let staged_binary = if unpacked.join("ensembyte").is_file() {
             unpacked.join("ensembyte")
-        } else if unpacked.join("ensembyte").is_file() {
-            unpacked.join("ensembyte")
+        } else if unpacked.join("orbit").is_file() {
+            unpacked.join("orbit")
         } else {
             bail!("tarball {file} did not contain an ensembyte binary");
         };
@@ -750,7 +750,7 @@ pub async fn stage_headless(
         match std::fs::rename(&unpacked, &dest) {
             Ok(()) => {}
             // Lost a race with another stager — the staged copy is equivalent.
-            Err(_) if dest.join("ensembyte").exists() || dest.join("ensembyte").exists() => {}
+            Err(_) if dest.join("ensembyte").exists() || dest.join("orbit").exists() => {}
             Err(err) => {
                 return Err(err).with_context(|| format!("moving {} into place", dest.display()));
             }
@@ -768,7 +768,7 @@ pub fn apply_headless(app_root: &Path, version: &str) -> anyhow::Result<()> {
     #[cfg(unix)]
     {
         let target = app_root.join(version);
-        if !target.join("ensembyte").exists() && !target.join("ensembyte").exists() {
+        if !target.join("ensembyte").exists() && !target.join("orbit").exists() {
             bail!("{} is not a staged install", target.display());
         }
         let tmp = app_root.join(format!(".current-{}", std::process::id()));
@@ -803,7 +803,7 @@ fn in_service_cgroup(cgroups: &str) -> bool {
     cgroups
         .lines()
         .filter_map(|line| line.rsplit(':').next())
-        .any(|path| path.split('/').any(|part| part == "ensembyte.service" || part == "ensembyte.service"))
+        .any(|path| path.split('/').any(|part| part == "ensembyte.service" || part == "orbit.service"))
 }
 
 /// Restart the installed engine service (the same units `ensembyte daemon` and the
@@ -834,7 +834,7 @@ pub fn restart_service() -> anyhow::Result<()> {
         .or_else(|_| {
             run(
                 "systemctl",
-                &["--user", "--no-block", "restart", "ensembyte.service"],
+                &["--user", "--no-block", "restart", "orbit.service"],
             )
         })?;
         Ok(())
@@ -865,15 +865,15 @@ pub async fn stage_mac_app(
     let dir = updates.join(version);
     let staged = if dir.join("Ensembyte.app").exists() {
         dir.join("Ensembyte.app")
-    } else if dir.join("Ensembyte.app").exists() {
-        dir.join("Ensembyte.app")
+    } else if dir.join("Orbit.app").exists() {
+        dir.join("Orbit.app")
     } else {
         dir.join("Ensembyte.app")
     };
     let staged_binary = if staged.join("Contents/MacOS/ensembyte").exists() {
         staged.join("Contents/MacOS/ensembyte")
     } else {
-        staged.join("Contents/MacOS/ensembyte")
+        staged.join("Contents/MacOS/orbit")
     };
     if staged_binary.exists() && verify_staged_binary(&staged_binary, version).await.is_ok() {
         return Ok(staged);
@@ -899,7 +899,7 @@ pub async fn stage_mac_app(
         if unpack.join("Ensembyte.app").exists() {
             unpack.join("Ensembyte.app")
         } else {
-            unpack.join("Ensembyte.app")
+            unpack.join("Orbit.app")
         }
     });
     std::fs::remove_file(&tarball).ok();
@@ -907,7 +907,7 @@ pub async fn stage_mac_app(
     let unpacked_binary = if unpacked.join("Contents/MacOS/ensembyte").exists() {
         unpacked.join("Contents/MacOS/ensembyte")
     } else {
-        unpacked.join("Contents/MacOS/ensembyte")
+        unpacked.join("Contents/MacOS/orbit")
     };
     if !unpacked_binary.exists() {
         let _ = std::fs::remove_dir_all(&dir);
@@ -1040,7 +1040,7 @@ impl UpdateStatus {
 /// `ENSEMBYTE_AUTO_UPDATE=1|true|yes` — headless daemons apply updates themselves.
 fn auto_update_enabled() -> bool {
     std::env::var("ENSEMBYTE_AUTO_UPDATE")
-        .or_else(|_| std::env::var("ENSEMBYTE_AUTO_UPDATE"))
+        .or_else(|_| std::env::var("ORBIT_AUTO_UPDATE"))
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false)
 }
@@ -1049,7 +1049,7 @@ fn auto_update_enabled() -> bool {
 /// background download and no install on quit. Unset means on.
 pub fn desktop_auto_update_enabled() -> bool {
     std::env::var("ENSEMBYTE_AUTO_UPDATE")
-        .or_else(|_| std::env::var("ENSEMBYTE_AUTO_UPDATE"))
+        .or_else(|_| std::env::var("ORBIT_AUTO_UPDATE"))
         .map(|v| !matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no"))
         .unwrap_or(true)
 }
