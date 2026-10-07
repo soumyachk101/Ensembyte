@@ -51,6 +51,7 @@ ensembyte-hero
 .ensembyte/
 .vscode/
 .idea/
+.worktrees/
 node_modules/
 .wrangler/
 .vercel/

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // Hydra's heads are threads: each one has a timeline of its own, sits in its lead's
 // floating panel while it works, and drops under the lead in the sidebar once dismissed,
@@ -226,12 +227,14 @@ extension AppModel {
     func setHydraThreadMode(_ threadMode: Bool, for threadID: UUID) {
         let previous = isThreadMode(for: threadID)
         guard previous != threadMode else { return }
-        updateThread(threadID) {
-            $0.hydraThreadMode = threadMode
-            // In thread mode, always show helpers expanded so heads are visible
-            // in the sidebar. Leave the user's folding preference alone when
-            // switching back to floating mode.
-            if threadMode { $0.foldsHelpers = false }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+            updateThread(threadID) {
+                $0.hydraThreadMode = threadMode
+                // In thread mode, always show helpers expanded so heads are visible
+                // in the sidebar. Leave the user's folding preference alone when
+                // switching back to floating mode.
+                if threadMode { $0.foldsHelpers = false }
+            }
         }
         // When switching to thread mode, dismiss any visible panel so the heads
         // migrate to the sidebar; when switching back, leave the panel state

@@ -220,10 +220,10 @@
       <div class="container hero__inner">
         <a class="hero__kicker reveal" data-reveal-on-load href="#mac">
           <img class="hero__kicker-mark" src="assets/brand/ensembyte-icon-96.png" alt="" height="20">
-          <span>The coding app by Soumya Chakraborty</span>
+          <span id="hero-kicker-text">The coding app by Soumya Chakraborty</span>
           <svg class="hero__kicker-arrow" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4M5 4h7v7"/></svg>
         </a>
-        <h1 class="hero__title reveal" data-reveal-on-load style="--reveal-delay: 60ms"><span class="hero__charged">Supercharged<span class="hero__charged-sheen" aria-hidden="true">Supercharged</span><svg class="hero__charge-entry" viewBox="0 0 180 600" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false"><text x="86" y="24">1</text><text class="dim" x="98" y="52">0</text><text x="82" y="80">0</text><text class="dim" x="94" y="108">1</text><text x="90" y="136">1</text><text class="dim" x="80" y="164">0</text><text x="96" y="192">1</text><text class="dim" x="88" y="220">0</text><text x="84" y="248">0</text><text class="dim" x="98" y="276">1</text><text x="90" y="304">1</text><text class="dim" x="82" y="332">1</text><text x="94" y="360">0</text><text class="dim" x="86" y="388">1</text><text x="98" y="416">0</text><text class="dim" x="90" y="444">0</text><text x="82" y="472">1</text><text class="dim" x="94" y="500">1</text><text x="88" y="528">0</text><text class="dim" x="96" y="556">1</text><text x="90" y="584">1</text></svg></span><br><span class="hero__mac">coding agent for <svg class="hero__apple" aria-hidden="true" focusable="false"><use href="#apple-mark"/></svg>Mac, Windows &amp; Linux</span></h1>
+        <h1 class="hero__title reveal" data-reveal-on-load style="--reveal-delay: 60ms"><span class="hero__charged">Supercharged<span class="hero__charged-sheen" aria-hidden="true">Supercharged</span><svg class="hero__charge-entry" viewBox="0 0 180 600" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false"><text x="86" y="24">1</text><text class="dim" x="98" y="52">0</text><text x="82" y="80">0</text><text class="dim" x="94" y="108">1</text><text x="90" y="136">1</text><text class="dim" x="80" y="164">0</text><text x="96" y="192">1</text><text class="dim" x="88" y="220">0</text><text x="84" y="248">0</text><text class="dim" x="98" y="276">1</text><text x="90" y="304">1</text><text class="dim" x="82" y="332">1</text><text x="94" y="360">0</text><text class="dim" x="86" y="388">1</text><text x="98" y="416">0</text><text class="dim" x="90" y="444">0</text><text x="82" y="472">1</text><text class="dim" x="94" y="500">1</text><text x="88" y="528">0</text><text class="dim" x="96" y="556">1</text><text x="90" y="584">1</text></svg></span><br><span class="hero__mac" id="hero-platform-text">coding agent for <svg class="hero__apple" aria-hidden="true" focusable="false"><use href="#apple-mark"/></svg>Mac, Windows &amp; Linux</span></h1>
         <p class="hero__subtitle reveal" data-reveal-on-load style="--reveal-delay: 120ms">Hydra is on from your first chat: one chat leads a team of heads that work in parallel, each in a copy of your project, and their work lands as one merge. Codex, Claude, Cursor, OpenCode, Grok, Antigravity, Copilot, Command Code, Pi, DeepSeek, Meta and Z.ai, in one Liquid Glass window on your own subscriptions. Free and open source.</p>
         <div class="hero__actions reveal" data-reveal-on-load style="--reveal-delay: 180ms">
           <a class="btn--applepill" id="hero-download-btn" data-download-link href="https://github.com/soumyachk101/Ensembyte/releases/latest/download/Ensembyte.dmg">
@@ -613,16 +613,16 @@
     </section>
 
     <!-- ================================================================ -->
-    <!-- Built for the Mac                                                 -->
+    <!-- Built for your platform                                            -->
     <!-- ================================================================ -->
-    <section id="mac">
+    <section id="mac" data-dynamic-os>
       <div class="container">
         <div class="stack-center">
-          <h2 class="section-heading reveal">Built for the Mac. Only the Mac.</h2>
-          <p class="section-subtitle reveal">Written entirely in Swift and SwiftUI with Liquid Glass, for Apple silicon on macOS 26 and later. No web view, no Electron, one dependency.</p>
+          <h2 class="section-heading reveal" id="platform-heading">Built for the Mac.</h2>
+          <p class="section-subtitle reveal" id="platform-subtitle">Written entirely in Swift and SwiftUI with Liquid Glass, for Apple silicon on macOS 26 and later. No web view, no Electron, one dependency.</p>
         </div>
 
-        <div class="stats reveal">
+        <div class="stats reveal" id="platform-stats">
           <div class="stat"><div class="stat__value">100%</div><div class="stat__label">Swift and SwiftUI</div></div>
           <div class="stat"><div class="stat__value">10</div><div class="stat__label">agent providers</div></div>
           <div class="stat"><div class="stat__value">26</div><div class="stat__label">tinted-glass themes</div></div>
@@ -630,10 +630,10 @@
           <div class="stat"><div class="stat__value">0</div><div class="stat__label">telemetry, ever</div></div>
         </div>
 
-        <div class="leftout stack-center reveal">
-          <h3 class="section-heading">Left out on purpose.</h3>
-          <p class="section-subtitle">Ensembyte is a Mac app for the agents on your Mac. Everything that would turn it into a service, an account or a data pipeline is not on the roadmap, and not in the binary.</p>
-          <ul class="leftout__list" aria-label="Not included">
+        <div class="leftout stack-center reveal" id="platform-leftout">
+          <h3 class="section-heading" id="platform-leftout-heading">Left out on purpose.</h3>
+          <p class="section-subtitle" id="platform-leftout-subtitle">Ensembyte is a Mac app for the agents on your Mac. Everything that would turn it into a service, an account or a data pipeline is not on the roadmap, and not in the binary.</p>
+          <ul class="leftout__list" aria-label="Not included" id="platform-leftout-list">
             <li>No remote access</li>
             <li>No mobile apps</li>
             <li>No cloud sync</li>

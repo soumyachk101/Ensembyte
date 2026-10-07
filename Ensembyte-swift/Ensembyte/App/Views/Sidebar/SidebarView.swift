@@ -464,14 +464,14 @@ struct SidebarView: View {
         let plain = helpers.filter { !$0.isHydraHead }
         let heads = Self.orderedHeads(helpers.filter(\.isHydraHead))
 
-        // Thread mode: heads are full rows, so we skip the card entirely.
+        // Thread mode: heads are full rows grouped under the parent, each with its own
+        // animated working indicator and proper visual hierarchy.
         if model.isThreadMode(for: thread.id), !heads.isEmpty {
-            // Show plain helpers first, then each head as its own row.
-            let plainItems = plain.map { helper in
-                SidebarItem(id: helper.id.uuidString, kind: .helper(helper, isLast: false))
+            let plainItems = plain.enumerated().map { idx, helper in
+                SidebarItem(id: helper.id.uuidString, kind: .helper(helper, isLast: idx == plain.count - 1 && heads.isEmpty))
             }
             let headItems = heads.enumerated().map { idx, head in
-                SidebarItem(id: head.id.uuidString, kind: .helper(head, isLast: idx == heads.count - 1 && plain.isEmpty))
+                SidebarItem(id: head.id.uuidString, kind: .helper(head, isLast: idx == heads.count - 1))
             }
             return plainItems + headItems
         }
@@ -859,7 +859,7 @@ struct SidebarView: View {
                     // Thread mode: each head is its own row.
                     if thread?.hydraThreadMode == true, !heads.isEmpty {
                         for head in heads {
-                            height += (rowHeights.values[head.id.uuidString] ?? ThreadRowMetrics.helperHeight) + 1
+                            height += (rowHeights.values[head.id.uuidString] ?? ThreadRowMetrics.headRowHeight) + 1
                         }
                     } else {
                         let headCount = model.settings.hydraAutoHidesIdleHeads && !hasRunningHead(heads)
@@ -1333,6 +1333,9 @@ private enum ThreadRowMetrics {
         let rows = max(1, rows)
         return 2 * headCardPadding + CGFloat(rows) * headGlyphSize + CGFloat(rows - 1) * headRowGap
     }
+    /// A head row in thread mode: slightly taller than the helper row so it has room
+    /// for the animated working indicator with task and status.
+    static let headRowHeight: CGFloat = 28
 }
 
 /// A helper under the thread it was spawned from: one small line, joined to its parent by a
@@ -1358,6 +1361,31 @@ private struct SidebarHelperRow: View, Equatable {
 
     @State private var isHovering = false
     @State private var isMenuPresented = false
+    /// Whether this row is a Hydra head in thread mode: the parent thread has thread mode
+    /// enabled and this row is a head helper.
+    private var isThreadModeHead: Bool {
+        guard let hydra = thread.hydra,
+              let parentID = thread.parentThreadID,
+              model.isThreadMode(for: parentID) else { return false }
+        return true
+    }
+    /// Whether the parent thread still has helpers shown (not collapsed).
+    private var parentShowsHelpers: Bool {
+        guard let parentID = thread.parentThreadID else { return true }
+        return !(model.thread(parentID)?.foldsHelpers ?? false)
+    }
+
+    nonisolated static func == (lhs: SidebarHelperRow, rhs: SidebarHelperRow) -> Bool {
+        lhs.snapshot.id == rhs.snapshot.id
+            && lhs.snapshot.title == rhs.snapshot.title
+            && lhs.snapshot.updatedAt == rhs.snapshot.updatedAt
+            && lhs.snapshot.isPinned == rhs.snapshot.isPinned
+            && lhs.snapshot.isSettled == rhs.snapshot.isSettled
+            && lhs.snapshot.hydra?.status == rhs.snapshot.hydra?.status
+            && lhs.snapshot.hydra?.persona == rhs.snapshot.hydra?.persona
+            && lhs.snapshot.hydra?.task == rhs.snapshot.hydra?.task
+            && lhs.isLast == rhs.isLast
+    }
 
     var body: some View {
         // Through the thread's own cell: a selection change re-renders the two rows it
@@ -1370,33 +1398,15 @@ private struct SidebarHelperRow: View, Equatable {
         let shape = RoundedRectangle(cornerRadius: Chrome.rowCornerRadius, style: .continuous)
         HStack(spacing: 0) {
             HelperConnector(endsHere: isLast, action: onFold)
-                .frame(width: ThreadRowMetrics.connectorWidth, height: ThreadRowMetrics.helperHeight)
+                .frame(width: ThreadRowMetrics.connectorWidth, height: isThreadModeHead ? ThreadRowMetrics.headRowHeight : ThreadRowMetrics.helperHeight)
             Button {
                 model.selectedThreadID = thread.id
             } label: {
-                HStack(spacing: 6) {
-                    // A head keeps its glyph, so the team reads at a glance under its lead,
-                    // at the same size the card draws it.
-                    if let head = thread.hydra {
-                        HydraGlyph(persona: head.persona, size: ThreadRowMetrics.headGlyphSize, status: head.status)
-                    }
-                    Text(verbatim: thread.title)
-                        .font(.system(size: 12, weight: isSelected || thread.hasUnread ? .medium : .regular))
-                        .foregroundStyle(Chrome.primaryText.opacity(isSelected ? 0.96 : 0.8))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer(minLength: 4)
+                if isThreadModeHead {
+                    threadModeHeadContent(isSelected: isSelected, showsActions: showsActions, shape: shape)
+                } else {
+                    legacyHelperContent(isSelected: isSelected, showsActions: showsActions, shape: shape)
                 }
-                .padding(.leading, 6)
-                .padding(.trailing, Chrome.rowHorizontalPadding + (showsActions ? 26 : 18))
-                .frame(height: ThreadRowMetrics.helperHeight)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    shape
-                        .fill(isSelected ? Chrome.overlay(0.12) : (isHovering ? Chrome.overlay(0.06) : Color.clear))
-                        .animation(Chrome.hover, value: isSelected)
-                }
-                .contentShape(shape)
             }
             .buttonStyle(.plain)
             .overlay(alignment: .trailing) {
@@ -1432,19 +1442,202 @@ private struct SidebarHelperRow: View, Equatable {
         .opacity(isHidden ? 0 : 1)
     }
 
-    /// The ellipsis popover's items. Kept on the instance: a popover is not an AppKit menu.
-
-    nonisolated static func == (lhs: SidebarHelperRow, rhs: SidebarHelperRow) -> Bool {
-        lhs.snapshot.id == rhs.snapshot.id
-            && lhs.snapshot.title == rhs.snapshot.title
-            && lhs.snapshot.updatedAt == rhs.snapshot.updatedAt
-            && lhs.snapshot.isPinned == rhs.snapshot.isPinned
-            && lhs.snapshot.isSettled == rhs.snapshot.isSettled
-            && lhs.isLast == rhs.isLast
+    /// The original one-line helper row, used for plain helpers and for heads outside
+    /// thread mode. Kept as its own function so the thread-mode head path reads cleanly
+    /// alongside it.
+    @ViewBuilder
+    private func legacyHelperContent(isSelected: Bool, showsActions: Bool, shape: RoundedRectangle) -> some View {
+        HStack(spacing: 6) {
+            // A head keeps its glyph, so the team reads at a glance under its lead,
+            // at the same size the card draws it.
+            if let head = thread.hydra {
+                HydraGlyph(persona: head.persona, size: ThreadRowMetrics.headGlyphSize, status: head.status)
+            }
+            Text(verbatim: thread.title)
+                .font(.system(size: 12, weight: isSelected || thread.hasUnread ? .medium : .regular))
+                .foregroundStyle(Chrome.primaryText.opacity(isSelected ? 0.96 : 0.8))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, Chrome.rowHorizontalPadding + (showsActions ? 26 : 18))
+        .frame(height: ThreadRowMetrics.helperHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            shape
+                .fill(isSelected ? Chrome.overlay(0.12) : (isHovering ? Chrome.overlay(0.06) : Color.clear))
+                .animation(Chrome.hover, value: isSelected)
+        }
+        .contentShape(shape)
     }
 
+    /// The thread-mode head row: a two-line card showing the head's task with an
+    /// animated working indicator while it runs. The persona's colour tints the
+    /// running pill, and the task rotates the working word on a steady tick.
+    @ViewBuilder
+    private func threadModeHeadContent(isSelected: Bool, showsActions: Bool, shape: RoundedRectangle) -> some View {
+        let hydra = thread.hydra
+        let isRunning = hydra?.status == .running
+        let isFinished = hydra.map { $0.status == .completed || $0.status == .failed || $0.status == .stopped } ?? false
+        ThreadModeHeadRow(
+            head: thread,
+            hydra: hydra,
+            isRunning: isRunning,
+            isFinished: isFinished,
+            isSelected: isSelected,
+            showsActions: showsActions,
+            isHovering: isHovering,
+            shape: shape
+        )
+        .padding(.leading, 2)
+        .padding(.trailing, Chrome.rowHorizontalPadding + (showsActions ? 26 : 0))
+        .frame(height: ThreadRowMetrics.headRowHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            shape
+                .fill(isSelected ? Chrome.overlay(0.12) : (isHovering ? Chrome.overlay(0.06) : Color.clear))
+                .animation(Chrome.hover, value: isSelected)
+        }
+        .contentShape(shape)
+    }
+
+    /// The ellipsis popover's items. Kept on the instance: a popover is not an AppKit menu.
     private func makeActions() -> [RowAction] {
         ThreadActions.make(model: model, thread: thread, onRename: onRename, onDelete: onDelete)
+    }
+}
+
+/// A Hydra head rendered as a child thread under its parent. The row carries
+/// the persona glyph on the left (with its own built-in breath ring while the
+/// head is running), the head's task as a single line, the rotating working
+/// word as the second line, and the same segmented "Scheming..." spinner the
+/// chat uses for a still-working assistant on the right. When the head has
+/// finished the spinner freezes, the rotating word becomes a status label and
+/// the row mutes.
+///
+/// Reads the head's running word off a steady 0.5 s tick so the word "Thinking" /
+/// "Pondering" / etc. rotates at the same cadence the chat uses, without a
+/// per-row timeline.
+private struct ThreadModeHeadRow: View {
+    @Environment(AppModel.self) private var model
+    let head: ChatThread
+    let hydra: HydraHeadInfo?
+    let isRunning: Bool
+    let isFinished: Bool
+    let isSelected: Bool
+    let showsActions: Bool
+    let isHovering: Bool
+    let shape: RoundedRectangle
+
+    /// A clock the row reads to keep the working word in step with the chat. The
+    /// clock is shared across rows, so every running head in the sidebar rotates
+    /// its word at the same moment.
+    @State private var elapsedSeconds: Int64 = 0
+    /// Whether the row is currently running its word-tick loop. The loop turns
+    /// off when the head finishes so the row's right edge settles.
+    @State private var wordTaskRunning = false
+
+    /// The word the row prints while the head is running, drawn from the same
+    /// vocabulary the chat uses for the same head. A stable seed keeps two
+    /// heads from reading the same word on the same tick.
+    private var workingWord: String {
+        let seed = WorkingWords.seed(head.id.uuidString)
+        return WorkingWords.word(seed: seed, elapsedSeconds: elapsedSeconds)
+    }
+
+    /// The status line under the task: the working word while running, a
+    /// completed/failed label once the head has stopped. Stays a single short
+    /// string so the row never wraps.
+    private var statusText: String {
+        if isRunning { return workingWord }
+        guard let hydra else { return "" }
+        switch hydra.status {
+        case .completed: return "Done"
+        case .failed:    return "Failed"
+        case .stopped:   return "Stopped"
+        case .running:   return workingWord
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // The persona glyph: the existing view already wraps the running
+            // head in a breath ring and stamps a small status badge on the
+            // corner when the head has finished.
+            HydraGlyph(
+                persona: hydra?.persona ?? HydraRoster.personas[0],
+                size: 16,
+                isRunning: isRunning,
+                status: hydra?.status
+            )
+            .padding(.leading, 2)
+
+            VStack(alignment: .leading, spacing: 0) {
+                // The head's task as a single line.
+                Text(verbatim: head.title)
+                    .font(.system(size: 11, weight: isSelected ? .medium : .regular))
+                    .foregroundStyle(Chrome.primaryText.opacity(isSelected ? 0.95 : 0.82))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                // The working word / status line. A working head shows the
+                // rotating word; a finished head shows a single label.
+                // The id() forces a clean crossfade when the word changes.
+                Text(verbatim: statusText)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Chrome.secondaryText.opacity(isFinished ? 0.55 : 0.85))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .id(statusText)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // The animated working indicator: the same segmented spinner the
+            // chat uses while an assistant is thinking. Running heads get the
+            // animated mini spinner; finished heads get a still frame.
+            if isRunning {
+                MiniSpinner(cellSize: 2.4)
+                    .help(workingWord)
+            } else if isFinished {
+                MiniSpinner(cellSize: 2.4, isStill: true)
+                    .opacity(0.35)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { initialiseClock() }
+        .onChange(of: isRunning) { _, newValue in
+            if newValue { startWordLoop() } else { stopWordLoop() }
+        }
+        .animation(Chrome.hover, value: isFinished)
+    }
+
+    /// Reads the start time off the head's hydra state and walks the word
+    /// clock to the right place. Called once when the row first appears;
+    /// thereafter the timer is what keeps the word in step.
+    private func initialiseClock() {
+        let started = hydra?.startedAt ?? head.createdAt
+        elapsedSeconds = Int64(Date().timeIntervalSince(started))
+        if isRunning { startWordLoop() }
+    }
+
+    /// Starts a 0.5 s tick that walks the working word. Cancellable so
+    /// leaving the row tears it down cleanly.
+    private func startWordLoop() {
+        guard !wordTaskRunning else { return }
+        wordTaskRunning = true
+        Task { @MainActor in
+            while !Task.isCancelled, wordTaskRunning, isRunning {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if Task.isCancelled { return }
+                guard wordTaskRunning, isRunning else { return }
+                elapsedSeconds &+= 1
+            }
+        }
+    }
+
+    private func stopWordLoop() {
+        wordTaskRunning = false
     }
 }
 

@@ -317,6 +317,99 @@
     return "mac";
   }
 
+  /* Dynamic platform content: mac, windows, or linux each get their own
+     copy, stats, left-out line. Mobile and the open-source dual ship a
+     "Mac, Windows & Linux" framing instead. */
+  var PLATFORM_COPY = {
+    mac: {
+      heading: "Built for the Mac.",
+      subtitle: "Written entirely in Swift and SwiftUI with Liquid Glass, for Apple silicon on macOS 26 and later. No web view, no Electron, one dependency.",
+      heroLine: "coding agent for <svg class='hero__apple' aria-hidden='true' focusable='false'><use href='#apple-mark'/></svg>Mac, Windows &amp; Linux",
+      heroKicker: "The coding app by Soumya Chakraborty",
+      stats: [
+        { value: "100%", label: "Swift and SwiftUI" },
+        { value: "12", label: "agent providers" },
+        { value: "26", label: "tinted-glass themes" },
+        { value: "1", label: "dependency, SwiftTerm" },
+        { value: "0", label: "telemetry, ever" }
+      ],
+      leftoutHeading: "Left out on purpose.",
+      leftoutSubtitle: "Ensembyte is a Mac app for the agents on your Mac. Everything that would turn it into a service, an account or a data pipeline is not on the roadmap, and not in the binary.",
+      leftoutItems: ["No remote access", "No mobile apps", "No cloud sync", "No telemetry", "No web client"]
+    },
+    windows: {
+      heading: "Built for Windows.",
+      subtitle: "A native coding app for Windows 10 and 11. The same Hydra workflow, the same providers, the same glass window — built for your desktop without a web view.",
+      heroLine: "coding agent for <svg class='hero__apple' aria-hidden='true' focusable='false'><use href='#apple-mark'/></svg>Mac, Windows &amp; Linux",
+      heroKicker: "The coding app by Soumya Chakraborty",
+      stats: [
+        { value: "100%", label: "Native Windows" },
+        { value: "12", label: "agent providers" },
+        { value: "26", label: "tinted-glass themes" },
+        { value: "1", label: "binary, no Electron" },
+        { value: "0", label: "telemetry, ever" }
+      ],
+      leftoutHeading: "Left out on purpose.",
+      leftoutSubtitle: "Ensembyte for Windows is a desktop app for the agents on your PC. Everything that would turn it into a service, an account or a data pipeline is not on the roadmap, and not in the binary.",
+      leftoutItems: ["No remote access", "No mobile apps", "No cloud sync", "No telemetry", "No web client"]
+    },
+    linux: {
+      heading: "Built for Linux.",
+      subtitle: "A native coding app for Linux. AppImage and .deb for every modern distribution, the same Hydra workflow, the same providers, and the same liquid window — built for your desktop without a web view.",
+      heroLine: "coding agent for <svg class='hero__apple' aria-hidden='true' focusable='false'><use href='#apple-mark'/></svg>Mac, Windows &amp; Linux",
+      heroKicker: "The coding app by Soumya Chakraborty",
+      stats: [
+        { value: "100%", label: "Native Linux" },
+        { value: "12", label: "agent providers" },
+        { value: "26", label: "tinted-glass themes" },
+        { value: "1", label: "binary, no Electron" },
+        { value: "0", label: "telemetry, ever" }
+      ],
+      leftoutHeading: "Left out on purpose.",
+      leftoutSubtitle: "Ensembyte for Linux is a desktop app for the agents on your machine. Everything that would turn it into a service, an account or a data pipeline is not on the roadmap, and not in the binary.",
+      leftoutItems: ["No remote access", "No mobile apps", "No cloud sync", "No telemetry", "No web client"]
+    }
+  };
+
+  function applyPlatformContent(os) {
+    var copy = PLATFORM_COPY[os] || PLATFORM_COPY.mac;
+
+    var heading = document.getElementById("platform-heading");
+    if (heading) heading.textContent = copy.heading;
+
+    var subtitle = document.getElementById("platform-subtitle");
+    if (subtitle) subtitle.textContent = copy.subtitle;
+
+    var loHeading = document.getElementById("platform-leftout-heading");
+    if (loHeading) loHeading.textContent = copy.leftoutHeading;
+
+    var loSubtitle = document.getElementById("platform-leftout-subtitle");
+    if (loSubtitle) loSubtitle.textContent = copy.leftoutSubtitle;
+
+    var loList = document.getElementById("platform-leftout-list");
+    if (loList && copy.leftoutItems) {
+      loList.innerHTML = copy.leftoutItems
+        .map(function (item) { return "<li>" + item + "</li>"; })
+        .join("");
+    }
+
+    var stats = document.getElementById("platform-stats");
+    if (stats && copy.stats) {
+      stats.innerHTML = copy.stats
+        .map(function (s) {
+          return "<div class=\"stat\"><div class=\"stat__value\">" + s.value +
+            "</div><div class=\"stat__label\">" + s.label + "</div></div>";
+        })
+        .join("");
+    }
+
+    var heroText = document.getElementById("hero-platform-text");
+    if (heroText) heroText.innerHTML = copy.heroLine;
+
+    var heroKicker = document.getElementById("hero-kicker-text");
+    if (heroKicker) heroKicker.textContent = copy.heroKicker;
+  }
+
   function selectPlatform(platform, smoothScroll) {
     var tabs = document.querySelectorAll(".platform-tab");
     var panes = document.querySelectorAll(".platform-pane");
@@ -405,7 +498,7 @@
       });
     });
 
-    // If detected OS is Windows or Linux, update CTAs, tabs, and chips
+    // If detected OS is Windows or Linux, update CTAs, tabs, chips
     if (os === "windows" || os === "linux") {
       var cfg = DOWNLOADS[os];
       updateCtaButton(document.getElementById("hero-download-btn"), document.getElementById("hero-download-text"), cfg);
@@ -415,6 +508,9 @@
 
       updatePlatformChips(os);
       selectPlatform(os, false);
+
+      // Update the "Built for the ..." section with the detected platform
+      applyPlatformContent(os);
     }
   }
 
