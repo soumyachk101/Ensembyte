@@ -717,7 +717,7 @@ final class AppSettings {
         settleSound = defaults.object(forKey: Key.settleSound) as? Bool ?? true
         showReasoning = defaults.object(forKey: Key.showReasoning) as? Bool ?? false
         antiSlopEnabled = defaults.object(forKey: Key.antiSlopEnabled) as? Bool ?? true
-        showsWorkingCard = defaults.object(forKey: Key.showsWorkingCard) as? Bool ?? true
+        showsWorkingCard = defaults.object(forKey: Key.showsWorkingCard) as? Bool ?? false
         chatZoom = ChatZoom.clamped(defaults.object(forKey: Key.chatZoom) as? Int ?? ChatZoom.defaultIndex)
         sidebarActivityView = defaults.bool(forKey: Key.sidebarActivityView)
         activityThreadStyle = ActivityThreadStyle(rawValue: defaults.string(forKey: Key.activityThreadStyle) ?? "") ?? .icon

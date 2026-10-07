@@ -1,6 +1,30 @@
 {
-  "generated_at": "2026-10-05T18:41:24.109388+00:00",
+  "generated_at": "2026-10-07T17:33:00.000000+00:00",
   "releases": [
+    {
+      "version": "1.1.1",
+      "date": "2026-10-07",
+      "platform": "mac",
+      "summary": "Ensembyte 1.1.1 updates the default working line style to a clean line, improves Hydra thread-mode status indicators and animations, and introduces dynamic platform adaptation on the website.",
+      "sections": [
+        {
+          "title": "New features",
+          "items": [
+            "Working line default: Changed the default working line style in Conversation settings to a clean line (\"Line\") instead of \"Card\".",
+            "Hydra thread-mode indicators: Live rotating working vocabulary ticker, animated mini thinking spinners, persona glyphs, and smooth spring physics transitions for child heads in the sidebar.",
+            "Dynamic platform landing page: Website now automatically detects the user's operating system (macOS, Windows, Linux) and dynamically updates platform highlights, hero text, and call-to-actions."
+          ]
+        },
+        {
+          "title": "Bug fixes",
+          "items": [
+            "Stabilized Swift CodeQL build workflow and updated codeql-action to v4.",
+            "Resolved Rust clippy warnings and restored backward-compatible environment variable fallbacks."
+          ]
+        }
+      ],
+      "thanks": []
+    },
     {
       "version": "1.1.0",
       "date": "2026-10-06",

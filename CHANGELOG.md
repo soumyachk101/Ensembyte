@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.1] - 2026-10-07
+
+Ensembyte 1.1.1 updates the default working line style to a clean line, improves Hydra thread-mode status indicators and animations, and introduces dynamic platform adaptation on the website.
+
+### New features
+- **Working line default** (`Ensembyte-swift/`): Changed the default working line style in Conversation settings to a clean line ("Line") instead of "Card".
+- **Hydra thread-mode indicators** (`Ensembyte-swift/`): Live rotating working vocabulary ticker, animated mini thinking spinners, persona glyphs, and smooth spring physics transitions for child heads in the sidebar.
+- **Dynamic platform landing page** (`website/`): Website now automatically detects the user's operating system (macOS, Windows, Linux) and dynamically updates platform highlights, hero text, and call-to-actions.
+
+### Bug fixes
+- Stabilized Swift CodeQL build workflow and updated codeql-action to v4.
+- Resolved Rust clippy warnings and restored backward-compatible environment variable fallbacks.
+
 ## [1.1.0] - 2026-10-06
 
 Ensembyte 1.1.0 introduces Hydra Thread View to the sidebar and live status glyphs for child heads.
