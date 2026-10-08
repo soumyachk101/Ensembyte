@@ -43,6 +43,7 @@ final class ClaudeSession: ProviderSession {
     /// Heads by their task id, for progress and completion, and their task ids by head, for stopping.
     private var agentsByTask: [String: String] = [:]
     private var tasksByAgent: [String: String] = [:]
+    private var backgroundTasks: [(id: String, description: String)] = []
     private var turnActive = false
     private var interruptRequested = false
     private var isStopping = false
@@ -288,6 +289,7 @@ final class ClaudeSession: ProviderSession {
 
     func stop() {
         isStopping = true
+        clearBackgroundTasks()
         process?.terminate()
     }
 
@@ -331,7 +333,14 @@ final class ClaudeSession: ProviderSession {
     private func handle(_ message: JSONValue) {
         // A head's message names the tool call that spawned it; the lead's carries null.
         let parent = message["parent_tool_use_id"]?.string
-        switch message["type"]?.string {
+        let type = message["type"]?.string
+        if parent == nil, type == "stream_event" || type == "assistant", isStarted, !turnActive {
+            // Claude Code answers a finished background task's notification with a turn of its own, without a send from the app.
+            turnActive = true
+            interruptRequested = false
+            onEvent?(.turnStarted(providerTurnID: nil))
+        }
+        switch type {
         case "control_response":
             let response = message["response"] ?? .null
             guard let requestID = response["request_id"]?.string,
@@ -407,7 +416,13 @@ final class ClaudeSession: ProviderSession {
                 toolCalls: usage?["tool_uses"]?.int
             ))
         case "task_notification":
-            guard let taskID = message["task_id"]?.string, let agentID = agentsByTask[taskID] else { return }
+            guard let taskID = message["task_id"]?.string else { return }
+            if backgroundTasks.contains(where: { $0.id == taskID }) {
+                backgroundTasks.removeAll { $0.id == taskID }
+                onEvent?(.backgroundTasks(backgroundTasks.map(\.description)))
+                return
+            }
+            guard let agentID = agentsByTask[taskID] else { return }
             let status: TurnStatus = switch message["status"]?.string {
             case "failed": .failed
             case "stopped": .interrupted
@@ -425,7 +440,11 @@ final class ClaudeSession: ProviderSession {
     private func handleTaskStarted(_ message: JSONValue) {
         guard let taskID = message["task_id"]?.string, message["skip_transcript"]?.bool != true else { return }
         let isAgent = message["subagent_type"]?.string != nil || message["task_type"]?.string == "local_agent"
-        guard isAgent else { return }
+        guard isAgent else {
+            backgroundTasks.append((taskID, message["description"]?.string ?? "a background command"))
+            onEvent?(.backgroundTasks(backgroundTasks.map(\.description)))
+            return
+        }
         let toolUseID = message["tool_use_id"]?.string
         let agentID = toolUseID ?? taskID
         agentsByTask[taskID] = agentID
@@ -665,7 +684,14 @@ final class ClaudeSession: ProviderSession {
         }
     }
 
+    private func clearBackgroundTasks() {
+        guard !backgroundTasks.isEmpty else { return }
+        backgroundTasks.removeAll()
+        onEvent?(.backgroundTasks([]))
+    }
+
     private func didClose() {
+        clearBackgroundTasks()
         hasClosed = true
         let tail = process?.errorTail ?? ""
         // The result's own error names the failure better than the stderr tail can.

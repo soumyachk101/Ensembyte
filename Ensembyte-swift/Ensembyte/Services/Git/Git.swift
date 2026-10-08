@@ -366,6 +366,10 @@ struct Git: Sendable {
         try await output(["rev-parse", "--verify", ref]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func message(of ref: String) async throws -> String {
+        try await output(["log", "-1", "--format=%B", ref]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// A commit of `tree` on `parent` in the user's own name, for a branch to carry.
     func commitWork(_ tree: String, parent: String, message: String) async throws -> String {
         let result = try await run(["commit-tree", tree, "-p", parent, "-F", "-"], input: Data(message.utf8))
@@ -397,6 +401,12 @@ struct Git: Sendable {
 
     func isAncestor(_ commit: String, of other: String) async -> Bool {
         (try? await run(["merge-base", "--is-ancestor", commit, other]))?.succeeded ?? false
+    }
+
+    func mergeBase(_ a: String, _ b: String) async -> String? {
+        guard let result = try? await run(["merge-base", a, b]), result.succeeded else { return nil }
+        let trimmed = result.trimmedOutput
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// Paths that differ between two commits or trees, as they are on disk: NUL-separated,

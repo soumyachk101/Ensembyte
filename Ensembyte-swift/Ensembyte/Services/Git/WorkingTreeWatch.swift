@@ -55,9 +55,8 @@ final class WorkingTreeWatch: Sendable {
         var cookiesWritten: UInt64 = 0
         var cookieSeen: UInt64 = 0
         var snapshot: Snapshot?
-        /// A capture under way and the generation it started at, for a caller at the same
-        /// generation to share instead of walking the tree again.
-        var capture: (generation: UInt64, task: Task<String?, Never>)?
+        var capture: (generation: UInt64, id: UInt64, task: Task<String?, Never>)?
+        var capturesStarted: UInt64 = 0
         var stream: Stream?
         /// Callers waiting for a cookie's event, resumed by `note` when it lands or by
         /// their own timeout, whichever removes them first.
@@ -307,8 +306,25 @@ final class WorkingTreeWatch: Sendable {
                 // in a fresh set, for the capture after this one.
                 let paths = state.snapshot?.index == index ? state.changed.map(Self.pathspecs) : nil
                 state.changed = []
-                let task = Task.detached(priority: .utility) { [scratch] in try? await capture(scratch, paths) }
-                state.capture = (generation, task)
+                state.capturesStarted += 1
+                let id = state.capturesStarted
+                // The capture clears itself from the state before it finishes. Left to the
+                // owner, a caller awaiting the finished task looped straight back to it
+                // without suspending: on the main actor the owner never ran again to clear
+                // it, and the app froze.
+                let task = Task.detached(priority: .utility) { [scratch, self] in
+                    let tree = try? await capture(scratch, paths)
+                    self.state.withLock { state in
+                        if state.capture?.id == id { state.capture = nil }
+                        if let tree {
+                            state.snapshot = Snapshot(tree: tree, generation: generation, index: index, commit: nil)
+                        } else {
+                            state.changed = nil
+                        }
+                    }
+                    return tree
+                }
+                state.capture = (generation, id, task)
                 return .own(task)
             }
             switch lookup {
@@ -321,16 +337,7 @@ final class WorkingTreeWatch: Sendable {
             case .wait(let task):
                 _ = await task.value
             case .own(let task):
-                let tree = await task.value
-                state.withLock { state in
-                    if state.capture?.task == task { state.capture = nil }
-                    if let tree {
-                        state.snapshot = Snapshot(tree: tree, generation: generation, index: index, commit: nil)
-                    } else {
-                        state.changed = nil
-                    }
-                }
-                guard let tree else { throw CocoaError(.fileReadUnknown) }
+                guard let tree = await task.value else { throw CocoaError(.fileReadUnknown) }
                 return tree
             }
         }

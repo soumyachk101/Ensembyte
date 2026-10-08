@@ -1788,7 +1788,7 @@ private struct HelperStubRow: View {
         let count = helpers.count
         let working = helpers.contains { helper in
             let runtime = model.existingRuntime(for: helper.id)
-            return runtime?.isRunning == true || runtime?.isHydraMerging == true
+            return runtime?.isRunning == true || runtime?.isHydraMerging == true || !(runtime?.backgroundTasks.isEmpty ?? true)
         }
         // A team of heads is called that; merges alone stay "helpers".
         let noun = if helpers.allSatisfy(\.isHydraHead) { "head" }
@@ -2307,7 +2307,7 @@ private struct ThreadGhostBadge: View {
     init(thread: ChatThread, runtime: ThreadRuntime?) {
         self.thread = thread
         needsInput = !(runtime?.approvals.isEmpty ?? true) || !(runtime?.questions.isEmpty ?? true)
-        isRunning = runtime?.isRunning == true || runtime?.isHydraMerging == true || runtime?.hasWorkingHelpers == true
+        isRunning = runtime?.isRunning == true || runtime?.isHydraMerging == true || runtime?.hasWorkingHelpers == true || !(runtime?.backgroundTasks.isEmpty ?? true)
     }
 
     var body: some View {
@@ -2367,14 +2367,15 @@ private struct ThreadBadge: View {
         let runtime = model.existingRuntime(for: thread.id)
         let needsInput = !(runtime?.approvals.isEmpty ?? true) || !(runtime?.questions.isEmpty ?? true)
         let mergeStage = SidebarThreadRow.mergeStage(of: runtime)
-        let isRunning = runtime?.isRunning == true || mergeStage != nil || runtime?.hasWorkingHelpers == true
+        let backgroundCount = runtime?.backgroundTasks.count ?? 0
+        let isRunning = runtime?.isRunning == true || mergeStage != nil || runtime?.hasWorkingHelpers == true || backgroundCount > 0
         SidebarIconBadge {
             if needsInput {
                 SidebarSymbol("hand.raised.fill")
                     .foregroundStyle(Chrome.orange)
             } else if isRunning {
                 MiniSpinner(cellSize: 2.4)
-                    .help(mergeStage ?? "")
+                    .help(mergeStage ?? (runtime?.isRunning != true && backgroundCount > 0 ? (backgroundCount == 1 ? "Waiting on a background task" : "Waiting on \(backgroundCount) background tasks") : ""))
             } else if thread.isPinned {
                 SidebarSymbol("pin.fill", scale: 0.9)
                     .foregroundStyle(Chrome.danger.opacity(0.85))
@@ -2646,6 +2647,9 @@ private struct ActivityStatus: View {
         } else if runtime?.isRunning == true || runtime?.isHydraMerging == true || runtime?.hasWorkingHelpers == true {
             MiniSpinner(cellSize: 2.4)
                 .help(SidebarThreadRow.mergeStage(of: runtime) ?? "")
+        } else if let count = runtime?.backgroundTasks.count, count > 0 {
+            MiniSpinner(cellSize: 2.4)
+                .help(count == 1 ? "Waiting on a background task" : "Waiting on \(count) background tasks")
         } else if thread.hasUnread {
             Circle()
                 .fill(thread.lastStatus == .failed ? Chrome.danger : Chrome.accent)

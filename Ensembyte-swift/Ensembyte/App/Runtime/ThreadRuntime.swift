@@ -189,6 +189,7 @@ final class ThreadRuntime {
     private(set) var isReverting = false
     private(set) var approvals: [ApprovalRequest] = []
     private(set) var questions: [QuestionRequest] = []
+    private(set) var backgroundTasks: [String] = []
     private(set) var turnStartedAt: Date?
     /// Bumped whenever the thread's files may differ from what the last diff saw. The diff
     /// cache and the change stats are keyed by it, so the entries of an old revision are
@@ -446,6 +447,11 @@ final class ThreadRuntime {
     /// then is reported by that throwing, and `ensureSession` starts over where it can,
     /// so its exit event neither lets the session go nor fails the turn.
     @ObservationIgnored private var isStartingSession = false
+    /// Claude started a turn of its own (a background task it launched finished) while the
+    /// previous turn was still being finalized: its events wait here and are replayed into
+    /// a turn of their own once `finishTurn` is done with the old one.
+    @ObservationIgnored private var opensTurnAfterFinish = false
+    @ObservationIgnored private var deferredBackgroundTurnEvents: [ProviderEvent] = []
     /// The turn being finalized, claimed before the first suspension: a completion and an
     /// exit can both arrive for one turn, and the second must not finalize it again.
     @ObservationIgnored private var finishingTurnID: UUID?
@@ -2055,6 +2061,9 @@ final class ThreadRuntime {
     /// it closes. Its handler is cleared a turn of the loop later, because a session that
     /// is ending usually says so from inside that very handler.
     private func releaseSession(stop: Bool) {
+        backgroundTasks = []
+        opensTurnAfterFinish = false
+        deferredBackgroundTurnEvents.removeAll()
         sessionEpoch += 1
         sessionSignature = nil
         unsentSessionID = nil
@@ -2091,15 +2100,46 @@ final class ThreadRuntime {
 
     // MARK: - Events
 
+    /// Opens the turn Claude started by itself while `finishTurn` was finalizing the one
+    /// before, and hands it the events that waited. Returns whether there was one.
+    private func replayBackgroundTurn() -> Bool {
+        guard opensTurnAfterFinish else { return false }
+        opensTurnAfterFinish = false
+        let events = deferredBackgroundTurnEvents
+        deferredBackgroundTurnEvents.removeAll()
+        finishingTurnID = nil
+        closingTurnID = nil
+        for event in events { handle(event) }
+        return true
+    }
+
+    private func openBackgroundTurn() {
+        rehearseTurn(nil)
+        let name = thread?.provider.displayName ?? "The agent"
+        appendNotice(.info, "\(name) picked the work back up after a background task finished.")
+    }
+
     private func handle(_ event: ProviderEvent) {
+        if opensTurnAfterFinish {
+            deferredBackgroundTurnEvents.append(event)
+            return
+        }
         switch event {
         case .sessionReady(let sessionID):
             recordSessionID(sessionID)
         case .turnStarted(let providerTurnID):
+            if finishingTurnID != nil, currentTurnID == nil || finishingTurnID == currentTurnID {
+                opensTurnAfterFinish = true
+                deferredBackgroundTurnEvents.append(event)
+                return
+            }
+            if currentTurnID == nil { openBackgroundTurn() }
             phase = .running
             if let currentTurnID, let providerTurnID {
                 updateTurn(currentTurnID) { $0.providerTurnID = providerTurnID }
             }
+        case .backgroundTasks(let descriptions):
+            backgroundTasks = descriptions
         case .messageDelta(let id, let text):
             queueDelta(id, .message, text)
         case .messageCompleted(let id, let text):
@@ -2188,6 +2228,7 @@ final class ThreadRuntime {
             if let error { appendNotice(.error, error) }
             Task { await finishTurn(status: status, turnID: turnID) }
         case .exited(let error):
+            backgroundTasks = []
             flushDeltas()
             // A session that exits while it starts is reported by its `start()` throwing:
             // `ensureSession` starts over where it can, and otherwise the turn ends with
@@ -2400,7 +2441,8 @@ final class ThreadRuntime {
         settleForegroundHeads(after: status)
         guard thread?.isArchived != true else {
             headBudgetSpent = false
-            app?.turnFinished(threadID, status: status, continues: false)
+            let continues = replayBackgroundTurn()
+            app?.turnFinished(threadID, status: status, continues: continues)
             return
         }
         // The Return-while-running message jumps the queue: it goes right away
@@ -2411,7 +2453,9 @@ final class ThreadRuntime {
         // turn. Either way the app hears whether a next turn is on its way, so
         // "finished" only sounds when nothing is.
         var continues: Bool
-        if pendingSend != nil {
+        if replayBackgroundTurn() {
+            continues = true
+        } else if pendingSend != nil {
             continues = drainPendingSend()
         } else if status == .completed, case let delegation = spawnDelegatedHeads(for: turnID), delegation != .none {
             continues = true
@@ -2606,7 +2650,7 @@ final class ThreadRuntime {
             if let edits = update.edits { noteHydraEdits(edits) }
             if let status = update.status, status != .running { settleHydraCommand("\(agentID)-\(toolID)") }
             headRuntime.rehearse(event)
-        case .usage, .sessionReady, .models, .commands, .title, .assistantMessageID:
+        case .usage, .sessionReady, .models, .commands, .title, .assistantMessageID, .backgroundTasks:
             break
         default:
             headRuntime.rehearse(event)

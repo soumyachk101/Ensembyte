@@ -82,6 +82,8 @@ struct AgentSpawn: Sendable {
 enum ProviderEvent: Sendable {
     case sessionReady(sessionID: String)
     case turnStarted(providerTurnID: String?)
+    /// Descriptions of background commands or monitors still running during or after a turn; empty when none remain.
+    case backgroundTasks([String])
     case messageDelta(id: String, text: String)
     case messageCompleted(id: String, text: String)
     case reasoningDelta(id: String, text: String)
