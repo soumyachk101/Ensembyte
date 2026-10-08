@@ -1,6 +1,25 @@
 {
-  "generated_at": "2026-10-07T17:33:00.000000+00:00",
+  "generated_at": "2026-10-08T14:00:00.000000+00:00",
   "releases": [
+    {
+      "version": "1.1.2",
+      "date": "2026-10-08",
+      "platform": "mac",
+      "summary": "Ensembyte 1.1.2 delivers major stability and performance enhancements across file tree watching, child process management, background task synchronization with Claude, and multi-chat git isolation.",
+      "sections": [
+        {
+          "title": "Bug fixes & Stability",
+          "items": [
+            "WorkingTreeWatch freeze fix: Resolved a deadlock in file-tree watching where concurrent callers looped without suspending, eliminating intermittent app beachballs and freezes during agent file edits.",
+            "Child process & memory management: Implemented full process-tree tracking via kernel APIs (proc_pidinfo, proc_listchildpids) ensuring child and grandchild agent processes cleanly terminate without leaking memory or leaving orphan zombies. Added 32MB input queue and 256MB backlog safety limits.",
+            "Claude background task sync: Fixed unprompted turn synchronization when Claude Code completes background commands, and added real-time \"Waiting on a background task\" mini spinner indicators to the sidebar.",
+            "Hydra multi-chat isolation: Prevented cross-chat write claiming and race conditions when multiple chat threads operate concurrently within the same checkout.",
+            "Offline Antigravity guard: Skipped headless usage queries when offline to avoid unexpected browser sign-in popups."
+          ]
+        }
+      ],
+      "thanks": []
+    },
     {
       "version": "1.1.1",
       "date": "2026-10-07",

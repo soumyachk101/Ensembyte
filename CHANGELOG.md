@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.2] - 2026-10-08
+
+Ensembyte 1.1.2 delivers major stability and performance enhancements across file tree watching, child process management, background task synchronization with Claude, and multi-chat git isolation.
+
+### Bug fixes & Performance
+- **WorkingTreeWatch freeze fix** (`Ensembyte-swift/`): Resolved a critical deadlock in file-tree watching where concurrent callers looped without suspending, eliminating intermittent app beachballs and UI freezes during agent file edits.
+- **Process tree & memory management** (`Ensembyte-swift/`): Implemented recursive process-tree tracking via kernel APIs (`proc_pidinfo`, `proc_listchildpids`) ensuring child and grandchild agent processes cleanly terminate on cancellation without leaking memory or leaving orphan zombies. Added 32MB input queue and 256MB backlog safety limits.
+- **Claude background task sync** (`Ensembyte-swift/`): Fixed unprompted turn synchronization when Claude Code completes background commands, and added real-time "Waiting on a background task" mini spinner indicators to the sidebar.
+- **Hydra multi-chat isolation** (`Ensembyte-swift/`): Added spent-branch tracking and dedicated ref namespaces (`refs/ensembyte/sent/`, `refs/ensembyte/merged/`) to prevent cross-chat write claiming and race conditions when multiple chat threads operate concurrently.
+- **Offline Antigravity guard** (`Ensembyte-swift/`): Added network reachability checks to guard headless usage queries when offline, preventing unexpected browser sign-in popups.
+
 ## [1.1.1] - 2026-10-07
 
 Ensembyte 1.1.1 updates the default working line style to a clean line, improves Hydra thread-mode status indicators and animations, and introduces dynamic platform adaptation on the website.
