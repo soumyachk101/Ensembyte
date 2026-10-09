@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>The open-source multi-agent coding client.</b><br/>
-  Drive your AI coding agents locally — with style, speed, and zero telemetry.
+  Drive your AI coding agents locally — with style, speed, and zero telemetry.<br/>
+  <a href="https://ensembyte.vercel.app"><b>🌐 ensembyte.vercel.app</b></a>
 </p>
 
 <p align="center">
