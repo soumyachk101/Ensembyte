@@ -61,7 +61,14 @@ CLAUDE.md
 .vercel
 .env*
 
-# Website clone (experiment)
+# Website (managed and deployed directly via Vercel CLI, not tracked in repo)
+website/
 website_try/
-website/video.html
+website_html/
+gulugulu/
 plans/
+
+# Local mascot scratch
+Make-Your-Own-Mascot.pdf
+cubee.avatar.json
+skills-lock.json
