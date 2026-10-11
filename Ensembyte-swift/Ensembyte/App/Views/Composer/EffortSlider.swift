@@ -183,7 +183,7 @@ private struct ModelEffortPanel: View {
                         .transition(.opacity)
                 }
             }
-            .frame(width: 330)
+            .frame(width: showsModels ? 350 : 330)
             .animation(.easeOut(duration: 0.12), value: showsModels)
         }
     }
@@ -268,100 +268,241 @@ private struct ModelEffortPanel: View {
 struct ModelList: View {
     @Environment(AppModel.self) private var model
     let thread: ChatThread
-    let hasHistory: Bool
+    var hasHistory: Bool = false
     let onChoose: (ModelCatalog.Entry) -> Void
     /// Left out where the list is only shown, as in the website captures.
     var onEnterPair: (HydraPair) -> Void = { _ in }
     let onBack: () -> Void
 
-    /// A pair row carries two lines, like a model row with its provider under it.
+    @State private var selectedProvider: ProviderKind
+    @State private var searchText = ""
+
     private static let pairRowHeight: CGFloat = 46
-    /// What `PopoverSectionHeader` takes: an 11 pt line with its own padding above and below.
-    private static let sectionHeaderHeight: CGFloat = 22
+
+    init(
+        thread: ChatThread,
+        hasHistory: Bool = false,
+        onChoose: @escaping (ModelCatalog.Entry) -> Void,
+        onEnterPair: @escaping (HydraPair) -> Void = { _ in },
+        onBack: @escaping () -> Void
+    ) {
+        self.thread = thread
+        self.hasHistory = hasHistory
+        self.onChoose = onChoose
+        self.onEnterPair = onEnterPair
+        self.onBack = onBack
+        _selectedProvider = State(initialValue: thread.provider)
+    }
+
+    private var railProviders: [ProviderKind] {
+        let registry = model.providers
+        let available = registry.availableProviders
+        var list: [ProviderKind] = []
+        for provider in ProviderKind.allCases {
+            if available.contains(provider) || !registry.models(for: provider).isEmpty || provider == thread.provider {
+                if !list.contains(provider) {
+                    list.append(provider)
+                }
+            }
+        }
+        if list.isEmpty {
+            list = [thread.provider]
+        }
+        return list
+    }
+
+    private var searchMatches: [ModelCatalog.Entry] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+        let registry = model.providers
+        var result: [ModelCatalog.Entry] = []
+        for provider in railProviders {
+            for option in registry.models(for: provider) {
+                if option.shortName.localizedCaseInsensitiveContains(query) ||
+                   option.name.localizedCaseInsensitiveContains(query) ||
+                   option.id.localizedCaseInsensitiveContains(query) ||
+                   provider.displayName.localizedCaseInsensitiveContains(query) {
+                    result.append(ModelCatalog.Entry(provider: provider, option: option))
+                }
+            }
+        }
+        return result
+    }
 
     var body: some View {
-        let entries = ModelCatalog.entries(model, including: thread)
-        // The pairs are Hydra's: on offer while it is on, out of sight otherwise.
-        let pairs = model.hydraIsOn(thread) ? model.hydraPickerPairs : []
-        // A chat leads with one pair or runs one model, never both: the checkmark sits on
-        // the pair while the chat is in one, even though the pair's lead model is a row too.
-        let leadsWithPair = pairs.contains { model.leadsWithHydraPair($0, thread: thread) }
-        let showsProviders = Set(entries.map(\.provider)).count > 1
-        // Fixed row heights let the popover size itself in one pass instead of measuring and resizing.
-        let rowHeight: CGFloat = showsProviders || (hasHistory && entries.contains { $0.provider != thread.provider }) ? 46 : 34
-        // The pairs section is part of that one pass: its two headers and its rows are
-        // counted here, so the popover opens at the size it keeps.
-        let pairsHeight = pairs.isEmpty ? 0 : Self.sectionHeaderHeight * 2 + CGFloat(pairs.count) * (Self.pairRowHeight + 1)
+        let activeProvider = selectedProvider
+        let activeModels = model.providers.models(for: activeProvider)
+        let pairs = model.hydraIsOn(thread) ? model.hydraPickerPairs.filter { $0.provider == activeProvider } : []
+
         VStack(alignment: .leading, spacing: 0) {
+            // Header
             HStack(spacing: 6) {
                 Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(.subheadline, weight: .semibold))
-                        .frame(width: 20, height: 20)
-                        .contentShape(.rect)
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Select model")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundStyle(Chrome.primaryText)
+                    .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Chrome.secondaryText)
                 .help("Back")
-                Text("Select model")
-                    .font(.system(.body))
-                    .foregroundStyle(Chrome.secondaryText)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    if !pairs.isEmpty {
-                        PopoverSectionHeader("Pairs")
-                        ForEach(pairs) { pair in
-                            let locked = hasHistory && pair.provider != thread.provider
-                            HydraPairListRow(
-                                pair: pair,
-                                title: HydraPairSummary.title(pair, registry: model.providers),
-                                detail: locked ? "New chats only" : detail(for: pair),
-                                rowHeight: Self.pairRowHeight,
-                                isSelected: model.leadsWithHydraPair(pair, thread: thread),
-                                isEnabled: !locked
-                            ) {
-                                onEnterPair(pair)
-                            }
-                        }
-                        PopoverSectionHeader("Models")
-                    }
-                    ForEach(entries) { entry in
-                        let locked = hasHistory && entry.provider != thread.provider
-                        ModelListRow(
-                            entry: entry,
-                            detail: locked ? "New chats only" : (showsProviders ? entry.provider.displayName : nil),
-                            showsIcon: showsProviders,
-                            rowHeight: rowHeight,
-                            isSelected: !leadsWithPair && entry.provider == thread.provider && entry.option.id == thread.model,
-                            isEnabled: !locked
-                        ) {
-                            onChoose(entry)
-                        }
-                    }
-                    if entries.isEmpty {
-                        Text("Loading models…")
-                            .font(.system(.body))
-                            .foregroundStyle(Chrome.secondaryText)
-                            .padding(10)
-                    }
+                Spacer()
+
+                HStack(spacing: 6) {
+                    ProviderIcon(provider: activeProvider, size: 15)
+                    Text(activeProvider.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Chrome.primaryText)
+                    Text("\(activeModels.count)")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Chrome.secondaryText)
                 }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: min(pairsHeight + CGFloat(max(entries.count, 1)) * (rowHeight + 1), 440))
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
+            // Search Bar
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Chrome.secondaryText)
+                TextField("Search models...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Chrome.primaryText)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Chrome.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
+            // Split Layout
+            HStack(alignment: .top, spacing: 10) {
+                // Left rail of provider icons
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 6) {
+                        ForEach(railProviders) { provider in
+                            Button {
+                                withAnimation(.easeOut(duration: 0.1)) {
+                                    selectedProvider = provider
+                                }
+                            } label: {
+                                ProviderIcon(provider: provider, size: 18)
+                                    .frame(width: 34, height: 34)
+                                    .background {
+                                        if provider == selectedProvider {
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(Color.white.opacity(0.14))
+                                        }
+                                    }
+                                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(provider == selectedProvider ? 1.0 : 0.65)
+                            .help(provider.displayName)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(width: 36)
+
+                // Right pane of models
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        if !searchText.isEmpty {
+                            let matches = searchMatches
+                            if matches.isEmpty {
+                                Text("No models found")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Chrome.secondaryText)
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 6)
+                            } else {
+                                ForEach(matches) { entry in
+                                    ModelPickerRow(
+                                        title: entry.option.shortName,
+                                        subtitle: entry.provider.displayName,
+                                        iconProvider: entry.provider,
+                                        supportsFast: entry.option.supportsFast,
+                                        isSelected: entry.provider == thread.provider && entry.option.id == thread.model
+                                    ) {
+                                        onChoose(entry)
+                                    }
+                                }
+                            }
+                        } else {
+                            if !pairs.isEmpty {
+                                PopoverSectionHeader("Pairs")
+                                ForEach(pairs) { pair in
+                                    HydraPairListRow(
+                                        pair: pair,
+                                        title: HydraPairSummary.title(pair, registry: model.providers),
+                                        detail: detail(for: pair),
+                                        rowHeight: Self.pairRowHeight,
+                                        isSelected: model.leadsWithHydraPair(pair, thread: thread),
+                                        isEnabled: true
+                                    ) {
+                                        onEnterPair(pair)
+                                    }
+                                }
+                                PopoverSectionHeader("Models")
+                            }
+
+                            if activeModels.isEmpty {
+                                Text("Loading models…")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Chrome.secondaryText)
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 6)
+                            } else {
+                                ForEach(activeModels) { option in
+                                    ModelPickerRow(
+                                        title: option.shortName,
+                                        subtitle: nil,
+                                        iconProvider: nil,
+                                        supportsFast: option.supportsFast,
+                                        isSelected: selectedProvider == thread.provider && option.id == thread.model
+                                    ) {
+                                        onChoose(ModelCatalog.Entry(provider: selectedProvider, option: option))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.trailing, 6)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 260)
         }
         .padding(6)
         .task {
-            // A pair on another provider, or with its heads on one, names its models from
-            // that provider's catalogue, which this chat may never have loaded.
-            for provider in Set(pairs.flatMap { [$0.provider, $0.headsProvider] }) where provider != thread.provider {
+            for provider in railProviders {
                 await model.providers.loadCatalog(provider)
             }
+        }
+        .task(id: selectedProvider) {
+            await model.providers.loadCatalog(selectedProvider)
         }
     }
 
@@ -426,57 +567,56 @@ private struct HydraPairListRow: View {
     }
 }
 
-private struct ModelListRow: View {
-    let entry: ModelCatalog.Entry
-    let detail: String?
-    let showsIcon: Bool
-    let rowHeight: CGFloat
+private struct ModelPickerRow: View {
+    let title: String
+    let subtitle: String?
+    let iconProvider: ProviderKind?
+    let supportsFast: Bool
     let isSelected: Bool
-    let isEnabled: Bool
     let action: () -> Void
 
     @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                if showsIcon {
-                    ProviderIcon(provider: entry.provider, size: 14)
+            HStack(spacing: 8) {
+                if let iconProvider {
+                    ProviderIcon(provider: iconProvider, size: 14)
                         .foregroundStyle(Chrome.secondaryText)
-                        .frame(width: 18)
+                        .frame(width: 16)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: entry.option.shortName)
+                    Text(verbatim: title)
                         .font(.system(size: 14))
                         .foregroundStyle(Chrome.primaryText)
-                    if let detail {
-                        Text(verbatim: detail)
-                            .font(.system(.callout))
+                        .lineLimit(1)
+                    if let subtitle {
+                        Text(verbatim: subtitle)
+                            .font(.system(size: 11))
                             .foregroundStyle(Chrome.secondaryText)
+                            .lineLimit(1)
                     }
                 }
-                Spacer(minLength: 12)
-                if entry.option.supportsFast {
+                Spacer(minLength: 8)
+                if supportsFast {
                     Image(systemName: "bolt")
-                        .font(.system(.footnote))
+                        .font(.system(size: 11))
                         .foregroundStyle(Chrome.secondaryText)
                 }
                 Image(systemName: "checkmark")
-                    .font(.system(.body, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Chrome.primaryText)
                     .opacity(isSelected ? 1 : 0)
             }
-            .padding(.horizontal, 10)
-            .frame(height: rowHeight)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
             .background {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isHovering && isEnabled ? Chrome.overlay(0.1) : Color.clear)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isHovering ? Chrome.overlay(0.1) : Color.clear)
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.45)
         .onHover { hovering in
             withAnimation(Chrome.hover) { isHovering = hovering }
         }
