@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.4] - 2026-10-11
+
+Ensembyte 1.1.4 is a major feature update delivering interactive Voice Mode with 3D fluid Orb visualization, a redesigned dynamic model picker with provider rails and mid-session switching, GitHub integration, multi-account management, automated CLI updates, system-wide zoom, and custom terminal typography.
+
+### New Features & Capabilities
+- **Interactive Voice Mode & 3D Fluid Orb** (`Ensembyte-swift/`):
+  - Converse naturally using full two-way voice mode backed by `LocalDictationEngine` and real-time audio playback.
+  - Interactive shader-driven 3D fluid Orb visualizer reacting dynamically to speaking, listening, and agent thinking states.
+  - Hands-free composer voice dictation directly from the prompt input.
+- **Redesigned Dynamic Model Picker** (`Ensembyte-swift/`):
+  - Split-view layout featuring a vertical provider rail with tile highlight and active provider model counts in the header.
+  - Real-time search across all installed providers and models.
+  - Unlocked mid-session model and provider switching with seamless turn re-routing without session restart.
+- **Multi-Account & Provider Management** (`Ensembyte-swift/`):
+  - Multi-account switching per provider directly in Settings and the Usage pane.
+  - Integrated CLI update checker and manager ensuring background agent binaries stay synchronized.
+  - Native support for OMP provider sessions, plan limits, and usage tracking.
+- **GitHub Integration & Repository Cloning** (`Ensembyte-swift/`):
+  - Secure GitHub device authorization with macOS Keychain token storage.
+  - In-app repository clone panel and workspace initialization.
+- **Timeline, Stream & UI Enhancements** (`Ensembyte-swift/`):
+  - Activity tree view providing hierarchical inspection of tool calls, command executions, and nested agent actions.
+  - AppZoom scaling across all application windows.
+  - Customizable terminal font selection and line heights.
+  - 120 FPS timeline scrolling, stream mending, and hover preview cards.
+
 ## [1.1.3] - 2026-10-11
 
 Ensembyte 1.1.3 brings updated welcome tour artwork and liquid glass UI rendering refinements.
