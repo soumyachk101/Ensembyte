@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.3] - 2026-10-11
+
+Ensembyte 1.1.3 brings updated welcome tour artwork and liquid glass UI rendering refinements.
+
+### Refinements
+- **Refreshed welcome tour artwork** (`Ensembyte-swift/`): Updated in-app tour walkthrough visuals across all 8 onboarding scenes with crisp, high-resolution native macOS retina assets.
+- **Liquid glass & theme refinements** (`Ensembyte-swift/`, `website/`): Cleaned frosted glass rendering across theme previews and app chrome surfaces.
+
 ## [1.1.2] - 2026-10-08
 
 Ensembyte 1.1.2 delivers major stability and performance enhancements across file tree watching, child process management, background task synchronization with Claude, and multi-chat git isolation.
