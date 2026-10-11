@@ -2,12 +2,10 @@ import Foundation
 
 /// Drives Claude Code in headless stream-json mode, routing permission prompts to the app.
 ///
-/// With Hydra on, the session defines the heads as session agents (`--agents`), steers the
-/// lead towards them with an appended system prompt, and asks for the heads' own text and
-/// thinking (`--forward-subagent-text`). A head's messages carry the spawning tool call in
-/// `parent_tool_use_id`; each such stream keeps its own block bookkeeping, and its events go
-/// out wrapped in `agentEvent`. The `task_started`, `task_progress` and `task_notification`
-/// system messages bracket a head's life.
+/// With Hydra on, the session appends the lead's delegation-block policy to the system prompt
+/// and launches with `--disallowedTools Agent Task`: every head is a thread Ensembyte
+/// runs, never a sub-agent of this session. Messages that still carry a
+/// `parent_tool_use_id` keep their own block bookkeeping and go out wrapped in `agentEvent`.
 @MainActor
 final class ClaudeSession: ProviderSession {
     var onEvent: ((ProviderEvent) -> Void)?
@@ -34,7 +32,7 @@ final class ClaudeSession: ProviderSession {
     private var runtimeMode: RuntimeMode
     private var model: String?
     private var controlCounter = 0
-    private var pendingControl: [String: CheckedContinuation<JSONValue, Error>] = [:]
+    private var pendingControl = PendingReplies<JSONValue>()
     private var pendingTools: [String: PendingTool] = [:]
     private var toolNames: [String: String] = [:]
     private var mainStream = StreamState()
@@ -95,7 +93,7 @@ final class ClaudeSession: ProviderSession {
         // Connected servers from Settings are the only MCP servers the session sees.
         // --strict-mcp-config leaves the user's own Claude config files alone but out of this session; with none connected, the flag is not passed and Claude reads its own config as usual.
         if let mcpConfig = MCPProviderConfig.claudeConfigPath() { arguments += ["--mcp-config", mcpConfig, "--strict-mcp-config"] }
-        var environment = configuration.environment
+        let environment = configuration.environment
         let options = await Self.knownOptions(of: executable, environment: environment)
         // Resumed chats must use the current setting, even with Hydra off.
         if options.contains("--system-prompt-snapshot") { arguments += ["--system-prompt-snapshot", "off"] }
@@ -103,21 +101,11 @@ final class ClaudeSession: ProviderSession {
         if let hydra = configuration.hydra {
             // The system prompt is rendered fresh rather than replayed from the
             // conversation's first request, so switching Hydra on for an existing chat
-            // reaches the model.
-            if hydra.runsNatively {
-                // The heads and the lead's brief.
-                arguments += ["--agents", HydraPrompts.claudeAgents(hydra).compactString]
-                hydraPolicy = HydraPrompts.policy(for: .claude, hydra)
-                if options.contains("--forward-subagent-text") { arguments.append("--forward-subagent-text") }
-                // Uncapped, the CLI keeps its own limit on heads at once.
-                if let cap = hydra.maxHeads { environment["CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"] = String(cap) }
-            } else {
-                // The heads run on another provider, as threads Ensembyte starts: the
-                // lead asks for them with the delegation block, and its own agent tool goes,
-                // since a head it spawned itself would run on its own model.
-                hydraPolicy = HydraPrompts.fallbackPolicy(hydra)
-                arguments += ["--disallowedTools", "Agent", "Task"]
-            }
+            // reaches the model. The heads are threads Ensembyte starts: the lead asks
+            // for them with the delegation block, and its own agent tool goes, since a
+            // head it spawned itself would run inside this session instead of the app.
+            hydraPolicy = HydraPrompts.fallbackPolicy(hydra)
+            arguments += ["--disallowedTools", "Agent", "Task"]
         }
         // Exactly one combined system prompt segment for every session, Hydra or not. The
         // off notice goes out too, so a resumed thread cannot keep earlier guidance alive.
@@ -152,12 +140,7 @@ final class ClaudeSession: ProviderSession {
         }
 
         sessionID = id
-        var initialize: [String: JSONValue] = ["subtype": "initialize", "hooks": .null]
-        if configuration.hydra?.runsNatively == true {
-            // One-line progress notes for the heads, on task_progress.
-            initialize["agentProgressSummaries"] = true
-            initialize["forwardSubagentText"] = true
-        }
+        let initialize: [String: JSONValue] = ["subtype": "initialize", "hooks": .null]
         let initialization = try await control(.object(initialize))
         isStarted = true
         let models = Self.models(in: initialization)
@@ -253,38 +236,65 @@ final class ClaudeSession: ProviderSession {
     }
 
     func resolveApproval(_ requestID: String, optionID: String) {
-        guard let pending = pendingTools.removeValue(forKey: requestID) else { return }
-        if optionID == "allow" || optionID == "always" {
-            var response: [String: JSONValue] = ["behavior": "allow", "updatedInput": pending.input]
+        resolveApproval(requestID, optionID: optionID, delivered: { _ in })
+    }
+
+    func resolveApproval(_ requestID: String, optionID: String, delivered: @escaping @MainActor (Bool) -> Void) {
+        guard !hasClosed, !isStopping, let pending = pendingTools[requestID] else { delivered(false); return }
+        let allowed = optionID == "allow" || optionID == "always"
+        let response: JSONValue
+        if allowed {
+            var payload: [String: JSONValue] = ["behavior": "allow", "updatedInput": pending.input]
             if optionID == "always", let suggestions = pending.suggestions?.array {
-                response["updatedPermissions"] = .array(suggestions.map(Self.sessionScoped))
+                payload["updatedPermissions"] = .array(suggestions.map(Self.sessionScoped))
             }
-            sendToolResponse(requestID, .object(response))
-            if pending.name == "ExitPlanMode" {
-                onEvent?(.modeChanged(.build))
-                let mode = Self.modeName(runtimeMode, .build)
-                permissionMode = mode
-                Task { _ = try? await self.control(["subtype": "set_permission_mode", "mode": .string(mode)]) }
-            }
+            response = .object(payload)
         } else {
             let message = pending.name == "ExitPlanMode"
                 ? "The user wants to keep planning. Wait for their feedback before changing anything."
                 : "The user declined this action."
-            sendToolResponse(requestID, ["behavior": "deny", "message": .string(message)])
+            response = ["behavior": "deny", "message": .string(message)]
         }
-        onEvent?(.requestResolved(id: requestID))
+        sendToolResponse(requestID, response) { [weak self] succeeded in
+            if succeeded, let self {
+                if self.pendingTools.removeValue(forKey: requestID) != nil {
+                    self.onEvent?(.requestResolved(id: requestID))
+                }
+                if allowed, pending.name == "ExitPlanMode", !self.hasClosed, !self.isStopping {
+                    self.onEvent?(.modeChanged(.build))
+                    let mode = Self.modeName(self.runtimeMode, .build)
+                    self.permissionMode = mode
+                    Task { _ = try? await self.control(["subtype": "set_permission_mode", "mode": .string(mode)]) }
+                }
+            }
+            delivered(succeeded)
+        }
     }
 
     func answerQuestion(_ requestID: String, answers: [String: [String]]) {
-        guard let pending = pendingTools.removeValue(forKey: requestID) else { return }
+        answerQuestion(requestID, answers: answers, delivered: { _ in })
+    }
+
+    func answerQuestion(_ requestID: String, answers: [String: [String]], delivered: @escaping @MainActor (Bool) -> Void) {
+        guard !hasClosed, !isStopping, let pending = pendingTools[requestID] else { delivered(false); return }
         var input = pending.input.object ?? [:]
         var mapped: [String: JSONValue] = [:]
         for (question, values) in answers {
             mapped[question] = .string(values.joined(separator: ", "))
         }
         input["answers"] = .object(mapped)
-        sendToolResponse(requestID, ["behavior": "allow", "updatedInput": .object(input)])
-        onEvent?(.requestResolved(id: requestID))
+        sendToolResponse(requestID, ["behavior": "allow", "updatedInput": .object(input)]) { [weak self] succeeded in
+            if succeeded, let self, self.pendingTools.removeValue(forKey: requestID) != nil {
+                self.onEvent?(.requestResolved(id: requestID))
+            }
+            delivered(succeeded)
+        }
+    }
+
+    func stopAndWait(timeout: TimeInterval) async {
+        let process = process
+        stop()
+        await process?.terminateAndWait(timeout: timeout)
     }
 
     func stop() {
@@ -304,9 +314,8 @@ final class ClaudeSession: ProviderSession {
         guard let process else { throw ProviderError.notRunning }
         if hasClosed { throw ProviderError.failed(launchError ?? "Claude exited.") }
         controlCounter += 1
-        let requestID = "swarm-code-\(controlCounter)"
-        return try await withCheckedThrowingContinuation { continuation in
-            pendingControl[requestID] = continuation
+        let requestID = "ensembyte-code-\(controlCounter)"
+        return try await pendingControl.register(requestID, timeout: .seconds(request["subtype"]?.string == "interrupt" ? 10 : 30)) {
             process.send(["type": "control_request", "request_id": .string(requestID), "request": request])
         }
     }
@@ -323,11 +332,17 @@ final class ClaudeSession: ProviderSession {
         ])
     }
 
-    private func sendToolResponse(_ requestID: String, _ response: JSONValue) {
-        process?.send([
+    private func sendToolResponse(_ requestID: String, _ response: JSONValue, completion: (@MainActor (Bool) -> Void)? = nil) {
+        guard !hasClosed, !isStopping, let process else { completion?(false); return }
+        process.send([
             "type": "control_response",
             "response": ["subtype": "success", "request_id": .string(requestID), "response": response],
-        ])
+        ]) { [weak self] succeeded in
+            Task { @MainActor [weak self] in
+                if !succeeded { self?.didClose() }
+                completion?(succeeded)
+            }
+        }
     }
 
     private func handle(_ message: JSONValue) {
@@ -343,12 +358,11 @@ final class ClaudeSession: ProviderSession {
         switch type {
         case "control_response":
             let response = message["response"] ?? .null
-            guard let requestID = response["request_id"]?.string,
-                  let continuation = pendingControl.removeValue(forKey: requestID) else { return }
+            guard let requestID = response["request_id"]?.string else { return }
             if response["subtype"]?.string == "error" {
-                continuation.resume(throwing: ProviderError.failed(response["error"]?.string ?? "Claude rejected the request."))
+                pendingControl.fail(requestID, ProviderError.failed(response["error"]?.string ?? "Claude rejected the request."))
             } else {
-                continuation.resume(returning: response["response"] ?? .null)
+                pendingControl.resolve(requestID, response["response"] ?? .null)
             }
         case "control_request":
             handleControlRequest(message)
@@ -408,6 +422,10 @@ final class ClaudeSession: ProviderSession {
         case "task_progress":
             guard let taskID = message["task_id"]?.string, let agentID = agentsByTask[taskID] else { return }
             let usage = message["usage"]
+            // The head's own running total, for its panel. It is not added to the
+            // ledger: this total and the turn result's usage are two accounts of
+            // overlapping work, and the CLI does not say how much of the head's
+            // work the result already covers, so counting both would charge it twice.
             onEvent?(.agentProgress(
                 agentID: agentID,
                 summary: message["summary"]?.string,
@@ -526,7 +544,7 @@ final class ClaudeSession: ProviderSession {
         // notice rather than a message; the placeholders say nothing and are dropped.
         if body["model"]?.string == Self.syntheticModel {
             let text = content.compactMap { $0["type"]?.string == "text" ? $0["text"]?.string : nil }
-                .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                .joined(separator: "\n").trimmed
             if message["isApiErrorMessage"]?.bool == true, !text.isEmpty, !Self.syntheticPlaceholders.contains(text) {
                 sink(.notice(Notice(level: .warning, message: text)))
             }
@@ -549,7 +567,7 @@ final class ClaudeSession: ProviderSession {
                 let input = block["input"] ?? [:]
                 toolNames[toolID] = name
                 if name == "TodoWrite" {
-                    sink(.todos(Self.todos(from: input)))
+                    sink(.todos(ACPSession.parseTodoItems(input["todos"])))
                 } else if let call = toolCall(name: name, input: input) {
                     sink(.toolStarted(id: toolID, call: call))
                     sink(.toolUpdated(id: toolID, update: ToolUpdate(title: call.title, detail: call.detail, edits: call.edits, kind: call.kind)))
@@ -567,7 +585,7 @@ final class ClaudeSession: ProviderSession {
             let name = toolNames.removeValue(forKey: toolID) ?? ""
             if Self.hiddenResultTools.contains(name) { continue }
             let isError = block["is_error"]?.bool ?? false
-            let output = Self.resultText(block["content"])
+            let output = ToolText.blocks(block["content"])
             var status: ToolCall.Status = isError ? .failed : .completed
             if isError, output.localizedCaseInsensitiveContains("declined") || output.localizedCaseInsensitiveContains("doesn't want") {
                 status = .declined
@@ -589,8 +607,16 @@ final class ClaudeSession: ProviderSession {
         turnActive = false
         if let usage = Self.contextUsage(message) {
             onEvent?(.usage(usage))
-            let spend = Self.turnSpend(message)
-            if spend > 0 { TokenLedger.shared.record(spend: spend) }
+            // The result is the turn's own account of itself: Claude Code reports
+            // one usage object per API call, cache reads included, and the total
+            // is theirs. Whether that total covers usage from heads running
+            // inside the turn is not something the CLI reports, so no head usage
+            // is added on top of it: a head's progress tokens stay where they
+            // are, reported to its panel.
+            if let spend = Self.turnSpendEvent(message, model: model) {
+                TokenLedger.shared.record(spend: spend.totalTokens)
+                onEvent?(.tokenSpend(spend))
+            }
         }
         for requestID in pendingTools.keys { onEvent?(.requestResolved(id: requestID)) }
         pendingTools.removeAll()
@@ -691,19 +717,14 @@ final class ClaudeSession: ProviderSession {
     }
 
     private func didClose() {
+        guard !hasClosed else { return }
         clearBackgroundTasks()
         hasClosed = true
         let tail = process?.errorTail ?? ""
         // The result's own error names the failure better than the stderr tail can.
         let reason = launchError ?? TextCleanup.lastLines(tail)
         launchError = reason
-        let waiting = Array(pendingControl.values)
-        pendingControl.removeAll()
-        for continuation in waiting {
-            continuation.resume(throwing: ProviderError.failed(reason ?? "Claude exited."))
-        }
-        for requestID in pendingTools.keys { onEvent?(.requestResolved(id: requestID)) }
-        pendingTools.removeAll()
+        pendingControl.failAll(ProviderError.failed(reason ?? "Claude exited."))
         turnActive = false
         // A launch that failed is reported by `start()` throwing; only a session that
         // ran says it exited.
@@ -776,35 +797,15 @@ final class ClaudeSession: ProviderSession {
         }
     }
 
-    private static func todos(from input: JSONValue) -> [TodoStep] {
-        (input["todos"]?.array ?? []).compactMap { todo in
-            guard let text = todo["content"]?.string else { return nil }
-            let status: TodoStep.Status = switch todo["status"]?.string {
-            case "completed": .done
-            case "in_progress": .active
-            default: .pending
-            }
-            return TodoStep(text: text, status: status)
-        }
-    }
-
-    private static func resultText(_ content: JSONValue?) -> String {
-        guard let content else { return "" }
-        if let text = content.string { return text }
-        return (content.array ?? []).compactMap { $0["text"]?.string }.joined(separator: "\n")
-    }
-
     /// The tokens the turn sent and received across its API calls, cache reads
     /// included, which is what Claude Code itself reports.
     private static func turnSpend(_ message: JSONValue) -> Int {
         guard let usage = message["usage"] else { return 0 }
         func tokens(_ value: JSONValue?) -> Int {
-            guard let value else { return 0 }
-            let input = value["input_tokens"]?.int ?? 0
-            let cacheRead = value["cache_read_input_tokens"]?.int ?? 0
-            let cacheCreation = value["cache_creation_input_tokens"]?.int ?? 0
-            let output = value["output_tokens"]?.int ?? 0
-            return input + cacheRead + cacheCreation + output
+            (value?["input_tokens"]?.int ?? 0)
+                + (value?["cache_read_input_tokens"]?.int ?? 0)
+                + (value?["cache_creation_input_tokens"]?.int ?? 0)
+                + (value?["output_tokens"]?.int ?? 0)
         }
         if let iterations = usage["iterations"]?.array, !iterations.isEmpty {
             return iterations.reduce(0) { $0 + tokens($1) }
@@ -812,14 +813,40 @@ final class ClaudeSession: ProviderSession {
         return tokens(usage)
     }
 
+    /// The turn's usage as spend: the total `turnSpend` counts, with the parts
+    /// the CLI gives when the usage is a single object. With iterations the
+    /// total is their sum and the parts are left out rather than guessed. Cache
+    /// reads stay inside `cachedInputTokens`, which is a slice of the total,
+    /// never something added to it.
+    private static func turnSpendEvent(_ message: JSONValue, model: String?) -> TokenSpend? {
+        guard let usage = message["usage"] else { return nil }
+        let total = turnSpend(message)
+        guard total > 0 else { return nil }
+        let iterations = usage["iterations"]?.array ?? []
+        guard iterations.isEmpty else {
+            return TokenSpend(provider: .claude, totalTokens: total, model: model)
+        }
+        let cached = usage["cache_read_input_tokens"]?.int
+        let input = usage["input_tokens"]?.int.map {
+            $0 + (cached ?? 0) + (usage["cache_creation_input_tokens"]?.int ?? 0)
+        }
+        return TokenSpend(
+            provider: .claude,
+            totalTokens: total,
+            inputTokens: input,
+            outputTokens: usage["output_tokens"]?.int,
+            cachedInputTokens: cached,
+            model: model
+        )
+    }
+
     private static func contextUsage(_ message: JSONValue) -> ContextUsage? {
         guard let usage = message["usage"] else { return nil }
         let last = usage["iterations"]?.array?.last ?? usage
-        let input = last["input_tokens"]?.int ?? 0
-        let cacheRead = last["cache_read_input_tokens"]?.int ?? 0
-        let cacheCreation = last["cache_creation_input_tokens"]?.int ?? 0
-        let output = last["output_tokens"]?.int ?? 0
-        let used = input + cacheRead + cacheCreation + output
+        let used = (last["input_tokens"]?.int ?? 0)
+            + (last["cache_read_input_tokens"]?.int ?? 0)
+            + (last["cache_creation_input_tokens"]?.int ?? 0)
+            + (last["output_tokens"]?.int ?? 0)
         guard used > 0 else { return nil }
         let window = message["modelUsage"]?.object?.values.compactMap { $0["contextWindow"]?.int }.max()
         return ContextUsage(usedTokens: used, windowTokens: window)

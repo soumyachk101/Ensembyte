@@ -128,14 +128,12 @@ final class StdioProcess: @unchecked Sendable {
 
     func send(_ message: JSONValue, completion: ((Bool) -> Void)? = nil) {
         let body = message.data()
-        let payload: Data
         switch framing {
         case .lines:
-            payload = body + Data([0x0A])
+            write(body + Data([0x0A]), completion: completion)
         case .contentLength:
-            payload = Data("Content-Length: \(body.count)\r\n\r\n".utf8) + body
+            write(Data("Content-Length: \(body.count)\r\n\r\n".utf8) + body, completion: completion)
         }
-        write(payload, completion: completion)
     }
 
     /// Writes raw bytes to the process's stdin: a prompt piped to a one-shot CLI.

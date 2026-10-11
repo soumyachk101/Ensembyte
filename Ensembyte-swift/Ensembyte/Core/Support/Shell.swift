@@ -9,11 +9,11 @@ struct ShellResult: Sendable {
     var succeeded: Bool { status == 0 }
     var output: String { String(decoding: stdout, as: UTF8.self) }
     var errorOutput: String { String(decoding: stderr, as: UTF8.self) }
-    var trimmedOutput: String { output.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedOutput: String { output.trimmed }
 
     /// The most useful text to show when a command fails.
     var failureMessage: String {
-        let error = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let error = errorOutput.trimmed
         let message = error.isEmpty ? trimmedOutput : error
         return message.isEmpty ? "The command failed with exit code \(status)." : message
     }
@@ -162,13 +162,32 @@ enum ShellCommandKind {
     private static let searchActions: Set<String> = ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-x", "-X"]
 
     static func mayWriteFiles(_ text: String) -> Bool {
-        let command = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let command = text.trimmed
         guard !command.isEmpty else { return false }
         // Redirection writes whatever the tool in front of it does, and a substitution
         // hides a command this cannot see.
         guard !command.contains(">"), !command.contains("$("), !command.contains("`") else { return true }
         for part in parts(of: command) where !onlyReads(part) { return true }
         return false
+    }
+
+    /// The folder a command moves into before anything else runs (`cd ~/copy && python3 …`),
+    /// resolved against `directory` where the command starts, or nil when it opens with
+    /// something else. A path the shell would still have to expand (a variable other than
+    /// `$HOME`, `cd -`) is left unresolved rather than guessed.
+    static func leadingDirectory(of text: String, from directory: String) -> String? {
+        guard let first = parts(of: text.trimmed).first else { return nil }
+        let tokens = first.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard tokens.count == 2, tokens[0] == "cd" else { return nil }
+        var path = tokens[1]
+        if path.count >= 2, let quote = path.first, quote == "'" || quote == "\"", path.last == quote {
+            path = String(path.dropFirst().dropLast())
+        }
+        if path.hasPrefix("$HOME") { path = "~" + path.dropFirst("$HOME".count) }
+        guard !path.isEmpty, path != "-", !path.contains("$") else { return nil }
+        if path.hasPrefix("~") { path = (path as NSString).expandingTildeInPath }
+        let absolute = path.hasPrefix("/") ? path : (directory as NSString).appendingPathComponent(path)
+        return (absolute as NSString).standardizingPath
     }
 
     /// A command line as the separate commands it runs. Quoting is not taken apart: a
@@ -216,12 +235,14 @@ enum ShellCommandKind {
 }
 
 /// Resumes a continuation exactly once, however many callbacks race to finish it.
-final class OnceContinuation<Value: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Value, Error>?
+///
+/// It is taken out under the lock and resumed outside it, since a resume runs whatever
+/// the awaiting task does next and `withLock` is non-reentrant.
+final class OnceContinuation<Value: Sendable>: Sendable {
+    private let continuation: Mutex<CheckedContinuation<Value, Error>?>
 
     init(_ continuation: CheckedContinuation<Value, Error>) {
-        self.continuation = continuation
+        self.continuation = Mutex(continuation)
     }
 
     func resume(returning value: Value) {
@@ -233,25 +254,27 @@ final class OnceContinuation<Value: Sendable>: @unchecked Sendable {
     }
 
     private func take() -> CheckedContinuation<Value, Error>? {
-        lock.withLock {
-            let continuation = self.continuation
-            self.continuation = nil
+        continuation.withLock { continuation in
+            defer { continuation = nil }
             return continuation
         }
     }
 }
 
-private final class OutputCollector: @unchecked Sendable {
+private final class OutputCollector: Sendable {
     enum Stream: Hashable {
         case stdout
         case stderr
     }
 
-    private let lock = NSLock()
-    private var stdout = Data()
-    private var stderr = Data()
-    private var closed: Set<Stream> = []
-    private var waiters: [OnceContinuation<Void>] = []
+    private struct State {
+        var stdout = Data()
+        var stderr = Data()
+        var closed: Set<Stream> = []
+        var waiters: [OnceContinuation<Void>] = []
+    }
+
+    private let state = Mutex(State())
     private let limit: Int?
 
     init(limit: Int?) {
@@ -265,10 +288,10 @@ private final class OutputCollector: @unchecked Sendable {
                 handle.readabilityHandler = nil
                 close(stream)
             } else {
-                lock.withLock {
+                state.withLock { state in
                     switch stream {
-                    case .stdout: append(data, to: &stdout)
-                    case .stderr: append(data, to: &stderr)
+                    case .stdout: append(data, to: &state.stdout)
+                    case .stderr: append(data, to: &state.stderr)
                     }
                 }
             }
@@ -284,7 +307,7 @@ private final class OutputCollector: @unchecked Sendable {
     }
 
     func finished(within timeout: TimeInterval) async -> (stdout: Data, stderr: Data) {
-        if let output = lock.withLock({ closed.count == 2 ? (stdout, stderr) : nil }) { return output }
+        if let output = state.withLock({ $0.closed.count == 2 ? ($0.stdout, $0.stderr) : nil }) { return output }
         let deadline = Task {
             do { try await Task.sleep(for: .seconds(timeout)) }
             catch { return }
@@ -295,9 +318,9 @@ private final class OutputCollector: @unchecked Sendable {
         await withTaskCancellationHandler {
             try? await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let once = OnceContinuation(continuation)
-                let isDone = lock.withLock {
-                    if closed.count == 2 { return true }
-                    waiters.append(once)
+                let isDone = state.withLock { state in
+                    if state.closed.count == 2 { return true }
+                    state.waiters.append(once)
                     return false
                 }
                 if isDone { once.resume(returning: ()) }
@@ -306,14 +329,14 @@ private final class OutputCollector: @unchecked Sendable {
             close(.stdout)
             close(.stderr)
         }
-        return lock.withLock { (stdout, stderr) }
+        return state.withLock { ($0.stdout, $0.stderr) }
     }
 
     private func close(_ stream: Stream) {
-        let ready: [OnceContinuation<Void>] = lock.withLock {
-            guard closed.insert(stream).inserted, closed.count == 2 else { return [] }
-            let ready = waiters
-            waiters.removeAll()
+        let ready: [OnceContinuation<Void>] = state.withLock { state in
+            guard state.closed.insert(stream).inserted, state.closed.count == 2 else { return [] }
+            let ready = state.waiters
+            state.waiters.removeAll()
             return ready
         }
         for waiter in ready { waiter.resume(returning: ()) }
@@ -324,6 +347,7 @@ private final class OutputCollector: @unchecked Sendable {
 /// minimal PATH that cannot find provider CLIs, so this is captured once at launch.
 enum LoginEnvironment {
     private static let cached = Mutex<[String: String]?>(nil)
+    private static let overlay = Mutex<[String: String]>([:])
     /// The one read of the login shell. Launch starts it; anything that resolves a CLI before
     /// it lands waits on the same task, so a codex under nvm is never reported missing.
     private static let loading = Mutex<Task<Void, Never>?>(nil)
@@ -335,7 +359,13 @@ enum LoginEnvironment {
     ]
 
     static var current: [String: String] {
-        cached.withLock { $0 } ?? fallbackEnvironment
+        let base = cached.withLock { $0 } ?? fallbackEnvironment
+        return base.merging(overlay.withLock { $0 }) { _, new in new }
+    }
+
+    /// The overlay is how a connected GitHub account reaches every process the app starts.
+    static func setOverlay(_ values: [String: String]) {
+        overlay.withLock { $0 = values }
     }
 
     /// The process's own environment, for the moments before the login shell has answered:
@@ -362,11 +392,11 @@ enum LoginEnvironment {
 
     @concurrent
     private static func read() async {
-        let marker = "__SWARM_CODE_ENVIRONMENT__"
+        let marker = "__ENSEMBYTE_ENVIRONMENT__"
         let script = "printf '\(marker)'; /usr/bin/env -0; printf '\(marker)'"
         var environment = fallbackEnvironment
         let shell = URL(fileURLWithPath: userShell())
-        if let result = try? await Shell.run(shell, ["-l", "-i", "-c", script], environment: environment, timeout: 15) {
+        if let result = try? await Shell.run(shell, ["-l", "-i", "-c", script], environment: environment, timeout: 8) {
             let text = result.output
             if let start = text.range(of: marker),
                let end = text.range(of: marker, options: .backwards),

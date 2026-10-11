@@ -14,46 +14,67 @@ struct ComposerArea: View {
     /// Whether the thread's changes tab can rise from the box. The main chat's does; a
     /// floating panel's box never does, since a head's changes land through the lead.
     var showsChanges = true
+    /// The main chat's box in a thread with no messages yet: narrower and taller, centred
+    /// in the pane by the chat column (see `ComposerDock`). Floating panels never are.
+    var isHero = false
+
+    /// The box's room at rest in a thread with messages, and in a new one.
+    static let dockedWidth: CGFloat = 820
+    static let heroWidth: CGFloat = 736
+    /// The empty box's height in a new thread: the text's room over the controls' row.
+    static let heroHeight: CGFloat = 120
+    /// The gap under the box when it sits docked at the pane's bottom.
+    static let bottomInset: CGFloat = 14
 
     /// The changes popover presented from the tab. Driven by
     /// `runtime.isDiffVisible`, so every opener (tab, Review, ⌘D) shares it.
     @State private var diffPopover = DiffPopoverCoordinator()
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
 
     var body: some View {
-        GlassEffectContainer(spacing: 8) {
-            VStack(spacing: 12) {
-                ForEach(runtime.approvals) { request in
-                    ApprovalCard(request: request, runtime: runtime)
-                }
+        areaContent
+            .frame(maxWidth: isHero ? Self.heroWidth : Self.dockedWidth)
+            .padding(.horizontal, 20)
+            .padding(.bottom, Self.bottomInset)
+            .frame(maxWidth: .infinity)
+            .animation(Chrome.panelSlide, value: runtime.approvals.map(\.id))
+    }
+
+    private var areaContent: some View {
+        VStack(spacing: 12) {
+            VoiceComposerOrb(threadID: runtime.threadID)
+            ForEach(runtime.approvals) { request in
+                ApprovalCard(request: request, runtime: runtime)
+            }
+            // One glass pass for the tab and the box: where the tab's foot tucks under the
+            // box their glass merges, instead of the box's glass sampling the tab's.
+            GlassEffectContainer(spacing: 0) {
                 VStack(alignment: .center, spacing: -ThreadChangesTab.overlap) {
                     TabSlot(runtime: runtime, diffPopover: diffPopover, showsChanges: showsChanges)
-                    ComposerView(runtime: runtime, workingDirectory: workingDirectory, compactModelChip: compactModelChip, takesFocusOnAppear: takesFocusOnAppear)
+                        .zIndex(0)
+                    ComposerView(runtime: runtime, workingDirectory: workingDirectory, compactModelChip: compactModelChip, takesFocusOnAppear: takesFocusOnAppear, isHero: isHero)
+                        .zIndex(1)
                 }
-                .background {
-                    AttachmentAnchorCapture { diffPopover.setFallbackAnchor($0) }
-                }
-                .background {
-                    // A box without the tab never runs git for the stats it would show.
-                    if showsChanges { ChangeStatsRefresh(runtime: runtime) }
-                }
-                .onAppear { diffPopover.sync(isVisible: runtime.isDiffVisible, runtime: runtime) }
-                // The box moved to another thread; the coordinator closes the popover it had and never opens one on arrival.
-                .onChange(of: runtime.threadID) { diffPopover.sync(isVisible: runtime.isDiffVisible, runtime: runtime) }
-                .onChange(of: runtime.isDiffVisible) { _, visible in
-                    diffPopover.sync(isVisible: visible, runtime: runtime)
-                }
-                .onChange(of: runtime.diffOpenRequest) {
-                    diffPopover.reopen(runtime: runtime)
-                }
-                .onDisappear { diffPopover.close() }
-                .onChange(of: isColumnShown) { _, shown in if !shown { diffPopover.close() } }
             }
+            .background {
+                AttachmentAnchorCapture { diffPopover.setFallbackAnchor($0) }
+            }
+            .background {
+                // A box without the tab never runs git for the stats it would show.
+                if showsChanges { ChangeStatsRefresh(runtime: runtime) }
+            }
+            .onAppear { diffPopover.sync(isVisible: runtime.isDiffVisible, runtime: runtime) }
+            // The box moved to another thread; the coordinator closes the popover it had and never opens one on arrival.
+            .onChange(of: runtime.threadID) { diffPopover.sync(isVisible: runtime.isDiffVisible, runtime: runtime) }
+            .onChange(of: runtime.isDiffVisible) { _, visible in
+                diffPopover.sync(isVisible: visible, runtime: runtime)
+            }
+            .onChange(of: runtime.diffOpenRequest) {
+                diffPopover.reopen(runtime: runtime)
+            }
+            .onDisappear { diffPopover.close() }
+            .onChange(of: isColumnShown) { _, shown in if !shown { diffPopover.close() } }
         }
-        .frame(maxWidth: 820)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 14)
-        .frame(maxWidth: .infinity)
-        .animation(Chrome.panelSlide, value: runtime.approvals.map(\.id))
     }
 }
 
@@ -121,8 +142,10 @@ struct ComposerView: View {
     /// Floating panels are narrow: the model chip collapses to the provider's icon.
     var compactModelChip: Bool = false
     var takesFocusOnAppear = true
+    var isHero = false
 
     @State private var controller = ComposerController()
+    @State private var dictation = ComposerDictation()
     @State private var suggestions = SuggestionState()
     /// Escape closed the list; the next caret move may open it again.
     @State private var dismissedSuggestions = false
@@ -133,6 +156,9 @@ struct ComposerView: View {
     /// seconds: files used to be dropped at the cap with nothing said about it.
     @State private var attachmentNotice: String?
 
+    /// The text column's room in a new thread's box: its height less the pill's padding.
+    private static let heroTextHeight = ComposerArea.heroHeight - 24
+
     /// How many files one message carries.
     static let maxAttachments = Storage.attachmentLimit
 
@@ -140,40 +166,62 @@ struct ComposerView: View {
         // Layout only: the resolved thread and help strings are plain values handed down,
         // so neither a keystroke nor a thread write re-evaluates the pill itself.
         let thread = model.thread(runtime.threadID)
-        // One pill: the text on the left, the controls tucked into its trailing end. The
-        // controls sit on the pill's bottom line, so they stay put while the text grows upward.
-        HStack(alignment: .bottom, spacing: 8) {
-            ComposerTextColumn(
-                runtime: runtime,
-                controller: controller,
-                placeholder: placeholder(for: thread),
-                takesFocusOnAppear: takesFocusOnAppear,
-                attachmentNotice: attachmentNotice,
-                onKey: handleKey,
-                onAttach: attach,
-                onCursorChange: cursorMoved(to:),
-                onBlur: blur
-            )
-            // A single line of text is as tall as the send button, so an empty pill is 44 high.
-            .padding(.vertical, 4)
-
-            if let thread {
-                ComposerControls(
-                    runtime: runtime,
-                    thread: thread,
-                    compact: compactModelChip,
+        // One pill: the attach button at its leading edge, the text, and the controls tucked
+        // into its trailing end. The controls sit on the pill's bottom line, so they stay put
+        // while the text grows upward; the attach button stays on the first line's. A
+        // dictation in progress shows its status above the row.
+        VStack(alignment: .leading, spacing: 8) {
+            ComposerDictationStatus(dictation: dictation)
+            HStack(alignment: .top, spacing: 4) {
+                AttachButton(
                     recentDownloadsPicker: model.settings.recentDownloadsPicker,
-                    goesToHead: goesToHead(thread),
-                    queueGoesToHead: queueGoesToHead(thread),
-                    headsProvider: headsProvider(thread),
                     showingRecents: $showingRecents,
                     onAttach: { attach($0.map(AttachmentSource.file)) },
-                    onChooseFiles: chooseFiles,
-                    onSend: send
+                    onChooseFiles: chooseFiles
                 )
+                // As tall as one line of text with its padding, so the clip centres on it.
+                .frame(height: 28)
+                HStack(alignment: .bottom, spacing: 8) {
+                    ComposerTextColumn(
+                        runtime: runtime,
+                        controller: controller,
+                        placeholder: placeholder(for: thread),
+                        takesFocusOnAppear: takesFocusOnAppear,
+                        attachmentNotice: attachmentNotice,
+                        onKey: handleKey,
+                        onAttach: attach,
+                        onCursorChange: cursorMoved(to:),
+                        onBlur: blur
+                    )
+                    // A new thread's box keeps a few lines of room over its controls; the text sits
+                    // at the top of it and a click anywhere in it types.
+                    .frame(minHeight: isHero ? Self.heroTextHeight : nil, alignment: .top)
+                    .background {
+                        if isHero {
+                            Color.clear
+                                .contentShape(.rect)
+                                .onTapGesture { controller.focus() }
+                        }
+                    }
+                    // A single line of text is as tall as the send button, so an empty pill is 44 high.
+                    .padding(.vertical, 4)
+
+                    if let thread {
+                        ComposerControls(
+                            runtime: runtime,
+                            thread: thread,
+                            compact: compactModelChip,
+                            goesToHead: goesToHead(thread),
+                            queueGoesToHead: queueGoesToHead(thread),
+                            headsProvider: headsProvider(thread),
+                            dictation: dictation,
+                            onSend: send
+                        )
+                    }
+                }
             }
         }
-        .padding(.leading, 14)
+        .padding(.leading, 8)
         .padding(.trailing, 8)
         .padding(.vertical, 8)
         // While a turn runs, accent dots flow along the pill's bottom two-fifths, behind
@@ -194,13 +242,27 @@ struct ComposerView: View {
                 controller.hideSuggestions()
             }
         }
-        .onDisappear { controller.hideSuggestions() }
-        .onChange(of: runtime.threadID) { _, _ in controller.hideSuggestions() }
+        .onDisappear { controller.hideSuggestions(); dictation.cancel() }
+        .onChange(of: runtime.threadID) { _, _ in
+            controller.hideSuggestions()
+            dictation.cancel()
+            dictation.dismissNotice()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
+            if dictation.isRecording { dictation.cancel() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            dictation.cancel()
+        }
         // The column shown again takes the keyboard back, as it did when it first appeared;
         // one going behind another drops its list.
         .onChange(of: isColumnShown) { _, shown in
-            if shown { if takesFocusOnAppear { controller.focus() } } else { controller.hideSuggestions() }
+            if shown { if takesFocusOnAppear { controller.focus() } } else {
+                controller.hideSuggestions()
+                dictation.cancel()
+            }
         }
+        .task { await dictation.warmUpIfInstalled() }
         .task(id: commandKey) { await loadCommands() }
         .onChange(of: model.providers.commands[commandKey]) { _, _ in
             if controller.hasFocus { cursorMoved(to: controller.cursorLocation) }
@@ -340,6 +402,10 @@ struct ComposerView: View {
         case .down:
             return recall(older: false)
         case .escape:
+            if dictation.isBusy {
+                dictation.cancel()
+                return true
+            }
             // A running turn is stopped and taken back, its words returning to the box; with
             // nothing running, the panels go the way ⌘J and ⌘D take them.
             if runtime.isRunning {
@@ -458,7 +524,7 @@ struct ComposerView: View {
             // is under way, and this answer is for a word that is gone.
             guard !Task.isCancelled else { return }
             items = paths.map { path in
-                Suggestion(value: "@\(path) ", title: (path as NSString).lastPathComponent, detail: path, symbol: path.hasSuffix("/") ? "folder" : "doc")
+                Suggestion(value: "@\(path) ", title: (path as NSString).lastPathComponent, detail: path, symbol: "doc")
             }
         } else if word.hasPrefix("/"), start == 0 {
             kind = .command
@@ -475,7 +541,7 @@ struct ComposerView: View {
     private func commandSuggestions(matching query: String) -> [Suggestion] {
         guard let thread = model.thread(runtime.threadID) else { return [] }
         var commands = [SlashCommand(name: "plan", detail: "Turn plan mode on or off", isBuiltIn: true)]
-        if thread.provider == .codex || thread.provider == .claude || thread.provider == .copilot || thread.provider == .deepseek || thread.provider == .meta || thread.provider == .zai || thread.provider == .pi {
+        if thread.provider.supportsCompact {
             commands.append(SlashCommand(name: "compact", detail: "Summarize the conversation to free up context", isBuiltIn: true))
         }
         commands += model.providers.commands[commandKey] ?? []
@@ -575,7 +641,7 @@ private struct ComposerTextColumn: View {
             DraftAttachments(runtime: runtime)
             if let attachmentNotice {
                 Text(verbatim: attachmentNotice)
-                    .font(.system(size: 11))
+                    .font(.system(.subheadline))
                     .foregroundStyle(Chrome.warning)
                     .lineLimit(1)
                     .padding(.bottom, 6)
@@ -606,44 +672,54 @@ private struct ComposerTextColumn: View {
     }
 }
 
-/// The pill's trailing controls: the attach button, the model chip, the context ring
-/// and send. It takes the resolved thread and help values as plain values, so a thread
-/// write repaints the controls without reaching the pill or the text.
+/// The attach button at the pill's leading edge: the file panel, or the recent downloads
+/// first when that picker is on.
+private struct AttachButton: View {
+    let recentDownloadsPicker: Bool
+    @Binding var showingRecents: Bool
+    let onAttach: ([URL]) -> Void
+    let onChooseFiles: () -> Void
+
+    var body: some View {
+        Button {
+            if recentDownloadsPicker {
+                showingRecents.toggle()
+            } else {
+                onChooseFiles()
+            }
+        } label: {
+            Image(systemName: "paperclip")
+                .font(Chrome.iconFont)
+        }
+        .buttonStyle(.chip(active: showingRecents))
+        .focusable(false)
+        .help("Attach files")
+        .accessibilityLabel(Text("Attach files"))
+        .popover(isPresented: $showingRecents, arrowEdge: .bottom) {
+            DownloadsPopover(
+                pick: { showingRecents = false; onAttach([$0]) },
+                chooseOther: { showingRecents = false; onChooseFiles() }
+            )
+        }
+    }
+}
+
+/// The pill's trailing controls: the model chip, the context ring and send. It takes the
+/// resolved thread and help values as plain values, so a thread write repaints the
+/// controls without reaching the pill or the text.
 private struct ComposerControls: View {
     let runtime: ThreadRuntime
     let thread: ChatThread
     let compact: Bool
-    let recentDownloadsPicker: Bool
     let goesToHead: Bool
     let queueGoesToHead: Bool
     let headsProvider: ProviderKind?
-    @Binding var showingRecents: Bool
-    let onAttach: ([URL]) -> Void
-    let onChooseFiles: () -> Void
+    let dictation: ComposerDictation
     let onSend: () -> Void
 
     var body: some View {
         HStack(spacing: 2) {
-            Button {
-                if recentDownloadsPicker {
-                    showingRecents.toggle()
-                } else {
-                    onChooseFiles()
-                }
-            } label: {
-                Image(systemName: "paperclip")
-                    .font(Chrome.iconFont)
-            }
-            .buttonStyle(.chip(active: showingRecents))
-            .focusable(false)
-            .help("Attach files")
-            .accessibilityLabel(Text("Attach files"))
-            .popover(isPresented: $showingRecents, arrowEdge: .bottom) {
-                DownloadsPopover(
-                    pick: { showingRecents = false; onAttach([$0]) },
-                    chooseOther: { showingRecents = false; onChooseFiles() }
-                )
-            }
+            ComposerDictationButton(runtime: runtime, dictation: dictation)
             ModelEffortSlot(runtime: runtime, thread: thread, compact: compact)
             // A floating panel's box (compact chip) leaves the ring out: a head's context
             // is not what the panel is for, and the row is short of room as it is.
@@ -651,6 +727,7 @@ private struct ComposerControls: View {
                 ContextMeter(runtime: runtime, provider: thread.provider, headsProvider: headsProvider)
             }
             SendButton(runtime: runtime, goesToHead: goesToHead, queueGoesToHead: queueGoesToHead, send: onSend)
+                .disabled(runtime.isDictating)
         }
         .fixedSize()
     }
@@ -660,16 +737,17 @@ private struct ComposerControls: View {
 /// off the run flag, so starting and stopping a turn repaints the dots alone.
 private struct ComposerWorkingDotsSlot: View {
     let runtime: ThreadRuntime
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
 
     var body: some View {
-        if runtime.isRunning {
-            GeometryReader { proxy in
-                ComposerWorkingDots()
-                    .frame(height: proxy.size.height * 0.4)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-            }
-            .clipShape(.rect(cornerRadius: 22, style: .continuous))
-            .transition(.opacity.animation(.easeInOut(duration: 0.4)))
+        if performanceMode {
+            EmptyView()
+        } else if runtime.isRunning {
+            ComposerWorkingDots()
+                .frame(height: 24)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .clipShape(.rect(cornerRadius: 22, style: .continuous))
+                .transition(.opacity.animation(.easeInOut(duration: 0.4)))
         }
     }
 }
@@ -742,7 +820,7 @@ private struct ContextMeter: View {
                     // from, so it is always here.
                     HStack {
                         Text("Usage")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.callout, weight: .semibold))
                             .foregroundStyle(Chrome.secondaryText)
                         Spacer(minLength: 8)
                         ChromeCircleButton(symbol: "arrow.up.right", help: "Open as a floating panel beside the chat") {
@@ -882,10 +960,10 @@ private struct DraftChips: View {
                     if let command {
                         HStack(spacing: 5) {
                             Image(systemName: command.isBuiltIn ? "command" : "sparkles")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(Chrome.secondaryText)
                             Text(verbatim: "/" + command.name)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(.subheadline, weight: .medium))
                                 .foregroundStyle(Chrome.primaryText.opacity(0.9))
                             Button {
                                 withAnimation(Chrome.panelSlide) {
@@ -893,7 +971,7 @@ private struct DraftChips: View {
                                 }
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold))
                                     .foregroundStyle(Chrome.secondaryText)
                             }
                             .buttonStyle(.plain)
@@ -908,10 +986,10 @@ private struct DraftChips: View {
                     ForEach(quotes) { quote in
                         HStack(spacing: 5) {
                             Image(systemName: "text.quote")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(Chrome.secondaryText)
                             Text(verbatim: quote.excerpt)
-                                .font(.system(size: 11))
+                                .font(.system(.subheadline))
                                 .foregroundStyle(Chrome.primaryText.opacity(0.9))
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -922,7 +1000,7 @@ private struct DraftChips: View {
                                 }
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold))
                                     .foregroundStyle(Chrome.secondaryText)
                             }
                             .buttonStyle(.plain)
@@ -1070,15 +1148,15 @@ private struct SuggestionPopoverRow: View {
         Button(action: pick) {
             HStack(spacing: 8) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 12))
+                    .font(.system(.callout))
                     .frame(width: 16)
                 Text(verbatim: item.title)
-                    .font(.system(size: 13))
+                    .font(.system(.body))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 16)
                 Text(verbatim: item.detail)
-                    .font(.system(size: 12))
+                    .font(.system(.callout))
                     .foregroundStyle(Chrome.secondaryText)
                     .lineLimit(1)
             }
@@ -1258,20 +1336,7 @@ final class FileIndex {
         let git = Git(directory)
         if await git.isRepository() {
             let files = await git.listFiles()
-            if !files.isEmpty {
-                let limited = Array(files.prefix(60_000))
-                // Extract unique parent directories from file paths so that @
-                // mentions can suggest folders alongside files.
-                var dirs = Set<String>()
-                for file in limited {
-                    var path = file
-                    while let slash = path.lastIndex(of: "/") {
-                        path = String(path[..<slash])
-                        if !dirs.insert(path + "/").inserted { break }
-                    }
-                }
-                return dirs.sorted() + limited
-            }
+            if !files.isEmpty { return Array(files.prefix(60_000)) }
         }
         return enumerate(directory)
     }
@@ -1292,18 +1357,17 @@ final class FileIndex {
                 enumerator.skipDescendants()
                 continue
             }
-            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-            let relative = ToolTitles.relativePath(url.path, to: directory)
-            results.append(isDir ? relative + "/" : relative)
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { continue }
+            results.append(ToolTitles.relativePath(url.path, to: directory))
             if results.count >= 20_000 { break }
         }
         return results
     }
 }
 
-/// The chat box's surface: Liquid Glass, or, inside a floating glass panel (a helper's,
-/// a head's), the panel's flat control fill, since glass on the panel's glass sampled
-/// the same pixels twice on every frame the transcript moved under it.
+/// The chat box's surface: the floating glass the tabs above it share, so the timeline
+/// scrolls under it blurred. On a glass panel it draws the panel's flat control fill instead,
+/// since glass on glass samples the same pixels twice.
 private struct ComposerSurface: ViewModifier {
     @Environment(\.isOnGlassPanel) private var isOnGlassPanel
     @Environment(\.colorScheme) private var colorScheme
@@ -1315,7 +1379,7 @@ private struct ComposerSurface: ViewModifier {
                 .background(shape.fill(Chrome.panelControlFill(isDark: colorScheme == .dark)))
                 .clipShape(shape)
         } else {
-            content.glassEffect(.regular, in: shape)
+            content.floatingGlass(shape)
         }
     }
 }

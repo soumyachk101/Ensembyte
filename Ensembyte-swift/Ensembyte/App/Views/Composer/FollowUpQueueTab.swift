@@ -67,7 +67,7 @@ struct FollowUpQueueTab: View {
                         .frame(width: 22, height: 22)
                         .rotationEffect(.degrees(isCollapsed ? 180 : 0))
                 }
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .font(.system(.callout, weight: .medium).monospacedDigit())
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -151,7 +151,7 @@ struct FollowUpQueueTab: View {
         .padding(.top, 7)
         .padding(.bottom, 7 + Self.overlap)
         .frame(maxWidth: 560)
-        .glassEffect(.regular, in: shape)
+        .modifier(FollowUpQueueSurface())
         .contentShape(shape)
         .onChange(of: runtime.followUps.map(\.id)) { _, ids in
             // A row that left mid-drag (deleted, or sent) ends the drag cleanly, and its
@@ -230,7 +230,6 @@ struct FollowUpQueueTab: View {
         if drag.id != id {
             drag = RowDrag(id: id)
             pairTarget = nil
-            NSCursor.closedHand.push()
         }
         var transaction = Transaction()
         transaction.disablesAnimations = true
@@ -291,7 +290,6 @@ struct FollowUpQueueTab: View {
             pairTarget = nil
         }
         guard drag.id != nil else { return }
-        NSCursor.pop()
         // The offset animates from wherever the pointer let go to the row's
         // slot, so the row settles instead of snapping.
         withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { drag = RowDrag() }
@@ -322,11 +320,12 @@ private struct FollowUpRow: View {
     /// The editor popover for this row, anchored to its pencil button.
     @State private var editor = PromptEditorPopover<FollowUpEditor>()
 
-    /// Whether the pointer is over the reorder grip, for the grab cursor.
+    /// Whether the pointer is over the reorder grip, which brightens its icon.
     @State private var isHoveringGrip = false
     /// Held while the grip's drag runs; SwiftUI resets it when the gesture ends or is
     /// cancelled, and a cancelled gesture calls no `onEnded` of its own.
     @GestureState private var isGrabbing = false
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
 
     /// How far the prose is lifted to centre its x-height on the row's line: half the
     /// gap between cap height and x-height of its 12 pt font, on the half point.
@@ -355,7 +354,7 @@ private struct FollowUpRow: View {
                             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
                         } label: {
                             Image(systemName: "link")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(Color.accentColor)
                         }
                         .buttonStyle(.plain)
@@ -365,38 +364,25 @@ private struct FollowUpRow: View {
                         .accessibilityLabel(Text("Unlink"))
                     } else {
                         Image(systemName: "link")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .accessibilityHidden(true)
                     }
                 } else {
                     Text(verbatim: "\(position)")
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .font(.system(.subheadline, weight: .medium).monospacedDigit())
                         .foregroundStyle(isBundledWithNext ? Color.accentColor : Chrome.secondaryText)
                         .accessibilityHidden(true)
                 }
             }
             .frame(width: 14, alignment: .trailing)
             Image(systemName: "line.3.horizontal")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(.subheadline, weight: .medium))
                 .foregroundStyle(isBundledWithNext ? Color.accentColor.opacity(isHoveringGrip ? 1 : 0.85) : Chrome.secondaryText.opacity(isHoveringGrip ? 1 : 0.7))
                 .frame(width: 28, height: 22)
                 .contentShape(.rect)
-                .onHover { hovering in
-                    isHoveringGrip = hovering
-                    // The grab cursor is the drag's while a drag is on.
-                    guard !isDragged else { return }
-                    if hovering { NSCursor.openHand.push() } else { NSCursor.pop() }
-                }
-                .onDisappear {
-                    if isHoveringGrip { NSCursor.pop() }
-                    isHoveringGrip = false
-                }
-                .onChange(of: isDragged) { _, dragging in
-                    // Released away from the grip: the hover's open hand is
-                    // still pushed with no leave to pop it.
-                    if !dragging, !isHoveringGrip { NSCursor.pop() }
-                }
+                .onHover { hovering in isHoveringGrip = hovering }
+                .pointerStyle(isDragged ? .grabActive : .grabIdle)
                 .gesture(
                     DragGesture(minimumDistance: 1, coordinateSpace: .global)
                         .updating($isGrabbing) { _, grabbing, _ in grabbing = true }
@@ -421,9 +407,9 @@ private struct FollowUpRow: View {
                 .onDisappear { preview.close() }
             }
             VStack(alignment: .leading, spacing: 4) {
-                if prompt.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if prompt.text.trimmed.isEmpty {
                     Text(verbatim: attachmentOnlyLabel)
-                        .font(.system(size: 12))
+                        .font(.system(.callout))
                         .foregroundStyle(Chrome.secondaryText)
                         .lineLimit(2)
                         .truncationMode(.tail)
@@ -432,7 +418,7 @@ private struct FollowUpRow: View {
                     // and this tab keeps every AppKit view out of the key-view-loop walk
                     // (see `WindowRectAnchor`). The pencil opens the full text to copy.
                     Text(verbatim: prompt.text)
-                        .font(.system(size: 12))
+                        .font(.system(.callout))
                         .foregroundStyle(Chrome.primaryText.opacity(0.9))
                         .lineLimit(2)
                         .truncationMode(.tail)
@@ -444,11 +430,7 @@ private struct FollowUpRow: View {
             .alignmentGuide(VerticalAlignment.center) { $0[VerticalAlignment.center] + Self.proseLift }
             Spacer(minLength: 4)
             HStack(spacing: 0) {
-                // Native heads run inside the lead's turn, so that turn is not stopped for
-                // a queued prompt; it goes the moment they have reported.
-                let sendHelp = runtime.hasWorkingNativeHeads && runtime.isRunning
-                    ? "Send as soon as the heads report"
-                    : runtime.isRunning ? "Send now (stops the running turn)" : "Send now"
+                let sendHelp = runtime.isRunning ? "Send now (stops the running turn)" : "Send now"
                 QueueIconButton(symbol: "paperplane", help: sendHelp) {
                     runtime.sendFollowUpNow(prompt.id)
                 }
@@ -489,7 +471,7 @@ private struct FollowUpRow: View {
             if isDragged {
                 Capsule(style: .continuous)
                     .fill(Chrome.overlay(0.12))
-                    .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
+                    .shadow(color: .black.opacity(performanceMode ? 0 : 0.28), radius: performanceMode ? 0 : 10, y: performanceMode ? 0 : 4)
             }
         }
         // A scale above the scroll view's edge would be cut off there, so the lift reads
@@ -533,7 +515,7 @@ private struct QueueIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(Chrome.secondaryText.opacity(isEnabled ? 1 : 0.35))
                 .frame(width: 22, height: 22)
                 .contentShape(.rect)
@@ -543,5 +525,16 @@ private struct QueueIconButton: View {
         .disabled(!isEnabled)
         .help(help)
         .accessibilityLabel(Text(help))
+    }
+}
+
+/// The tab's glass, merged with the box's by the container round the two. Its foot
+/// tucks under the box, so the hairline stops short of it.
+private struct FollowUpQueueSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content.floatingGlass(
+            UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12, style: .continuous),
+            hiddenRimBottom: ThreadChangesTab.overlap
+        )
     }
 }

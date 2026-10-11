@@ -4,7 +4,7 @@ Senior Developer Production Image Sanitizer for Ensembyte:
 1. Surgically replaces all residual raster pixel text of:
    - "Swarm Code" / "SwarmCode" / "Swarm" -> "Ensembyte"
    - "swarmcode.dev" -> "ensembyte.app"
-   - "DroppyCode build" / "SwarmCode build" -> "Ensembyte build"
+   - "Ensembyte build" / "SwarmCode build" -> "Ensembyte build"
    - "Welcome to Swarm Code" -> "Welcome to Ensembyte"
    - "What should we build in Swarm Code?" -> "What should we build in Ensembyte?"
    - "SwarmCode/App/Views/Composer/ComposerView.swift" -> "Ensembyte/App/Views/Composer/ComposerView.swift"
@@ -503,7 +503,7 @@ def sanitize_themes_all():
             txt_color = tuple(int(round(c)) for c in np.median(txt_pixels, axis=0)) + (255,)
             inpaint_v(arr, 780, 875, 676, 694)
 
-        # Terminal line: DroppyCode/SwarmCode build (x=654..845, y=964..989)
+        # Terminal line: Ensembyte/SwarmCode build (x=654..845, y=964..989)
         crop_term_txt = im_raw[968:984, 600:650, :3]
         crop_term_bg = im_raw[960:963, 600:650, :3]
         term_bg_color = np.median(crop_term_bg, axis=(0, 1))

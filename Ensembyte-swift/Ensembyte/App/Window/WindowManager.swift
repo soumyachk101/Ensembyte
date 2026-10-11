@@ -13,12 +13,13 @@ final class WindowManager {
     let model = AppModel()
 
     private var mainWindow: NSWindow?
-    private var settingsWindow: NSWindow?
+    /// What held the keyboard in the main window when Settings took it over, given back on
+    /// the way out so the composer is still where the caret was.
+    private weak var responderBeforeSettings: NSResponder?
 
     private enum Size {
         static let main = NSSize(width: 1320, height: 860)
         static let mainMinimum = NSSize(width: 860, height: 560)
-        static let settings = NSSize(width: 780, height: 580)
     }
 
     private static let mainFrameName = "EnsembyteMainWindow"
@@ -30,29 +31,42 @@ final class WindowManager {
         present(window)
     }
 
+    /// Settings takes over the main window rather than opening one of its own (see
+    /// `SettingsNavigation`). A page, when given, is the one it lands on.
     func showSettings(page: SettingsPage? = nil) {
-        if let page { SettingsNavigation.shared.requestedPage = page }
-        let window = settingsWindow ?? makeSettingsWindow()
-        settingsWindow = window
-        centerOverMainWindow(window)
+        let window = mainWindow ?? makeMainWindow()
+        mainWindow = window
+        let navigation = SettingsNavigation.shared
+        if !navigation.isPresented {
+            // The chats stay built under Settings: the composer would go on taking keys unseen.
+            responderBeforeSettings = window.firstResponder
+            window.makeFirstResponder(nil)
+        }
+        navigation.present(page: page)
         present(window)
     }
 
-    /// Opens a window centered over the main window, kept on the screen the main window is on.
-    private func centerOverMainWindow(_ window: NSWindow) {
-        guard let main = mainWindow, main.isVisible, !main.isMiniaturized else {
-            window.center()
-            return
+    /// Back to the chats, with the keyboard where it was before Settings opened.
+    func hideSettings() {
+        let navigation = SettingsNavigation.shared
+        guard navigation.isPresented else { return }
+        navigation.dismiss()
+        guard let window = mainWindow else { return }
+        if let view = responderBeforeSettings as? NSView, view.window === window {
+            window.makeFirstResponder(view)
+        } else {
+            window.makeFirstResponder(nil)
         }
-        let parent = main.frame
-        var frame = window.frame
-        frame.origin.x = (parent.midX - frame.width / 2).rounded()
-        frame.origin.y = (parent.midY - frame.height / 2).rounded()
-        if let visible = (main.screen ?? NSScreen.main)?.visibleFrame {
-            frame.origin.x = min(max(frame.origin.x, visible.minX), visible.maxX - frame.width)
-            frame.origin.y = min(max(frame.origin.y, visible.minY), visible.maxY - frame.height)
+        responderBeforeSettings = nil
+    }
+
+    /// The Settings shortcut: opens it, or, with it open in front, goes back to the chats.
+    func toggleSettings() {
+        if SettingsNavigation.shared.isPresented, let mainWindow, mainWindow.isKeyWindow {
+            hideSettings()
+        } else {
+            showSettings()
         }
-        window.setFrame(frame, display: false)
     }
 
     private func present(_ window: NSWindow) {
@@ -64,6 +78,11 @@ final class WindowManager {
         let window = makeWindow(title: AppInfo.name, size: Size.main, resizable: true, windowClass: ThreadWindow.self) { RootView() }
         (window as? ThreadWindow)?.selectThread = { [weak model] offset in model?.selectThread(offset: offset) }
         (window as? ThreadWindow)?.selectThreadNumber = { [weak model] number in model?.selectThread(number: number) }
+        (window as? ThreadWindow)?.escapeSettings = { [weak self] in
+            guard SettingsNavigation.shared.isPresented else { return false }
+            self?.hideSettings()
+            return true
+        }
         window.contentMinSize = Size.mainMinimum
         if !window.setFrameUsingName(Self.mainFrameName) && !window.setFrameUsingName(Self.legacyMainFrameName) {
             window.center()
@@ -76,12 +95,6 @@ final class WindowManager {
     /// no frame autosave, so the run never reads or writes where the real window sits.
     func makeCaptureWindow(size: NSSize) -> NSWindow {
         makeWindow(title: AppInfo.name, size: size, resizable: true) { RootView() }
-    }
-
-    private func makeSettingsWindow() -> NSWindow {
-        let window = makeWindow(title: "Settings", size: Size.settings, resizable: false, windowClass: SecondaryWindow.self) { SettingsView() }
-        window.center()
-        return window
     }
 
     private func makeWindow<Content: View>(
@@ -182,10 +195,6 @@ private struct ThemeTint: ViewModifier {
     let theme: AppTheme
 
     func body(content: Content) -> some View {
-        // One branch, never two: an `if` here made the whole window's content a different
-        // view once a theme with an accent replaced one without, so every page was built
-        // afresh and Settings jumped back to its top on a theme change. A nil tint keeps
-        // the system accent.
         content.tint(theme.spec.accent)
     }
 }
@@ -213,8 +222,8 @@ final class FrameHostingView: NSHostingView<AnyView> {
 
     /// A hidden chat column keeps its buttons' shortcuts to itself: AppKit offers a chord to
     /// hidden views too, and a Return meant for the shown column's card must not land on
-    /// one behind it.
+    /// one behind it, nor one under Settings, which hides the pane the columns sit in.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        !isHidden && super.performKeyEquivalent(with: event)
+        !isHiddenOrHasHiddenAncestor && super.performKeyEquivalent(with: event)
     }
 }

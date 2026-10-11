@@ -44,7 +44,9 @@ final class ProviderRegistry {
     private static let commandFreshness: TimeInterval = 600
     private(set) var loadingCatalogs: Set<ProviderKind> = []
 
-    @ObservationIgnored private let settings: any ProviderSettings
+    @ObservationIgnored let settings: any ProviderSettings
+    /// Every provider's logins and which one new sessions start on.
+    let accounts = ProviderAccountStore()
     @ObservationIgnored private let cacheKey = "providerModelCatalogs"
     // When the provider last delivered a list, persisted under `catalogDatesKey`.
     @ObservationIgnored private let catalogDatesKey = "providerModelCatalogDates"
@@ -52,7 +54,16 @@ final class ProviderRegistry {
 
     /// Providers whose CLI is being updated right now (see `updateCLIIfDue`).
     private(set) var updatingCLIs: Set<ProviderKind> = []
-    @ObservationIgnored private let cliUpdatesKey = "providerCLIUpdateDates"
+    @ObservationIgnored let cliUpdatesKey = "providerCLIUpdateDates"
+
+    /// Each provider CLI's installed against latest version (see `checkCLIUpdates`). Set
+    /// only from `ProviderRegistry+CLIUpdates.swift`.
+    var cliUpdates: [ProviderKind: CLIUpdateStatus] = [:]
+    /// Whether a provider has a chat running a turn right now; the app sets it. An update
+    /// waits for those to finish, so no turn has its binary replaced under it.
+    @ObservationIgnored var isProviderBusy: @MainActor (ProviderKind) -> Bool = { _ in false }
+    @ObservationIgnored var cliUpdateLoop: Task<Void, Never>?
+    @ObservationIgnored var cliUpdateCheck: Task<Void, Never>?
 
     /// A list read within this window is served as it is; an older one, or one cached by an
     /// earlier build that stored no date, is read again on the next ask, so a model the
@@ -65,6 +76,12 @@ final class ProviderRegistry {
     @ObservationIgnored private var limitsFetchedAt: [ProviderKind: Date] = [:]
     // A forced read that arrives while a read is out is remembered, not dropped.
     @ObservationIgnored private var forcedLimitReads: Set<ProviderKind> = []
+
+    /// What the last check of each account found: sign-in, identity and usage windows.
+    var accountStates: [UUID: ProviderAccountState] = [:]
+    /// Sign-ins started from the Accounts section, watched until the login lands.
+    @ObservationIgnored var accountSignInWatches: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var accountsFetchedAt: [ProviderKind: Date] = [:]
 
     /// Pay-as-you-go balances (DeepSeek's credit), shown where subscriptions show their windows.
     private(set) var credits: [ProviderKind: ProviderCredits] = [:]
@@ -160,9 +177,15 @@ final class ProviderRegistry {
     /// Pi's starting catalog; the live catalog from pi's RPC `get_available_models` replaces it.
     static let piSeed = [ModelOption(id: "default", name: "Default", detail: "The model pi itself is set to", efforts: ["off", "minimal", "low", "medium", "high", "xhigh", "max"], defaultEffort: "medium", isDefault: true)]
 
+    /// omp's starting catalog; the live catalog from `omp models --json` replaces it.
+    static let ompSeed = [ModelOption(id: "default", name: "Default", detail: "The model omp itself is set to", efforts: ["off", "minimal", "low", "medium", "high", "xhigh", "max"], defaultEffort: "medium", isDefault: true)]
+
     /// Every provider tries its live catalog at most once per launch unless forced, success or not,
     /// so views that ask on appear never re-spawn a CLI or re-hit an API while scrolling.
     @ObservationIgnored private var attemptedCatalogs: Set<ProviderKind> = []
+
+    /// The opencode ACP catalogue, probed once per launch and shared by Zen and Go.
+    @ObservationIgnored private var openCodeCatalogTask: Task<[ModelOption]?, Never>?
 
     init(settings: any ProviderSettings) {
         self.settings = settings
@@ -174,7 +197,7 @@ final class ProviderRegistry {
                 guard let provider = ProviderKind(rawValue: key) else { continue }
                 // A list cached before the scales were ordered may still run high to low
                 // (Grok's did); the slider reads them low to high, so they are put right here.
-                catalogs[provider] = list.map { option in
+                catalogs[provider] = Self.openCodeModels(list, for: provider).map { option in
                     var option = option
                     option.efforts = ACPSession.orderedEfforts(option.efforts)
                     return option
@@ -198,6 +221,7 @@ final class ProviderRegistry {
         if catalogs[.copilot]?.isEmpty ?? true { catalogs[.copilot] = [Self.copilotAuto] }
         if catalogs[.commandcode]?.isEmpty ?? true { catalogs[.commandcode] = Self.commandcodeSeed }
         if catalogs[.pi]?.isEmpty ?? true { catalogs[.pi] = Self.piSeed }
+        if catalogs[.omp]?.isEmpty ?? true { catalogs[.omp] = Self.ompSeed }
     }
 
     var availableProviders: [ProviderKind] {
@@ -254,29 +278,26 @@ final class ProviderRegistry {
                 }
             }
             return candidates
-        case .cursor:
-            let home = LoginEnvironment.homeDirectory
-            return [
-                "\(home)/.local/bin/cursor-agent",
-                "\(home)/.cursor/bin/cursor-agent",
-                "/usr/local/bin/cursor-agent",
-                "/opt/homebrew/bin/cursor-agent",
-                "/Applications/Cursor.app/Contents/Resources/app/bin/cursor-agent",
-                "\(home)/.local/bin/cursor",
-                "/usr/local/bin/cursor",
-                "/opt/homebrew/bin/cursor",
-                "/Applications/Cursor.app/Contents/Resources/app/bin/cursor"
-            ].map { URL(fileURLWithPath: $0) }
         case .pi:
             let home = LoginEnvironment.homeDirectory
             return ["\(home)/.npm-global/bin/pi", "/opt/homebrew/bin/pi", "/usr/local/bin/pi", "\(home)/.local/bin/pi", "\(home)/.volta/bin/pi", "\(home)/.bun/bin/pi"].map { URL(fileURLWithPath: $0) }
+        case .omp:
+            let home = LoginEnvironment.homeDirectory
+            return ["\(home)/.bun/bin/omp", "\(home)/.npm-global/bin/omp", "/opt/homebrew/bin/omp", "/usr/local/bin/omp", "\(home)/.local/bin/omp", "\(home)/.volta/bin/omp"].map { URL(fileURLWithPath: $0) }
         default:
             return []
         }
     }
 
     func environment(for provider: ProviderKind) -> [String: String] {
+        environment(for: provider, account: accounts.activeAccount(for: provider))
+    }
+
+    /// The provider's environment running on one account: its home variable points at the
+    /// account's home. Sessions, heads, the usage read and the catalog all take the active one.
+    func environment(for provider: ProviderKind, account: ProviderAccount?) -> [String: String] {
         var environment = LoginEnvironment.current
+        ProviderAccountStore.apply(account, to: &environment)
         if let directory = executable(for: provider)?.deletingLastPathComponent().path,
            let path = environment["PATH"],
            !path.split(separator: ":").contains(Substring(directory)) {
@@ -290,7 +311,7 @@ final class ProviderRegistry {
         }
         // OpenCode takes its MCP servers as config content in the environment,
         // so the connected servers reach it without a line written into its config files.
-        if provider == .opencode { environment.merge(MCPSessionOverrides.opencodeEnvironment()) { _, new in new } }
+        if provider == .opencode || provider == .opencodeGo { environment.merge(MCPSessionOverrides.opencodeEnvironment()) { _, new in new } }
         // The CLI reads system settings from that path, so the connected servers reach it without a line in `~/.gemini/settings.json`.
         if provider == .antigravity, let path = MCPProviderConfig.geminiSettingsPath() { environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"] = path }
         return environment
@@ -348,6 +369,7 @@ final class ProviderRegistry {
                 group.addTask { await self.loadCatalog(provider, force: true) }
             }
         }
+        await checkCLIUpdates()
     }
 
     /// How many providers are checked at the same time. Every check spawns the provider's
@@ -356,6 +378,9 @@ final class ProviderRegistry {
     private static let probeWidth = 4
 
     func refreshAll() async {
+        // Added accounts link whatever the default homes gained since the last launch.
+        await LoginEnvironment.load()
+        accounts.refreshHomes(environment: LoginEnvironment.current)
         let providers = ProviderKind.allCases
         var next = 0
         await withTaskGroup(of: Void.self) { group in
@@ -450,7 +475,14 @@ final class ProviderRegistry {
 
     func model(_ id: String?, for provider: ProviderKind) -> ModelOption? {
         guard let id else { return nil }
-        let list = models(for: provider)
+        if let match = Self.match(id, in: models(for: provider)) { return match }
+        // A thread or pin made before Zen and Go split kept `.opencode` for a Go model;
+        // the CLI is one and the same, so the Go catalogue answers.
+        guard provider == .opencode, id.hasPrefix("opencode-go/") else { return nil }
+        return Self.match(id, in: models(for: .opencodeGo))
+    }
+
+    private static func match(_ id: String, in list: [ModelOption]) -> ModelOption? {
         if let exact = list.first(where: { $0.id == id }) { return exact }
         // Cursor used to advertise parameterized ids (`model[effort=…]`); the catalog now
         // stores the base name once the parameterized picker is declared.
@@ -476,9 +508,11 @@ final class ProviderRegistry {
     /// version 2.1.280 or newer is required". The app runs each CLI's own updater instead.
     private static let cliUpdateInterval: TimeInterval = 12 * 3600
 
-    /// The providers whose CLI carries its own updater (`claude update`, `codex update`).
+    /// The providers whose CLI carries its own updater (`claude update`, `codex update`,
+    /// `omp update`). omp raises no "too old" error to react to, but it takes protocol changes
+    /// (a single head stopped, say) that the app waits on, so it is kept up to date all the same.
     static func updatesOwnCLI(_ provider: ProviderKind) -> Bool {
-        provider == .claude || provider == .codex
+        provider == .claude || provider == .codex || provider == .omp
     }
 
     /// Whether a provider's error says its CLI is too old for what was asked of it.
@@ -513,14 +547,20 @@ final class ProviderRegistry {
         updatingCLIs.insert(provider)
         defer { updatingCLIs.remove(provider) }
         let environment = environment(for: provider)
+        // Through whoever installed it: `claude update` on a Homebrew cask or an npm global
+        // reports success and changes nothing.
+        guard let channel = CLIUpdates.channel(for: provider, executable: executable, environment: environment) else { return false }
+        let (tool, arguments, extra) = channel.invocation
         let before = await Self.cliVersion(executable, environment: environment)
-        _ = try? await Shell.run(executable, ["update"], in: FileManager.default.temporaryDirectory, environment: environment, timeout: 300)
+        _ = try? await Shell.run(URL(fileURLWithPath: tool), arguments, in: FileManager.default.temporaryDirectory,
+                                 environment: environment.merging(extra) { $1 }, timeout: 300)
         dates[provider.rawValue] = Date.now.timeIntervalSince1970
         UserDefaults.standard.set(dates, forKey: cliUpdatesKey)
         let after = await Self.cliVersion(executable, environment: environment)
         guard let after, after != before else { return false }
         await refresh(provider)
         await loadCatalog(provider, force: true)
+        await checkCLIUpdate(provider, force: true)
         return true
     }
 
@@ -555,7 +595,8 @@ final class ProviderRegistry {
             || (provider == .copilot && models(for: provider) == [Self.copilotAuto])
             || (provider == .commandcode && models(for: provider) == Self.commandcodeSeed)
             || (provider == .pi && models(for: provider) == Self.piSeed)
-            || (provider == .opencode && Self.lacksEffortWalk(models(for: provider)))
+            || (provider == .omp && models(for: provider) == Self.ompSeed)
+            || ((provider == .opencode || provider == .opencodeGo) && Self.lacksEffortWalk(models(for: provider)))
         let stale = catalogFetchedAt[provider].map { Date.now.timeIntervalSince($0) > Self.catalogFreshness } ?? !(models(for: provider).isEmpty)
         guard force || seeded || stale || models(for: provider).isEmpty else { return }
         loadingCatalogs.insert(provider)
@@ -563,16 +604,19 @@ final class ProviderRegistry {
         await LoginEnvironment.load()
         guard let executable = executable(for: provider) else { return }
         let environment = environment(for: provider)
-        let list: [ModelOption]? = switch provider {
+        let raw: [ModelOption]? = switch provider {
         case .claude: await loadClaudeCatalog(executable: executable, environment: environment)
         case .codex: try? await CodexSession.listModels(executable: executable, environment: environment)
         case .antigravity: try? await AntigravitySession.listModels(executable: executable, environment: environment)
         case .copilot: try? await CopilotSession.listModels(executable: executable, environment: environment)
         case .commandcode: try? await CommandCodeAPI.listModels(executable: executable, environment: environment)
         case .pi: try? await PiCLI.listModels(executable: executable, environment: environment)
-        case .cursor, .opencode, .grok, .devin: try? await ACPSession.probeModels(provider: provider, executable: executable, environment: environment)
+        case .omp: try? await OmpCLI.listModels(executable: executable, environment: environment)
+        case .cursor, .grok, .devin: try? await ACPSession.probeModels(provider: provider, executable: executable, environment: environment)
+        case .opencode, .opencodeGo: await openCodeCatalog(force: force, executable: executable, environment: environment)
         case .deepseek, .meta, .zai: nil
         }
+        let list = raw.map { Self.openCodeModels($0, for: provider) }
         if let list, !list.isEmpty {
             updateCatalog(list, for: provider)
             catalogFetchedAt[provider] = .now
@@ -581,6 +625,18 @@ final class ProviderRegistry {
             // nothing (a cold CLI losing to its handshake timeout, say) is tried again
             // on the next ask rather than leaving the provider empty for the whole run.
             attemptedCatalogs.insert(provider)
+            // One session answers both halves: Zen and Go come from the same probe, so a
+            // load of either leaves the other's catalogue ready for the picker.
+            if let raw, provider == .opencode || provider == .opencodeGo {
+                for kind in [ProviderKind.opencode, .opencodeGo] where kind != provider {
+                    let sibling = Self.openCodeModels(raw, for: kind)
+                    guard !sibling.isEmpty else { continue }
+                    updateCatalog(sibling, for: kind)
+                    catalogFetchedAt[kind] = .now
+                    attemptedCatalogs.insert(kind)
+                }
+                storeCatalogDates()
+            }
         }
     }
 
@@ -588,6 +644,42 @@ final class ProviderRegistry {
     /// reasoning levels holds a scale for the model the probe's session started on alone.
     private static func lacksEffortWalk(_ list: [ModelOption]) -> Bool {
         list.count(where: { !$0.efforts.isEmpty }) <= 1
+    }
+
+    /// The opencode ACP catalogue once per launch, shared by Zen and Go: the probe spawns
+    /// the CLI and walks every model, so it runs once and each provider keeps its half.
+    private func openCodeCatalog(force: Bool, executable: URL, environment: [String: String]) async -> [ModelOption]? {
+        if force { openCodeCatalogTask = nil }
+        let task: Task<[ModelOption]?, Never>
+        if let openCodeCatalogTask {
+            task = openCodeCatalogTask
+        } else {
+            task = Task { try? await ACPSession.probeModels(provider: .opencode, executable: executable, environment: environment) }
+            openCodeCatalogTask = task
+        }
+        let list = await task.value
+        if list == nil { openCodeCatalogTask = nil }
+        return list
+    }
+
+    /// OpenCode serves two catalogues through one CLI and marks them in the model id:
+    /// `opencode/…` is Zen, `opencode-go/…` is Go. Each provider keeps its own half.
+    private static func openCodeModels(_ list: [ModelOption], for provider: ProviderKind) -> [ModelOption] {
+        let goPrefix = "opencode-go/"
+        let half: [ModelOption] = switch provider {
+        case .opencode: list.filter { !$0.id.hasPrefix(goPrefix) }
+        case .opencodeGo: list.filter { $0.id.hasPrefix(goPrefix) }
+        default: list
+        }
+        // The CLI names a row "OpenCode Go/DeepSeek V4 Flash"; the provider already says
+        // which of the two it is, so the redundant half of the name goes.
+        let namePrefix = provider.displayName + "/"
+        return half.map { option in
+            guard option.name.hasPrefix(namePrefix) else { return option }
+            var option = option
+            option.name = String(option.name.dropFirst(namePrefix.count))
+            return option
+        }
     }
 
     private func loadClaudeCatalog(executable: URL, environment: [String: String]) async -> [ModelOption]? {
@@ -670,6 +762,18 @@ final class ProviderRegistry {
             planLimits[provider] = limits
             limitsFetchedAt[provider] = .now
         }
+    }
+
+    /// Drops the provider's limits read for another account, so nothing shows the old
+    /// account's numbers while the new one's are read.
+    func setPlanLimits(_ limits: PlanLimits, for provider: ProviderKind) {
+        planLimits[provider] = limits
+        limitsFetchedAt[provider] = .now
+    }
+
+    func forgetPlanLimits(_ provider: ProviderKind) {
+        planLimits[provider] = nil
+        limitsFetchedAt[provider] = nil
     }
 
     /// Runs a forced read that had to wait because a read was already out for this provider.
@@ -827,7 +931,7 @@ final class ProviderRegistry {
         return nil
     }
 
-    private static func auth(_ provider: ProviderKind, _ executable: URL, _ environment: [String: String]) async -> ProviderStatus.Auth {
+    static func auth(_ provider: ProviderKind, _ executable: URL, _ environment: [String: String]) async -> ProviderStatus.Auth {
         switch provider {
         case .codex:
             guard let result = try? await Shell.run(executable, ["login", "status"], environment: environment, timeout: 20) else {
@@ -862,26 +966,35 @@ final class ProviderRegistry {
             return await CommandCodeAPI.authStatus(executable: executable, environment: environment)
         case .pi:
             return await PiCLI.authStatus(executable: executable, environment: environment)
-        case .opencode:
+        case .omp:
+            return await OmpCLI.authStatus(executable: executable, environment: environment)
+        case .opencode, .opencodeGo:
             guard let result = try? await Shell.run(executable, ["auth", "list"], environment: environment, timeout: 20) else { return .unknown }
             let text = TextCleanup.stripANSI(result.output + result.errorOutput)
             let credentialText = text.components(separatedBy: "\n").prefix { !$0.contains("Environment") }.joined(separator: "\n")
-            let creds = credentialText.components(separatedBy: "\n").compactMap { line -> String? in
+            let credentials = credentialText.components(separatedBy: "\n").compactMap { line -> String? in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 guard trimmed.hasPrefix("\u{25CF}") else { return nil }
-                return trimmed.dropFirst().trimmingCharacters(in: .whitespaces)
-            }
-            if let name = creds.first {
-                var credential = name
-                for suffix in [" api", " oauth"] where credential.lowercased().hasSuffix(suffix) {
-                    credential = String(credential.dropLast(suffix.count))
+                var name = trimmed.dropFirst().trimmingCharacters(in: .whitespaces)
+                for suffix in [" api", " oauth"] where name.lowercased().hasSuffix(suffix) {
+                    name = String(name.dropLast(suffix.count))
                 }
-                return .signedIn(credential.isEmpty ? nil : credential)
+                return name.isEmpty ? nil : name
             }
+            // Go carries its own credential in the one auth file; Zen is whatever else is there.
+            let name = provider == .opencodeGo
+                ? credentials.first { $0.localizedCaseInsensitiveContains("opencode go") }
+                : credentials.first
+            if let name { return .signedIn(name) }
             return result.succeeded ? .signedOut : .unknown
         case .grok:
-            let url = URL(fileURLWithPath: (LoginEnvironment.homeDirectory as NSString).appendingPathComponent(".grok/auth.json"))
-            guard let data = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return .unknown }
+            let home = provider.defaultAccountHome(in: environment) ?? (LoginEnvironment.homeDirectory as NSString).appendingPathComponent(".grok")
+            let url = URL(fileURLWithPath: home).appendingPathComponent("auth.json")
+            guard let data = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                // An added account's home without a login yet is signed out, not unknown.
+                let isAccountHome = environment["GROK_HOME"].map { !$0.isEmpty } ?? false
+                return isAccountHome && !FileManager.default.fileExists(atPath: url.path) ? .signedOut : .unknown
+            }
             guard !root.isEmpty else { return .signedOut }
             let entries = root.values.compactMap { $0 as? [String: Any] }
             if let email = entries.lazy.compactMap({ $0["email"] as? String }).first(where: { !$0.isEmpty }) {
@@ -899,7 +1012,7 @@ final class ProviderRegistry {
     /// The `Name:` line of `devin auth status`, so Settings reads "Signed in as …".
     private static func devinAccount(from text: String) -> String? {
         for line in text.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = line.trimmed
             guard trimmed.lowercased().hasPrefix("name:") else { continue }
             let name = trimmed.dropFirst("name:".count).trimmingCharacters(in: .whitespaces)
             return name.isEmpty ? nil : name

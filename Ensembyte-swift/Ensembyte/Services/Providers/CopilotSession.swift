@@ -120,29 +120,26 @@ final class CopilotSession: ProviderSession {
     /// thread restarts the session when it switches into or out of Auto.
     private func sessionParameters() -> [String: JSONValue] {
         var params: [String: JSONValue] = [
-            "clientName": "swarm-code",
+            "clientName": "ensembyte-code",
             "workingDirectory": .string(workingDirectory),
             "streaming": true,
             "requestPermission": true,
             "requestUserInput": true,
             "requestExitPlanMode": true,
-            "includeSubAgentStreamingEvents": .bool(configuration.hydra?.runsNatively == true),
+            "includeSubAgentStreamingEvents": false,
             "isExperimentalMode": .bool(configuration.runtimeMode == .auto),
         ]
         if let model, !model.isEmpty { params["model"] = .string(model) }
         if let effort, !effort.isEmpty { params["reasoningEffort"] = .string(effort) }
-        // The native or fallback Hydra policy, when Hydra is on: the system message below
-        // is assembled fresh, once, with the anti-slop guidance alongside it.
+        // The Hydra policy, when Hydra is on: the system message below is assembled fresh,
+        // once, with the anti-slop guidance alongside it. The heads are Ensembyte-run: the
+        // lead asks for them with the delegation block, no agents of the CLI's own are
+        // defined, and its task tool goes, since a head started with it would run inside
+        // this session instead of the app.
         var hydraPolicy: String?
         if let hydra = configuration.hydra {
-            if hydra.runsNatively {
-                params["customAgents"] = .array(HydraPrompts.copilotAgents(hydra))
-                hydraPolicy = HydraPrompts.policy(for: .copilot, hydra)
-            } else {
-                // Heads on another provider are Swarm-run: the lead asks for them with the
-                // delegation block, and no agents of the CLI's own are defined.
-                hydraPolicy = HydraPrompts.fallbackPolicy(hydra)
-            }
+            hydraPolicy = HydraPrompts.fallbackPolicy(hydra)
+            params["excludedTools"] = ["task"]
         }
         // Exactly one appended system message for every session, Hydra or not. The off
         // notice goes out too, so a resumed thread cannot keep earlier guidance alive.
@@ -215,7 +212,7 @@ final class CopilotSession: ProviderSession {
             try await sendPrompt(result["prompt"]?.string ?? input, images: [])
         case "text", "completed":
             let text = TextCleanup.stripANSI(result["text"]?.string ?? result["message"]?.string ?? "")
-            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !text.trimmed.isEmpty {
                 let body = result["markdown"]?.bool == true ? text : "```\n\(text)\n```"
                 onEvent?(.messageCompleted(id: "command-\(UUID().uuidString)", text: body))
             }
@@ -230,9 +227,9 @@ final class CopilotSession: ProviderSession {
     private static let slashCommandPattern = #/^/([A-Za-z][\w-]*)(?:\s+([\s\S]*))?$/#
 
     static func slashCommand(in text: String) -> (name: String, input: String)? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmed
         guard let match = trimmed.firstMatch(of: slashCommandPattern) else { return nil }
-        return (String(match.output.1), match.output.2.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? "")
+        return (String(match.output.1), match.output.2.map { String($0).trimmed } ?? "")
     }
 
     func interrupt() async {
@@ -468,10 +465,7 @@ final class CopilotSession: ProviderSession {
     }
 
     private static func parseDate(_ text: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withFullDate]
-        return formatter.date(from: text)
+        ISO8601.date(from: text) ?? ISO8601.dateOnly(from: text)
     }
 
     private static func connect(
@@ -494,7 +488,7 @@ final class CopilotSession: ProviderSession {
         let connection = JSONRPCConnection(process: process, sendsVersion: true)
         configure(connection)
         try connection.start()
-        let pong = try await connection.request("ping", ["message": "swarm-code"])
+        let pong = try await connection.request("ping", ["message": "ensembyte-code"])
         guard pong["protocolVersion"]?.int != nil else {
             connection.close()
             throw ProviderError.failed("This `copilot` does not speak the SDK protocol. Update it with `copilot update`.")
@@ -724,7 +718,7 @@ final class CopilotSession: ProviderSession {
             // The model-list failure wraps the HTTP reply as JSON after this marker.
             let json = JSONValue.parse(String(message[raw.upperBound...]))
             if let status = json?["status"]?.int, let body = json?["body"]?.string {
-                message = "HTTP \(status): \(body.trimmingCharacters(in: .whitespacesAndNewlines))"
+                message = "HTTP \(status): \(body.trimmed)"
             }
         }
         if data["statusCode"]?.int == 403 || data["remediation"]?.string == "sign_in"
@@ -1065,7 +1059,7 @@ final class CopilotSession: ProviderSession {
     }
 
     private static func reasoningKey(_ text: String) -> Int {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).hashValue
+        text.trimmed.hashValue
     }
 
     private static func humanize(_ name: String) -> String {

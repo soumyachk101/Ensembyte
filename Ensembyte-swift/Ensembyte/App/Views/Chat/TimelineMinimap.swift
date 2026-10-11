@@ -29,7 +29,7 @@ enum TimelineMinimap {
         case .group(.single(let entry), _, _):
             guard case .user(let message) = entry.item.content else { return nil }
             return userEntry(id: entry.id, message: message)
-        case .group(.work, _, _), .group(.heads, _, _), .working, .merging, .headsWorking:
+        case .group(.work, _, _), .group(.heads, _, _), .working, .merging, .headsWorking, .backgroundTasks:
             return nil
         }
     }

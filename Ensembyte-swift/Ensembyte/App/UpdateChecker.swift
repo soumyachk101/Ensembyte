@@ -263,7 +263,7 @@ final class UpdateChecker {
         for release in releases {
             guard !release.prerelease, !release.draft, let version = AppVersion(release.tagName) else { continue }
             if let publishedAt = release.publishedAt, publishedAt > .now { continue }
-            let asset = release.assets.first(where: { $0.isDiskImage })
+            let asset = release.assets.first(where: { $0.isDiskImageForThisMac }) ?? release.assets.first(where: { $0.isDiskImage })
             let fallbackDownloadURL = releasesURL.appending(path: "download/\(release.tagName)/Ensembyte-swift.dmg")
             let downloadURL = asset.flatMap({ URL(string: $0.browserDownloadURL) }) ?? fallbackDownloadURL
             let pageURL = release.htmlURL.flatMap(URL.init(string:)) ?? releasesURL.appending(path: "tag/\(release.tagName)")
@@ -356,6 +356,16 @@ struct GitHubRelease: Decodable, Sendable {
         var isDiskImage: Bool {
             let path = browserDownloadURL.lowercased()
             return path.hasSuffix(".dmg") || name.lowercased().hasSuffix(".dmg")
+        }
+
+        var diskImageArchitecture: String? {
+            guard isDiskImage else { return nil }
+            return (browserDownloadURL.lowercased().hasSuffix("-x86_64.dmg") || name.lowercased().contains("x86_64")) ? "x86_64" : "arm64"
+        }
+
+        var isDiskImageForThisMac: Bool {
+            guard isDiskImage else { return false }
+            return diskImageArchitecture == AppInfo.architecture
         }
 
         private enum CodingKeys: String, CodingKey {

@@ -210,7 +210,7 @@ enum AppShortcut: String, CaseIterable, Identifiable {
         case .toggleHydraPanel: "Shows or hides the Hydra agent panel."
         case .toggleActivityView: "Lists every thread by when it was last active."
         case .showMainWindow: "Brings the main window to the front."
-        case .openSettings: "Opens this window."
+        case .openSettings: "Opens Settings, or goes back to your threads."
         }
     }
 

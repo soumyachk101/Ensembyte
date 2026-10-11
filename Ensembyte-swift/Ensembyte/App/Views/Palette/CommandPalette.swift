@@ -187,6 +187,7 @@ struct CommandPalette: View {
             .prefix(needle.isEmpty ? 6 : 10)
             .map { thread in
                 Item(id: thread.id.uuidString, title: thread.title, subtitle: model.project(thread.projectID)?.name, symbol: "bubble.left") {
+                    WindowManager.shared.hideSettings()
                     model.selectedThreadID = thread.id
                 }
             }

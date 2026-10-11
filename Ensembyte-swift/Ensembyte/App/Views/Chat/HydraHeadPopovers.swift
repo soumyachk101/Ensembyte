@@ -100,7 +100,6 @@ struct HydraHeadReportPopover: View {
             }
         }
         .frame(width: Self.width)
-        .environment(\.chatZoom, 1)
     }
 
     static func caption(for head: HydraHeadInfo) -> String {
@@ -170,6 +169,5 @@ struct HydraBriefPopover: View {
             }
         }
         .frame(width: Self.width)
-        .environment(\.chatZoom, 1)
     }
 }

@@ -4,7 +4,7 @@ import SwiftUI
 /// The thread's changes as a small tab rising from the top of the chat box. The composer draws
 /// over its lower edge, so it reads as part of the box. Clicking it opens the changes popover.
 struct ThreadChangesTab: View {
-    static let overlap: CGFloat = 14
+    static let overlap: CGFloat = 6
 
     let stats: FileChangeSummary
     /// Receives the tab's own view, so the popover can anchor to it.
@@ -27,7 +27,7 @@ struct ThreadChangesTab: View {
                 Text(verbatim: "\u{2212}\(stats.deletions)")
                     .foregroundStyle(Chrome.danger)
             }
-            .font(.system(size: 12, weight: .medium).monospacedDigit())
+            .font(.system(.callout, weight: .medium).monospacedDigit())
             .padding(.horizontal, 12)
             .padding(.top, 7)
             .padding(.bottom, 7 + Self.overlap)
@@ -35,12 +35,24 @@ struct ThreadChangesTab: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .glassEffect(.regular.interactive(), in: shape)
+        .modifier(ThreadChangesTabSurface())
         .background {
             AttachmentAnchorCapture(onResolve: anchor)
         }
         .fixedSize()
         .help("Show this thread's changes\(ShortcutStore.hint(for: .toggleChanges))")
         .accessibilityLabel(Text(verbatim: "\(stats.files.count) files changed, \(stats.additions) added, \(stats.deletions) removed"))
+    }
+}
+
+/// The tab's glass, merged with the box's by the container round the two. Its foot
+/// tucks under the box, so the hairline stops short of it.
+private struct ThreadChangesTabSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content.floatingGlass(
+            UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12, style: .continuous),
+            isInteractive: true,
+            hiddenRimBottom: ThreadChangesTab.overlap
+        )
     }
 }

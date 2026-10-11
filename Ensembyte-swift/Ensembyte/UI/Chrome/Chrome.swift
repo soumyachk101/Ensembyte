@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Tokens and building blocks shared with Swarm's settings panel, so the two apps read as one family.
+/// Tokens and building blocks shared with Ensembyte's settings panel, so the two apps read as one family.
 enum Chrome {
     // MARK: Window
 
@@ -25,8 +25,8 @@ enum Chrome {
     /// One weight and size for every symbol that is a control on its own: chrome buttons,
     /// the composer's paperclip and send, the terminal strip. Symbols beside text step down
     /// a point so they sit level with the type; menu chevrons are small and bold.
-    static let iconFont: Font = .system(size: 12, weight: .semibold)
-    static let inlineIconFont: Font = .system(size: 11, weight: .semibold)
+    static let iconFont: Font = .system(.callout, weight: .semibold)
+    static let inlineIconFont: Font = .system(.subheadline, weight: .semibold)
     static let chevronFont: Font = .system(size: 8, weight: .bold)
     static let chromeHorizontalPadding: CGFloat = 14
     static let chromeTopPadding: CGFloat = 12
@@ -74,7 +74,9 @@ enum Chrome {
 
     // Dynamic system colors resolve at draw time, so one wrapped value serves every appearance.
     static let primaryText = Color(nsColor: .labelColor)
-    static let secondaryText = Color(nsColor: .secondaryLabelColor)
+    /// Supporting copy: captions, metadata lines, row details. Primary at 70% clears the
+    /// 4.5:1 floor on both grounds; `secondaryLabelColor`'s 50% alpha does not.
+    static let secondaryText = primaryText.opacity(0.7)
     private static let systemAccent = Color(nsColor: .controlAccentColor)
 
     /// The theme's accent, or the system control accent for System/Light/Dark.
@@ -95,13 +97,8 @@ enum Chrome {
 
     static var hover: Animation { .easeOut(duration: 0.1) }
 
-    /// If the user has set a preference for reduced motion, that takes priority;
-    /// otherwise fall back to the system's accessibility setting.
-    nonisolated(unsafe) static var reducedMotionOverride: Bool? = nil
-
     static var panelSlide: Animation {
-        let reduce = reducedMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        return reduce
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             ? .easeOut(duration: 0.18)
             : .spring(response: 0.32, dampingFraction: 0.9)
     }
@@ -113,8 +110,7 @@ enum Chrome {
     /// The rows making room as a thread settles to the bottom of the sidebar or comes back
     /// up: the glide's own spring, so the ghost and the rows land together.
     static var settleFlight: Animation {
-        let reduce = reducedMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        return reduce
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             ? .easeOut(duration: 0.2)
             : .spring(glideSpring)
     }
@@ -150,6 +146,73 @@ extension View {
     func detailSheet() -> some View {
         modifier(DetailSheetModifier())
     }
+
+    /// A surface floating over the timeline: the chat box, the tabs rising from it, the
+    /// request cards. One Liquid Glass pass washed with the theme, so what scrolls under it
+    /// shows through blurred, and a cool hairline. `tint` replaces the theme wash, `rim` the
+    /// hairline; `hiddenRimBottom` leaves the hairline off a foot tucked under another
+    /// surface, where it would otherwise cross that surface's glass. Reduce Transparency and
+    /// performance mode draw a flat fill instead.
+    func floatingGlass<S: InsettableShape>(
+        _ shape: S,
+        tint: Color? = nil,
+        rim: Color? = nil,
+        isInteractive: Bool = false,
+        hiddenRimBottom: CGFloat = 0
+    ) -> some View {
+        modifier(FloatingGlassSurface(shape: shape, tint: tint, rim: rim, isInteractive: isInteractive, hiddenRimBottom: hiddenRimBottom))
+    }
+}
+
+extension Chrome {
+    /// The theme wash over a floating surface's glass. Light enough that the blurred
+    /// content reads through; the glass's own blur, not the wash, carries legibility.
+    static func floatingGlassWash(isDark: Bool) -> Color {
+        glassTint.opacity(isDark ? 0.15 : 0.35)
+    }
+
+    /// The hairline round a floating surface: a translucent cool slate, which sits on glass
+    /// more naturally than the neutral separator.
+    static func floatingGlassRim(isDark: Bool) -> Color {
+        isDark
+            ? Color(hue: 210 / 360, saturation: 0.18, brightness: 0.82).opacity(0.09)
+            : Color(hue: 210 / 360, saturation: 0.30, brightness: 0.38).opacity(0.10)
+    }
+}
+
+private struct FloatingGlassSurface<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    let rim: Color?
+    let isInteractive: Bool
+    let hiddenRimBottom: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
+
+    func body(content: Content) -> some View {
+        let isDark = colorScheme == .dark
+        let edge = shape
+            .strokeBorder(rim ?? Chrome.floatingGlassRim(isDark: isDark), lineWidth: 1)
+            .mask(alignment: .top) { Rectangle().padding(.bottom, hiddenRimBottom) }
+        if reduceTransparency || performanceMode {
+            content
+                .background(shape.fill(Color(nsColor: .controlBackgroundColor)))
+                .clipShape(shape)
+                .overlay { edge }
+        } else {
+            // No base under the glass: a fill behind it is what the glass samples, and an
+            // opaque one turned every floating surface a flat grey.
+            content
+                .glassEffect(glass(isDark: isDark), in: shape)
+                .overlay { edge }
+        }
+    }
+
+    private func glass(isDark: Bool) -> Glass {
+        let wash = tint ?? Chrome.floatingGlassWash(isDark: isDark)
+        return isInteractive ? .regular.tint(wash).interactive() : .regular.tint(wash)
+    }
 }
 
 /// A control's surface: interactive Liquid Glass, or, inside a glass panel, the panel's
@@ -161,6 +224,7 @@ private struct ChromeGlassSurface: ViewModifier {
     var isInteractive = true
     @Environment(\.isOnGlassPanel) private var isOnGlassPanel
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
     @State private var isHovered = false
 
     func body(content: Content) -> some View {
@@ -174,12 +238,12 @@ private struct ChromeGlassSurface: ViewModifier {
 
     @ViewBuilder
     private func surface<S: InsettableShape>(_ content: Content, in shape: S) -> some View {
-        if isOnGlassPanel {
+        if isOnGlassPanel || performanceMode {
             content
                 .background(shape.fill(Chrome.panelControlFill(isDark: colorScheme == .dark, hovered: isHovered)))
                 .contentShape(shape)
                 .onHover { isHovered = $0 }
-                .animation(Chrome.hover, value: isHovered)
+                .animation(performanceMode ? nil : Chrome.hover, value: isHovered)
         } else if isInteractive {
             content.glassEffect(.regular.tint(Chrome.glassTint.opacity(0.3)).interactive(), in: shape)
         } else {
@@ -193,7 +257,8 @@ private struct DetailSheetModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         // Square: the window's own clip rounds the sheet's outer corners with everything
-        // else, so the sheet never draws a corner of its own inside the window's.
+        // else, so the sheet never draws a corner of its own inside the window's. Flat
+        // fills, so performance mode keeps them.
         content
             .background {
                 Rectangle().fill(colorScheme == .dark ? Color.black.opacity(0.22) : Color.white.opacity(0.3))
@@ -205,6 +270,7 @@ private struct DetailSheetModifier: ViewModifier {
 /// One shaped surface for the whole window: glass or a solid fill, a legibility tint and a hairline.
 struct WindowBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
     /// The backdrop setting, 0 for bare glass and 1 for a solid base.
     let opacity: Double
     /// The user's wallpaper, painted edge to edge at the transparency setting's own opacity; nil for the stock glass.
@@ -218,61 +284,129 @@ struct WindowBackdrop: View {
         return t <= 0.5 ? stock * (t / 0.5) : stock + (1 - stock) * ((t - 0.5) / 0.5)
     }
 
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Chrome.windowCornerRadius, style: .continuous)
+    }
+
+    private var solidBackdrop: some View {
+        shape.fill(colorScheme == .dark ? Color.black : Color.white)
+            .overlay { shape.fill(Chrome.glassTint.opacity(0.12)) }
+            .overlay { shape.strokeBorder(Chrome.overlay(0.14), lineWidth: 1) }
+    }
+
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Chrome.windowCornerRadius, style: .continuous)
         let isDark = colorScheme == .dark
-        // At the solid end of the slider the scrim covers the glass completely, and a
-        // Liquid Glass surface the size of the window is a full-window sample on every
-        // frame anything over it moves. There it draws as a plain fill instead; the
-        // scrim, the tint and the hairline stay exactly as they are.
         let isSolid = opacity >= 0.98
-        Group {
-            if let wallpaper {
-                // The picture rides over the desktop rather than in place of it: the
-                // transparency setting is the picture's own opacity, so a clear window
-                // shows the desktop through the picture and a solid one shows the picture
-                // alone. No scrim in this branch: the scrim is the window's base colour,
-                // and the picture is what that base is when one is set.
-                shape.fill(.clear)
-                    .overlay {
-                        Image(nsImage: wallpaper)
-                            .resizable()
-                            .interpolation(.high)
-                            .aspectRatio(contentMode: .fill)
-                            .opacity(opacity)
-                    }
-                    .clipShape(shape)
-                    .overlay {
-                        if !isSolid {
-                            shape
-                                .fill(.clear)
-                                .glassEffect(in: shape)
+        if performanceMode || (isSolid && wallpaper == nil) {
+            solidBackdrop
+        } else {
+            Group {
+                if let wallpaper {
+                    // The picture's opacity follows the transparency slider, with no scrim.
+                    shape.fill(.clear)
+                        .overlay {
+                            Image(nsImage: wallpaper)
+                                .resizable()
+                                .interpolation(.high)
+                                .aspectRatio(contentMode: .fill)
+                                .opacity(opacity)
                         }
-                    }
-                    .transition(.opacity)
-            } else if isSolid {
-                shape.fill(isDark ? Color.black : Color.white)
-            } else {
-                shape
-                    .fill(.clear)
-                    .glassEffect(in: shape)
-                    .overlay {
-                        shape
-                            .fill(isDark ? Color.black : Color.white)
-                            .opacity(Self.scrim(for: opacity, isDark: isDark))
-                    }
+                        .clipShape(shape)
+                        .overlay {
+                            if !isSolid {
+                                shape
+                                    .fill(.clear)
+                                    .glassEffect(in: shape)
+                            }
+                        }
+                        .transition(.opacity)
+                } else {
+                    // The desktop blurred by the window server: one blur for the whole
+                    // window that costs nothing when content inside it moves, where a
+                    // window-sized glass surface resampled on every such frame.
+                    BehindWindowBlur(cornerRadius: Chrome.windowCornerRadius)
+                        .overlay {
+                            shape
+                                .fill(isDark ? Color.black : Color.white)
+                                .opacity(Self.scrim(for: opacity, isDark: isDark))
+                        }
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: wallpaper != nil)
+            .overlay {
+                shape.fill(Chrome.glassTint.opacity(0.12))
+            }
+            // The hairline sits on the glass as well as on the solid fill.
+            .overlay {
+                shape.strokeBorder(Chrome.overlay(0.14), lineWidth: 1)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: wallpaper != nil)
-        .overlay {
-            shape.fill(Chrome.glassTint.opacity(0.12))
+    }
+
+}
+
+/// What lies behind the window, blurred and kept live while the window is inactive, cut
+/// to the window's continuous corners. Reduce Transparency turns it opaque by itself.
+struct BehindWindowBlur: NSViewRepresentable {
+    let cornerRadius: CGFloat
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.blendingMode = .behindWindow
+        view.material = .underWindowBackground
+        view.state = .active
+        view.maskImage = Self.mask(cornerRadius: cornerRadius)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+
+    /// A stretchable rounded mask. The caps run past the radius because a continuous
+    /// corner starts bending about one and a half radii from the corner.
+    private static func mask(cornerRadius: CGFloat) -> NSImage {
+        let cap = (cornerRadius * 1.6).rounded(.up)
+        let edge = cap * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.addPath(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect).cgPath)
+            context.setFillColor(NSColor.black.cgColor)
+            context.fillPath()
+            return true
         }
-        // The hairline sits on the glass as well as on the solid fill, the way Swarm's
-        // settings window draws its edge: on a clear window the glass rim alone reads as
-        // a second line outside the curve.
-        .overlay {
-            shape.strokeBorder(Chrome.overlay(0.14), lineWidth: 1)
-        }
+        image.capInsets = NSEdgeInsets(top: cap, left: cap, bottom: cap, right: cap)
+        image.resizingMode = .stretch
+        return image
+    }
+}
+
+// No pressed feedback, while retaining Button semantics for keyboard and accessibility.
+struct ChromeQuietButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
+/// Reveals its single child by height: fraction 1 gives the slot the child's natural
+/// height, 0 collapses the slot to nothing while the child stays mounted, laid out
+/// top-leading at full size so it never travels — the clip reveals it in place.
+/// Animatable, so a panelSlide transaction slides the fraction, not the child.
+struct ChromeRevealLayout: Layout {
+    var fraction: CGFloat
+
+    var animatableData: CGFloat {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let natural = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: natural.width, height: natural.height * min(max(fraction, 0), 1))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 
@@ -608,7 +742,7 @@ struct ChromeCompactTitle: View {
     var body: some View {
         let progress = model.progress
         Text(verbatim: title)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(.title3, weight: .semibold))
             .foregroundStyle(Chrome.primaryText)
             .lineLimit(1)
             .opacity(Double(progress))
@@ -687,7 +821,7 @@ struct SidebarRow<Icon: View, Accessory: View>: View {
                 icon
                     .frame(width: Chrome.iconSize, alignment: .center)
                 Text(verbatim: title)
-                    .font(.system(size: 13, weight: isSelected || isEmphasized ? .medium : .regular))
+                    .font(.system(.body, weight: isSelected || isEmphasized ? .medium : .regular))
                     .foregroundStyle(Chrome.primaryText.opacity(isSelected ? 1 : 0.92))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -757,11 +891,11 @@ struct SidebarSearchField: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.callout, weight: .medium))
                 .foregroundStyle(Chrome.secondaryText.opacity(0.85))
             TextField(prompt, text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(.system(.body))
                 .frame(maxWidth: .infinity)
                 .onSubmit(onSubmit)
                 .onKeyPress(.upArrow) { move(-1) }
@@ -771,7 +905,7 @@ struct SidebarSearchField: View {
                     text = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
+                        .font(.system(.callout))
                         .foregroundStyle(Chrome.secondaryText.opacity(0.75))
                 }
                 .buttonStyle(.plain)
@@ -806,7 +940,7 @@ struct ChromeSearchField: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.callout, weight: .semibold))
                 .foregroundStyle(Chrome.secondaryText)
                 .accessibilityHidden(true)
             TextField(prompt, text: $query)
@@ -820,7 +954,7 @@ struct ChromeSearchField: View {
                 query = ""
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 12))
+                    .font(.system(.callout))
                     .foregroundStyle(Chrome.secondaryText.opacity(0.8))
             }
             .buttonStyle(.plain)
@@ -868,7 +1002,7 @@ struct GlassPickerButton<Value: Hashable>: View {
                 }
                 if let symbol = symbol(selection) {
                     Image(systemName: symbol)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(.callout, weight: .medium))
                         .foregroundStyle(Chrome.secondaryText)
                 }
                 Text(verbatim: title)
@@ -937,7 +1071,7 @@ extension Animation {
 /// The face holds through the first half of the flight and fades over the second, the way
 /// the sidebar's ghost slips out of the list's edge (see `RowGlideAnimator`); with Reduce
 /// Motion on it fades where it stands.
-private struct SettleGlideModifier: ViewModifier, @preconcurrency Animatable {
+private struct SettleGlideModifier: ViewModifier, Animatable {
     var progress: Double
 
     var animatableData: Double {
@@ -1011,8 +1145,8 @@ struct ChromeSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Chrome.sectionHeaderSpacing) {
             HStack(spacing: 4) {
                 Text(verbatim: title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(.body, weight: .semibold))
+                    .foregroundStyle(Chrome.secondaryText)
                 if let accessory { accessory }
                 if let trailing {
                     Spacer(minLength: 8)
@@ -1034,11 +1168,11 @@ struct ChromeRow<Control: View>: View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: title)
-                    .font(.system(size: 13))
+                    .font(.system(.body))
                     .foregroundStyle(Chrome.primaryText)
                 if let detail, !detail.isEmpty {
                     Text(verbatim: detail)
-                        .font(.system(size: 11))
+                        .font(.system(.subheadline))
                         .foregroundStyle(Chrome.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1061,23 +1195,14 @@ struct ChromeRowDivider: View {
 
 // MARK: - Window drag
 
-/// Lets a stretch of chrome move the window, the way the sidebar does in Swarm.
-struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> WindowDragView {
-        WindowDragView()
+/// Lets a stretch of chrome move the window, the way the sidebar does in Ensembyte.
+struct WindowDragArea: View {
+    var body: some View {
+        Color.clear
+            .contentShape(.rect)
+            .gesture(WindowDragGesture())
+            .allowsWindowActivationEvents(true)
     }
-
-    func updateNSView(_ nsView: WindowDragView, context: Context) {}
-}
-
-final class WindowDragView: NSView {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
-    }
-
-    override func mouseUp(with event: NSEvent) {}
 }
 
 /// Marks a chrome control's hit area as never dragging the window.

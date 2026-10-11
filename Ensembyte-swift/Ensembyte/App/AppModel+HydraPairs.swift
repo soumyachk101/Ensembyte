@@ -39,6 +39,7 @@ extension AppModel {
             thread.model = lead.model
             thread.effort = lead.effort
             thread.fastMode = lead.fastMode
+            thread.speedTier = lead.speedTier
             thread.hydraPairID = pair.id
             thread.hydraEnabled = true
         }
@@ -51,8 +52,8 @@ extension AppModel {
         settings.hydraDefaultEnabled = true
     }
 
-    /// The model, effort and fast mode a chat runs on as a pair's lead.
-    func hydraLead(of pair: HydraPair, for thread: ChatThread) -> (model: String?, effort: String?, fastMode: Bool) {
+    /// The model, effort and speed a chat runs on as a pair's lead.
+    func hydraLead(of pair: HydraPair, for thread: ChatThread) -> (model: String?, effort: String?, fastMode: Bool, speedTier: String?) {
         let provider = pair.provider
         let switchesProvider = provider != thread.provider
         // A pair with no lead model runs on any model, so the chat keeps the one it is on;
@@ -77,7 +78,22 @@ extension AppModel {
         } else {
             preference.effort.flatMap { (option?.efforts.contains($0) ?? false) ? $0 : nil }
         }
-        return (modelID, effort, (option?.supportsFast ?? false) && preference.fastMode)
+        // The pair's own speed wins too; without one, the speed this model was last left on.
+        if let speed = hydraLeadSpeed(of: pair, option: option) {
+            return (modelID, effort, speed.fastMode, speed.tier)
+        }
+        return (modelID, effort, (option?.supportsFast ?? false) && preference.fastMode, nil)
+    }
+
+    /// The lead's speed as the pair sets it: fast mode, and the tier when the pair picked
+    /// one past the plain fast one. Nil when the pair leaves the speed to the chat. A tier
+    /// the model does not list is standard speed; a model the catalog has not listed yet
+    /// takes the tier as chosen.
+    func hydraLeadSpeed(of pair: HydraPair, option: ModelOption?) -> (fastMode: Bool, tier: String?)? {
+        guard let speed = pair.orchestratorSpeed else { return nil }
+        guard speed != ModelSpeedTier.standardID else { return (false, nil) }
+        if let option, !option.speeds.contains(where: { $0.id == speed }) { return (false, nil) }
+        return (true, speed == option?.fastTier ? nil : speed)
     }
 
     /// Edits a pair in Settings and moves the chats leading with it along: the pair is
@@ -95,11 +111,12 @@ extension AppModel {
                 continue
             }
             let lead = hydraLead(of: pair, for: thread)
-            guard lead.model != thread.model || lead.effort != thread.effort || lead.fastMode != thread.fastMode else { continue }
+            guard lead.model != thread.model || lead.effort != thread.effort || lead.fastMode != thread.fastMode || lead.speedTier != thread.speedTier else { continue }
             updateThread(thread.id) {
                 $0.model = lead.model
                 $0.effort = lead.effort
                 $0.fastMode = lead.fastMode
+                $0.speedTier = lead.speedTier
             }
             settings.remember(model: lead.model, effort: lead.effort, for: pair.provider)
         }

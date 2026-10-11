@@ -6,6 +6,53 @@ enum MarkdownSegment: Equatable {
     case block(MarkdownBlock)
 }
 
+@MainActor
+@Observable
+private final class StreamingParseCoordinator {
+    @ObservationIgnored private var result: (text: String, parse: MarkdownParser.Parse)?
+    /// Bumped only when a parse finished off the main thread lands, so the view redraws
+    /// with it even if no more text arrives; the synchronous path writes nothing observed.
+    private var landed = 0
+    @ObservationIgnored private var requested: String?
+    @ObservationIgnored private var pending: String?
+    @ObservationIgnored private var running = false
+
+    func parse(_ text: String) -> (blocks: [MarkdownBlock], stable: Int) {
+        _ = landed
+        if requested != text {
+            requested = text
+            let tailSize = text.utf8.count - (result?.parse.restart ?? 0)
+            if tailSize <= 4096 {
+                pending = nil
+                result = (text, MarkdownParser.parse(text, extending: result))
+            } else {
+                pending = text
+                startNext()
+            }
+        }
+        return (result?.parse.blocks ?? [], result?.parse.stable ?? 0)
+    }
+
+    private func startNext() {
+        guard !running, let text = pending else { return }
+        pending = nil
+        running = true
+        let previous = result
+        Task { [weak self] in
+            let parsed = await Task.detached(priority: .userInitiated) {
+                MarkdownParser.parse(text, extending: previous)
+            }.value
+            guard let self else { return }
+            self.running = false
+            if self.requested == text {
+                self.result = (text, parsed)
+                self.landed &+= 1
+            }
+            self.startNext()
+        }
+    }
+}
+
 struct MarkdownView: View, Equatable {
     let text: String
     static let warmCandidateLimit = 96
@@ -15,6 +62,8 @@ struct MarkdownView: View, Equatable {
     /// through the thread will ask for again.
     var isStreaming = false
     @Environment(\.markdownProseRuns) private var proseRuns
+    @State private var sawStreaming = false
+    @State private var streamingCoordinator = StreamingParseCoordinator()
 
     /// Equal text renders equally, so finished replies are skipped entirely while a
     /// new reply streams or the timeline rebuilds around them.
@@ -64,11 +113,11 @@ struct MarkdownView: View, Equatable {
         // While the text streams, the parse also says how many of its leading blocks are
         // final; those are the ones a flush cannot change, and the views for them are
         // compared by that fact alone (see `MarkdownBlockView.settled`).
-        let parse = isStreaming ? Self.streamingParse(for: text) : (blocks: Self.blocks(for: text), stable: 0)
+        let parse = isStreaming ? streamingCoordinator.parse(text) : (blocks: Self.blocks(for: text), stable: 0)
         let blocks = parse.blocks
         let stable = parse.stable
         let last = blocks.count - 1
-        if !isStreaming && proseRuns {
+        if !isStreaming && !sawStreaming && proseRuns {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(Self.segments(blocks).enumerated()), id: \.offset) { _, segment in
                     switch segment {
@@ -99,12 +148,14 @@ struct MarkdownView: View, Equatable {
             // snapping the moment the next block starts.
             .environment(\.markdownVeiled, isStreaming)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .onAppear { if isStreaming { sawStreaming = true } }
+            .onChange(of: isStreaming) { _, streaming in if streaming { sawStreaming = true } }
         }
     }
 
     /// Parsed blocks by source. Rows are rebuilt as they scroll into view, but a finished
     /// message parses to the same blocks, so each distinct text parses once.
-    @MainActor private static var blockCache = RecentCache<String, [MarkdownBlock]>(limit: 800)
+    @MainActor private static var blockCache = RecentCache<String, [MarkdownBlock]>(limit: 800, costLimit: 24 * 1024 * 1024, entryCostLimit: 3 * 1024 * 1024)
     /// The latest parse of each message still streaming, newest last: re-renders between
     /// flushes never parse, and a flush parses only the block the new text extends. A few
     /// slots, so a lead and the heads in its panel streaming together keep theirs.
@@ -112,7 +163,7 @@ struct MarkdownView: View, Equatable {
     /// Enough for a lead and a whole team of heads streaming in its panel at once. With
     /// four slots, twenty heads evicted each other's parse on every flush and every
     /// render parsed its reply from the start again, on the main thread.
-    private static let streamingSlots = 48
+    nonisolated fileprivate static let streamingSlots = 48
 
     /// The parse of a streaming text together with how many of its leading blocks are
     /// final: the parser decides each line from that line and the next, so a block that
@@ -143,7 +194,7 @@ struct MarkdownView: View, Equatable {
         } else {
             parsed = MarkdownParser.parse(text)
         }
-        blockCache.insert(parsed, for: text)
+        blockCache.insert(parsed, for: text, cost: text.utf8.count * 3)
         return parsed
     }
 
@@ -210,7 +261,7 @@ struct MarkdownView: View, Equatable {
         try Task.checkCancellation()
         for (text, blocks, inline) in parsed {
             try Task.checkCancellation()
-            if !blockCache.contains(text) { blockCache.insert(blocks, for: text) }
+            if !blockCache.contains(text) { blockCache.insert(blocks, for: text, cost: text.utf8.count * 3) }
             for (source, pretty) in inline {
                 try Task.checkCancellation()
                 RichLink.warm(source, with: pretty)
@@ -284,7 +335,6 @@ struct MarkdownBlockView: View, Equatable {
     var settled = false
     @Environment(\.markdownDimmed) private var dimmed
     @Environment(\.markdownListDepth) private var listDepth
-    @Environment(\.chatZoom) private var zoom
     @Environment(\.markdownStreaming) private var streaming
     @Environment(\.hydraMentionPersonas) private var hydraMentionPersonas
     @Environment(\.hydraMentionTargets) private var hydraMentionTargets
@@ -325,10 +375,10 @@ struct MarkdownBlockView: View, Equatable {
         case .code(let language, let code):
             // The lead's delegation block (info string `hydra`) is a brief for the team, not
             // code: it reads as a card while it streams and whenever it stays in the reply.
-            if let info = language?.lowercased(), MarkdownView.isDelegationInfo(info) {
+            if let info = language?.lowercased(), MarkdownView.isDelegationInfo(info), let delegationRenderer = MarkdownDelegationCard.render {
                 // `hydra-leaving`: the card fades where it stands, still taking up its room,
                 // before the block leaves the reply and the text below closes up.
-                HydraDelegationBlock(json: code, sent: info != "hydra")
+                delegationRenderer(code, info != "hydra")
                     .opacity(info == "hydra-leaving" ? 0 : 1)
                     .scaleEffect(info == "hydra-leaving" ? 0.98 : 1, anchor: .top)
                     .allowsHitTesting(info != "hydra-leaving")
@@ -362,7 +412,7 @@ struct MarkdownBlockView: View, Equatable {
                     }
                 }
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Chrome.secondaryText)
             .environment(\.markdownDimmed, true)
         case .table(let header, let rows):
             TableBlock(header: header, rows: rows)
@@ -376,10 +426,10 @@ struct MarkdownBlockView: View, Equatable {
 
     private func headingFont(_ level: Int) -> Font {
         switch level {
-        case 1: .chat(.title2, weight: .semibold, zoom: zoom)
-        case 2: .chat(.title3, weight: .semibold, zoom: zoom)
-        case 3: .chat(.headline, zoom: zoom)
-        default: .chat(.subheadline, weight: .semibold, zoom: zoom)
+        case 1: .chat(.title2, weight: .semibold)
+        case 2: .chat(.title3, weight: .semibold)
+        case 3: .chat(.headline)
+        default: .chat(.subheadline, weight: .semibold)
         }
     }
 
@@ -417,54 +467,13 @@ struct MarkdownBlockView: View, Equatable {
     /// Word-bounded ranges of any of `names` in `text`, longest-name-first, so
     /// 'Hank 2' beats 'Hank'.
     nonisolated static func mentionRanges(in text: String, names: [String]) -> [Range<String.Index>] {
-        let ordered = names.sorted { $0.count > $1.count }
-        var out: [Range<String.Index>] = []
-        var i = text.startIndex
-        while i < text.endIndex {
-            var hit: String?
-            for name in ordered where text[i...].hasPrefix(name) {
-                let after = text.index(i, offsetBy: name.count, limitedBy: text.endIndex) ?? text.endIndex
-                let beforeOK: Bool
-                if i == text.startIndex { beforeOK = true } else { let c = text[text.index(before: i)]; beforeOK = !c.isLetter && !c.isNumber }
-                let afterOK: Bool
-                if after == text.endIndex { afterOK = true } else { let c = text[after]; afterOK = !c.isLetter && !c.isNumber }
-                if beforeOK && afterOK { hit = name; break }
-            }
-            if let hit {
-                let end = text.index(i, offsetBy: hit.count)
-                out.append(i..<end)
-                i = end
-            } else {
-                i = text.index(after: i)
-            }
-        }
-        return out
+        MentionScanner.matches(in: text, candidates: names, name: { $0 }).map(\.range)
     }
     private func mentionSegments(in text: String) -> [VeiledText.Segment]? {
         let pretty = RichLink.prettyAttributed(text, streaming: streaming)
         let chars = String(pretty.characters)
         guard !hydraMentionPersonas.isEmpty else { return nil }
-        let ordered = hydraMentionPersonas.sorted { $0.name.count > $1.name.count }
-        var matches: [(range: Range<String.Index>, persona: HydraPersona)] = []
-        var i = chars.startIndex
-        while i < chars.endIndex {
-            var hit: HydraPersona?
-            for persona in ordered where chars[i...].hasPrefix(persona.name) {
-                let after = chars.index(i, offsetBy: persona.name.count, limitedBy: chars.endIndex) ?? chars.endIndex
-                let beforeOK: Bool
-                if i == chars.startIndex { beforeOK = true } else { let c = chars[chars.index(before: i)]; beforeOK = !c.isLetter && !c.isNumber }
-                let afterOK: Bool
-                if after == chars.endIndex { afterOK = true } else { let c = chars[after]; afterOK = !c.isLetter && !c.isNumber }
-                if beforeOK && afterOK { hit = persona; break }
-            }
-            if let hit {
-                let end = chars.index(i, offsetBy: hit.name.count)
-                matches.append((i..<end, hit))
-                i = end
-            } else {
-                i = chars.index(after: i)
-            }
-        }
+        let matches = MentionScanner.matches(in: chars, candidates: hydraMentionPersonas, name: \.name)
         guard !matches.isEmpty else { return nil }
         func prettyRange(_ r: Range<String.Index>) -> Range<AttributedString.Index> {
             let lo = chars.distance(from: chars.startIndex, to: r.lowerBound)
@@ -478,7 +487,7 @@ struct MarkdownBlockView: View, Equatable {
             if cursor < match.range.lowerBound {
                 segments.append(.prose(AttributedString(pretty[prettyRange(cursor..<match.range.lowerBound)])))
             }
-            segments.append(.fixed(mentionText(match.persona)))
+            segments.append(.fixed(mentionText(match.value)))
             cursor = match.range.upperBound
         }
         if cursor < chars.endIndex {
@@ -488,7 +497,7 @@ struct MarkdownBlockView: View, Equatable {
     }
 
     private func mentionText(_ persona: HydraPersona) -> Text {
-        let size = 16 * zoom
+        let size: CGFloat = 16
         let glyph = Text(Self.mentionGlyph(persona, size: size))
             .foregroundColor(persona.color)
             .baselineOffset(Self.mentionGlyphOffset(size: size))
@@ -544,34 +553,41 @@ private struct MarkdownListDepthKey: EnvironmentKey {
     static let defaultValue = 0
 }
 
+/// Draws a `hydra` delegation block. The card is an App view that UI can't name, so the
+/// app sets this at launch; until then the block reads as code.
+enum MarkdownDelegationCard {
+    @MainActor static var render: ((String, Bool) -> AnyView)?
+}
+
 extension EnvironmentValues {
     @Entry var hydraMentionPersonas: [HydraPersona] = []
     /// The heads this chat sent out, by persona name, for the hover card and the click.
     @Entry var hydraMentionTargets: [String: HydraMentionTarget] = [:]
-
     var markdownListDepth: Int {
         get { self[MarkdownListDepthKey.self] }
         set { self[MarkdownListDepthKey.self] = newValue }
     }
 }
 
-/// Pretty linktitels + favicons voor chat-markdown.
+/// Pretty link titles plus favicons for chat markdown.
 ///
-/// Kale URL's (`https://…`) kwamen volledig in beeld. Afspraak: toon de titel
-/// (expliciete `[titel](url)` of host+pad zonder scheme) met de favicon ervoor.
+/// Bare URLs (`https://…`) used to fill the row. The rule: show the title
+/// (an explicit `[title](url)` or the host and path without a scheme) with the
+/// favicon in front.
 enum RichLink {
-    @MainActor private static var prettyCache = RecentCache<String, AttributedString>(limit: 1200)
+    @MainActor private static var prettyCache = RecentCache<String, AttributedString>(limit: 1200, costLimit: 16 * 1024 * 1024, entryCostLimit: 2 * 1024 * 1024)
     /// The paragraphs still being streamed, newest last, kept apart so their every flush
     /// leaves the cache alone. As many slots as `MarkdownView` keeps parses, so a lead and
     /// the heads streaming beside it never evict each other between flushes.
     @MainActor private static var streamingPretty: [(source: String, value: AttributedString)] = []
-    private static let streamingSlots = 4
+    private static let streamingSlots = MarkdownView.streamingSlots
 
     @MainActor
     static func prettyAttributed(_ source: String, streaming: Bool = false) -> AttributedString {
         if streaming {
             if let pretty = streamingPretty.last(where: { $0.source == source }) { return pretty.value }
-            let value = build(source)
+            // The paragraph still being written shows its open markup closed (see `StreamMend`).
+            let value = build(StreamMend.mended(source))
             if streamingPretty.count == streamingSlots { streamingPretty.removeFirst() }
             streamingPretty.append((source, value))
             return value
@@ -579,18 +595,21 @@ enum RichLink {
         if let hit = prettyCache.value(for: source) { return hit }
         let value: AttributedString
         if let slot = streamingPretty.lastIndex(where: { $0.source == source }) {
-            value = streamingPretty.remove(at: slot).value
+            // The streamed build stands for the finished text only if nothing was mended
+            // into it: markup that never closed settles as written.
+            let streamed = streamingPretty.remove(at: slot).value
+            value = StreamMend.mended(source) == source ? streamed : build(source)
         } else {
             value = build(source)
         }
-        prettyCache.insert(value, for: source)
+        prettyCache.insert(value, for: source, cost: source.utf8.count * 3)
         return value
     }
 
     /// Stores a run built off the main thread (see `MarkdownView.warm`).
     @MainActor
     static func warm(_ source: String, with pretty: AttributedString) {
-        if !prettyCache.contains(source) { prettyCache.insert(pretty, for: source) }
+        if !prettyCache.contains(source) { prettyCache.insert(pretty, for: source, cost: source.utf8.count * 3) }
     }
 
     nonisolated static func build(_ source: String) -> AttributedString {
@@ -618,12 +637,6 @@ enum RichLink {
             result.append(linkSlice)
         }
         return result
-    }
-
-    @MainActor
-    static func containsLinks(in source: String, streaming: Bool = false) -> Bool {
-        let pretty = prettyAttributed(source, streaming: streaming)
-        return pretty.runs.contains { $0.link != nil }
     }
 
     @MainActor
@@ -735,8 +748,13 @@ enum RichLink {
         return String(absolute.prefix(19)) + "…" + String(absolute.suffix(18))
     }
 
+    @MainActor
+    static func containsLinks(in source: String, streaming: Bool = false) -> Bool {
+        prettyAttributed(source, streaming: streaming).runs.contains { $0.link != nil }
+    }
+
     static func isBareDisplay(_ display: String, url: URL) -> Bool {
-        var d = display.trimmingCharacters(in: .whitespacesAndNewlines)
+        var d = display.trimmed
         if d.hasPrefix("<"), d.hasSuffix(">"), d.count >= 2 {
             d = String(d.dropFirst().dropLast())
         }
@@ -748,7 +766,9 @@ enum RichLink {
         return false
     }
 
-    /// A bare domain as people type it in chat: getswarm.app, www.swarm.app/pricing?a=1.
+    /// A bare domain as people type it in chat: getensembyte.app, www.ensembyte.app/pricing?a=1.
+    /// The lookbehind is not supported by Swift's `Regex`, so this stays on
+    /// `NSRegularExpression`.
     private static let bareDomainPattern = try? NSRegularExpression(
         pattern: "(?<![A-Za-z0-9@._/-])((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\\.)+[A-Za-z]{2,24})(/[^\\s<>()]*)?",
         options: [.caseInsensitive])
@@ -766,7 +786,7 @@ enum RichLink {
         "sg", "hk", "tw", "th", "my", "id", "ph", "vn", "tr", "il", "ae", "sa", "cl", "ar", "pe"
     ]
 
-    /// Links the bare domains Foundation leaves alone: `getswarm.app` typed in chat
+    /// Links the bare domains Foundation leaves alone: `getensembyte.app` typed in chat
     /// reads as a link with its favicon, the same as a full URL does.
     private static func autolinkedBareDomains(_ parsed: AttributedString) -> AttributedString {
         var out = AttributedString()
@@ -908,7 +928,7 @@ enum FaviconCache {
     /// Hosts with no icon are remembered too, and concurrent asks share one request: a streaming
     /// reply restarts its row's task on every token, and scrolling re-runs it on every appear.
     private static var failed: Set<String> = []
-    private static var inFlight: [String: Task<Data?, Never>] = [:]
+    private static var inFlight: [String: Task<NSImage?, Never>] = [:]
 
     static func image(for host: String) async -> NSImage? {
         let key = host.lowercased()
@@ -920,25 +940,20 @@ enum FaviconCache {
             failed.insert(key)
             return nil
         }
-        let data: Data?
-        if let task = inFlight[key] {
-            data = await task.value
+        if let task = inFlight[key] { return await task.value }
+        let task = Task { () -> NSImage? in
+            guard let data = await iconData(for: key), let clean = cleaned(data) else { return nil }
+            return resizedIcon(clean)
+        }
+        inFlight[key] = task
+        let image = await task.value
+        inFlight[key] = nil
+        if let image {
+            if memory.count >= 300 { memory.removeAll(keepingCapacity: true) }
+            memory[key] = image
         } else {
-            let task = Task { () -> Data? in
-                await iconData(for: key)
-            }
-            inFlight[key] = task
-            data = await task.value
-            inFlight[key] = nil
-        }
-        if let hit = memory[key] { return hit }
-        guard let data, let clean = cleaned(data) else {
             failed.insert(key)
-            return nil
         }
-        let image = resizedIcon(clean)
-        if memory.count >= 300 { memory.removeAll(keepingCapacity: true) }
-        memory[key] = image
         return image
     }
 
@@ -1109,7 +1124,6 @@ struct InlineText: View {
     /// The caller is a bubble that hugs its text: no full-width frame.
     var hugsContent = false
     @Environment(\.markdownPointSize) private var pointSize
-    @Environment(\.chatZoom) private var zoom
     @Environment(\.markdownDimmed) private var dimmed
     @Environment(\.markdownStreaming) private var streaming
     @Environment(\.hydraMentionPersonas) private var hydraMentionPersonas
@@ -1132,7 +1146,7 @@ struct InlineText: View {
     var body: some View {
         // faviconRevision read so loaded favicons rebuild the text.
         let _ = faviconRevision
-        let scaled = (pointSize * zoom * 2).rounded() / 2
+        let scaled = (pointSize * 2).rounded() / 2
         // Local file links have no host, but still need the native link opener.
         let hasLinkText = hasLinks ?? RichLink.containsLinks(in: source, streaming: streaming)
         if hasLinkText {
@@ -1151,50 +1165,14 @@ struct InlineText: View {
             // hand binding: the hover responder and the representable must not keep this
             // paragraph (and its styled text) alive after it scrolls away.
             let linkBox = linkView
-            let hand = $showsHand
-            let hoveredHead = $hoveredHeadID
-            let personasByName = Dictionary(hydraMentionPersonas.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
             let targets = hydraMentionTargets
             LinkParagraphView(source: source, pointSize: scaled, dimmed: dimmed, streaming: streaming, revision: faviconRevision, mentions: hydraMentionPersonas, targets: hydraMentionTargets, onOpenHead: { url in openURL(url) }, onHost: { [weak linkBox] view in linkBox?.value = view })
                 .frame(maxWidth: hugsContent ? nil : .infinity, alignment: .leading)
                 .alignmentGuide(.firstTextBaseline) { _ in ascender }
                 .alignmentGuide(.lastTextBaseline) { $0.height - lineHeight + ascender }
-                // The pointing hand over links, from here rather than the text view's own
-                // tracking (which AppKit would rebuild every scrolled frame). Hover is off
-                // while the timeline scrolls, so this costs nothing then.
-                .onContinuousHover(coordinateSpace: .local) { [weak linkBox, hand, hoveredHead, personasByName, targets] phase in
-                    guard let view = linkBox?.value as? LinkTextView else { return }
-                    switch phase {
-                    case .active(let point):
-                        let overLink = view.hasLink(at: point)
-                        if overLink != hand.wrappedValue {
-                            hand.wrappedValue = overLink
-                            if overLink { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                        }
-                        if let (name, url, rect) = view.headMentionRect(at: point),
-                           let target = targets[name], target.url == url,
-                           let persona = personasByName[name] {
-                            if hoveredHead.wrappedValue != target.threadID {
-                                hoveredHead.wrappedValue = target.threadID
-                                HydraHeadHoverPopover.shared.show(persona: persona, target: target, relativeTo: rect, of: view)
-                            }
-                        } else {
-                            if hoveredHead.wrappedValue != nil {
-                                hoveredHead.wrappedValue = nil
-                                HydraHeadHoverPopover.shared.hide()
-                            }
-                        }
-                    case .ended:
-                        if hand.wrappedValue { NSCursor.pop(); hand.wrappedValue = false }
-                        hoveredHead.wrappedValue = nil
-                        HydraHeadHoverPopover.shared.hide()
-                    }
-                }
-                .onDisappear { [hand, hoveredHead] in
-                    if hand.wrappedValue { NSCursor.pop(); hand.wrappedValue = false }
-                    hoveredHead.wrappedValue = nil
-                    HydraHeadHoverPopover.shared.hide()
-                }
+                // The pointing hand over links and the head card over a mention, from here
+                // rather than the text view's own tracking (see `LinkHoverModifier`).
+                .modifier(LinkHoverModifier(linkView: linkBox, showsHand: $showsHand, hoveredHeadID: $hoveredHeadID, personas: hydraMentionPersonas, targets: targets))
                 // Stable hosts and video ids key the link work, so a streamed token with no
                 // new link leaves the task alone.
                 .task(id: hostKey) { [source, streaming, revision = $faviconRevision] in
@@ -1268,13 +1246,40 @@ private struct CodeBlockCopyButton: View {
     }
 }
 
+@MainActor
+private final class CodeMetrics {
+    private var source = ""
+    private var count = 1
+    private(set) var prefix = ""
+    private var prefixComplete = false
+
+    func update(_ code: String, limit: Int) -> Int {
+        guard source != code else { return count }
+        let append = code.utf8.starts(with: source.utf8)
+        let offset = append ? source.utf8.count : 0
+        if !append { count = 1; prefix = ""; prefixComplete = false }
+        let start = code.utf8.index(code.utf8.startIndex, offsetBy: offset)
+        var prefixBytes: [UInt8] = []
+        for byte in code.utf8[start...] {
+            if byte == 10 { count += 1 }
+            if !prefixComplete {
+                if count > limit { prefixComplete = true }
+                else { prefixBytes.append(byte) }
+            }
+        }
+        prefix += String(decoding: prefixBytes, as: UTF8.self)
+        source = code
+        return count
+    }
+}
+
 struct CodeBlock: View {
     let language: String?
     let code: String
 
-    @Environment(\.chatZoom) private var zoom
     @State private var hover = BlockHover()
     @State private var showsAll = false
+    @State private var metrics = CodeMetrics()
 
     /// Long dumps render collapsed: materializing thousands of lines at once is what
     /// makes expanding feel laggy. The full text is one instant tap away.
@@ -1283,17 +1288,17 @@ struct CodeBlock: View {
     var body: some View {
         // A count of newlines, not a split: hovering re-runs this body, and a big dump split
         // into an array of lines on every hover is what made the copy button feel sticky.
-        let lineCount = 1 + code.utf8.count { $0 == 0x0A }
+        let lineCount = metrics.update(code, limit: Self.collapsedLineLimit)
         let truncated = !showsAll && lineCount > Self.collapsedLineLimit
-        let visible = truncated ? Self.head(of: code, lines: Self.collapsedLineLimit) : code
+        let visible = truncated ? metrics.prefix : code
         // The box alone: the hover handler must not keep this block (and its whole
         // text) alive after it scrolls away.
         let hoverBox = hover
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(language ?? "code")
-                    .font(.chat(.caption, zoom: zoom))
-                    .foregroundStyle(.secondary)
+                    .font(.chat(.caption))
+                    .foregroundStyle(Chrome.secondaryText)
                 Spacer()
                 CodeBlockCopyButton(text: code, hover: hover)
             }
@@ -1303,7 +1308,7 @@ struct CodeBlock: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 // Code streams line by line and veils in like prose.
                 VeiledText(verbatim: visible)
-                    .font(.chat(.callout, design: .monospaced, zoom: zoom))
+                    .font(.chat(.callout, design: .monospaced))
                     .modifier(MarkdownBlockSelection())
                     .fixedSize(horizontal: true, vertical: true)
                     .padding(.horizontal, 12)
@@ -1315,8 +1320,8 @@ struct CodeBlock: View {
                     showsAll.toggle()
                 }
                 .buttonStyle(.link)
-                .font(.chat(.caption, zoom: zoom))
-                .foregroundStyle(.secondary)
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.secondaryText)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)
             }
@@ -1325,38 +1330,25 @@ struct CodeBlock: View {
         .onHover { [weak hoverBox] in hoverBox?.isHovering = $0 }
     }
 
-    /// The first `lines` lines of `code`, without splitting the rest.
-    private static func head(of code: String, lines: Int) -> String {
-        var remaining = lines
-        var end = code.utf8.startIndex
-        for index in code.utf8.indices where code.utf8[index] == 0x0A {
-            remaining -= 1
-            if remaining == 0 {
-                end = index
-                break
-            }
-        }
-        return remaining == 0 ? String(code[..<end]) : code
-    }
+
 }
 
 struct TableBlock: View {
     let header: [String]
     let rows: [[String]]
 
-    @Environment(\.chatZoom) private var zoom
     @State private var showsAll = false
 
     private static let collapsedRowLimit = 30
 
     /// Cell runs by source text, so a re-layout joins cached runs instead of re-parsing.
-    @MainActor private static var cellCache = RecentCache<String, AttributedString>(limit: 1200)
+    @MainActor private static var cellCache = RecentCache<String, AttributedString>(limit: 1200, costLimit: 8 * 1024 * 1024, entryCostLimit: 1024 * 1024)
 
     @MainActor
     private static func cell(_ source: String) -> AttributedString {
         if let hit = cellCache.value(for: source) { return hit }
         let value = InlineText.attributed(source)
-        cellCache.insert(value, for: source)
+        cellCache.insert(value, for: source, cost: source.utf8.count * 3)
         return value
     }
 
@@ -1365,7 +1357,7 @@ struct TableBlock: View {
         let head = header.map(Self.cell)
         let cells = visible.map { $0.map(Self.cell) }
         return VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 // Cells go through the shared cache even while the table streams: only its
                 // last row changes between flushes, and the rest hit.
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
@@ -1385,15 +1377,21 @@ struct TableBlock: View {
                     }
                 }
                 .modifier(MarkdownBlockSelection())
+                // Keep the columns at their readable intrinsic widths so the table's
+                // content width remains independent of the surrounding timeline's proposal.
+                .fixedSize(horizontal: true, vertical: true)
                 .padding(12)
             }
+            // The timeline hides its own vertical indicator. That environment value also
+            // reaches nested scroll views, so opt the table's horizontal indicator back in.
+            .scrollIndicators(.visible, axes: .horizontal)
             if !showsAll, rows.count > Self.collapsedRowLimit {
                 Button("Show all \(rows.count) rows") {
                     showsAll.toggle()
                 }
                 .buttonStyle(.link)
-                .font(.chat(.caption, zoom: zoom))
-                .foregroundStyle(.secondary)
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.secondaryText)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)
             }
@@ -1498,7 +1496,7 @@ struct CopyButton: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Chrome.secondaryText)
         .help(label)
     }
 }

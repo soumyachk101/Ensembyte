@@ -51,7 +51,7 @@ extension TourCaptures {
             head.parentThreadID = leadID
             head.isInPanel = true
             head.branch = "main"
-            var info = HydraHeadInfo(index: index, task: tasks[index], kind: .swarm, origin: .delegated)
+            var info = HydraHeadInfo(index: index, task: tasks[index], kind: .ensembyte, origin: .delegated)
             info.toolUseID = "head-\(index)"
             info.toolCalls = index == 0 ? 6 : (index == 1 ? 11 : 9)
             if index == 0 {
@@ -70,7 +70,7 @@ extension TourCaptures {
             head.hydra = info
             head.createdAt = info.startedAt
             head.updatedAt = info.finishedAt ?? now
-            head.lastStatus = index == 0 ? .completed : .running
+            head.lastStatus = index == 0 ? TurnStatus.completed : TurnStatus.running
             library.threads.append(head)
 
             var document = ThreadDocument(threadID: headIDs[index])

@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 struct TimelineItem: Codable, Identifiable, Hashable, Sendable {
     var id: String
@@ -27,7 +28,7 @@ struct TimelineItem: Codable, Identifiable, Hashable, Sendable {
     /// A thinking block with nothing to read, as a redacted stream leaves behind.
     var isEmptyReasoning: Bool {
         guard case .reasoning(let block) = content else { return false }
-        return block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return block.text.trimmed.isEmpty
     }
 }
 
@@ -95,13 +96,44 @@ struct Attachment: Codable, Hashable, Identifiable, Sendable {
     var isImage: Bool { mimeType.hasPrefix("image/") }
 
     /// The images among the attachments with their bytes as base64, read and encoded off
-    /// the main actor: a photo is megabytes, and its string a third larger again.
+    /// the main actor: a photo is megabytes, and its string a third larger again. A photo
+    /// past `maxPixelSize` on its longest side is downscaled to a JPEG here, once, so
+    /// every provider and every token count gets the smaller copy.
     @concurrent
     static func base64Images(_ attachments: [Attachment]) async -> [(image: Attachment, base64: String)] {
         attachments.compactMap { attachment in
             guard attachment.isImage, let data = try? Data(contentsOf: attachment.url) else { return nil }
-            return (attachment, data.base64EncodedString())
+            let downscaled = downscaledJPEG(data)
+            var sent = attachment
+            if downscaled != nil { sent.mimeType = "image/jpeg" }
+            return (sent, (downscaled ?? data).base64EncodedString())
         }
+    }
+
+    /// The longest side a photo may keep on its way to a provider.
+    private static let maxPixelSize = 2000
+
+    /// A JPEG of the image at no more than `maxPixelSize` on its longest side, or nil for
+    /// an image already that small or one ImageIO cannot read, which keeps its own bytes.
+    /// The thumbnail is generated with its transform applied, so an orientation flag does
+    /// not reach the provider as a sideways photo.
+    private static func downscaledJPEG(_ data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              max(width, height) > maxPixelSize else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
+              let output = CFDataCreateMutable(nil, 0),
+              let destination = CGImageDestinationCreateWithData(output, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, thumbnail, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
     }
 }
 
@@ -195,24 +227,6 @@ struct TodoStep: Codable, Hashable, Sendable {
 
     var text: String
     var status: Status
-    var files: [FileEdit] = []
-
-    init(text: String, status: Status, files: [FileEdit] = []) {
-        self.text = text
-        self.status = status
-        self.files = files
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case text, status, files
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        text = try container.decode(String.self, forKey: .text)
-        status = try container.decode(Status.self, forKey: .status)
-        files = try container.decodeIfPresent([FileEdit].self, forKey: .files) ?? []
-    }
 }
 
 struct Notice: Codable, Hashable, Sendable {
@@ -327,8 +341,16 @@ struct ContextUsage: Codable, Hashable, Sendable {
     }
 }
 
+struct ThreadTurnReference: Codable, Equatable, Sendable {
+    var id: UUID
+    var revision: UInt64
+}
+
 struct ThreadDocument: Codable, Equatable, Sendable {
     var threadID: UUID
+    /// Nil identifies the legacy, self-contained document format.
+    var turnIndex: [ThreadTurnReference]? = nil
+    var itemPositions: [String: Double]? = nil
     var items: [TimelineItem] = []
     var turns: [TurnRecord] = []
     var usage: ContextUsage?
@@ -345,6 +367,8 @@ struct ThreadDocument: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         threadID = try container.decode(UUID.self, forKey: .threadID)
+        turnIndex = try container.decodeIfPresent([ThreadTurnReference].self, forKey: .turnIndex)
+        itemPositions = try container.decodeIfPresent([String: Double].self, forKey: .itemPositions)
         items = container.value(.items, default: [Lenient<TimelineItem>]()).compactMap(\.value)
         turns = container.value(.turns, default: [Lenient<TurnRecord>]()).compactMap(\.value)
         usage = container.value(.usage, default: nil)

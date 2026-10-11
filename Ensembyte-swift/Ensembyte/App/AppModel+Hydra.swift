@@ -1,12 +1,11 @@
-import Foundation
 import SwiftUI
+import Foundation
 
 // Hydra's heads are threads: each one has a timeline of its own, sits in its lead's
 // floating panel while it works, and drops under the lead in the sidebar once dismissed,
-// like any helper. Native heads run inside the lead's provider session and their
-// timelines fill from the session's events; Swarm-run heads have sessions of their own,
-// each in a copy of the checkout made for it, and their work lands in the lead's checkout
-// the moment they report.
+// like any helper. Every head is Ensembyte-run, whatever the lead's provider: it has a
+// session of its own, in a copy of the checkout made for it, and its work lands in the
+// lead's checkout the moment it reports. No head runs inside the lead's provider session.
 
 /// What a head changed in its copy since the tree it started from: the patch itself, the
 /// files it touches, and the tree the copy holds now, which becomes the head's new base
@@ -19,17 +18,22 @@ private struct HydraPatch: Sendable {
 }
 
 /// One capture of a checkout's working tree, shared by the heads sent out together.
-/// Capturing means `git add -A` and `write-tree` over the whole project, seconds on a big
-/// repository, and the heads of one delegation block ask for it within milliseconds of
-/// each other: without this each head would pay for its own and the last one would start
-/// half a minute after the first. A capture stands for a few seconds only, and a landing
-/// into the checkout throws it away, so no head ever starts from a stale tree.
+/// The heads of one delegation block ask for it within milliseconds of each other:
+/// without this each head would pay for its own capture and the last one would start
+/// half a minute after the first. The capture is `Git.currentTree`, so after the first
+/// head of a session the tree is the checkout's watch snapshot, walked only where git
+/// saw it change rather than over the whole project. A capture stands for a few seconds
+/// only, and a landing into the checkout throws it away, so no head ever starts from a
+/// stale tree.
 @MainActor
 private enum HydraTreeCache {
     private struct Capture {
         var tree: String
         var commit: String
         var capturedAt: Date
+        /// The generation the checkout was in when this was taken: a capture from before
+        /// a landing stands for nothing now, however recently it was made.
+        var generation: UInt64
     }
 
     /// How long a capture stands in for the checkout: long enough for one batch to go out
@@ -37,36 +41,72 @@ private enum HydraTreeCache {
     private static let lifetime: TimeInterval = 3
 
     private static var captures: [String: Capture] = [:]
-    /// Captures under way, so heads asking at the same moment wait for the one running
-    /// rather than each starting another.
-    private static var inFlight: [String: Task<(tree: String, commit: String), any Error>] = [:]
+    /// Bumped by every invalidation: a capture that began in an earlier generation is
+    /// neither stored nor joined, so a landing cannot be undone in the cache by a walk
+    /// that was already under way when it happened.
+    private static var generations: [String: UInt64] = [:]
+    /// Captures under way with the generation they began in, so heads asking at the same
+    /// moment wait for the one running rather than each starting another.
+    private static var inFlight: [String: (generation: UInt64, task: Task<(tree: String, commit: String), any Error>)] = [:]
 
     static func capture(of checkout: String, with git: Git) async throws -> (tree: String, commit: String) {
-        if let ready = captures[checkout], Date.now.timeIntervalSince(ready.capturedAt) < lifetime {
-            return (ready.tree, ready.commit)
+        while true {
+            try Task.checkCancellation()
+            let generation = generations[checkout] ?? 0
+            if let ready = captures[checkout], ready.generation == generation, Date.now.timeIntervalSince(ready.capturedAt) < lifetime {
+                let current = try await git.currentTree()
+                try Task.checkCancellation()
+                guard (generations[checkout] ?? 0) == generation else { continue }
+                if current == ready.tree { return (ready.tree, ready.commit) }
+            }
+            if let running = inFlight[checkout], running.generation == generation {
+                let made = try await running.task.value
+                try Task.checkCancellation()
+                guard (generations[checkout] ?? 0) == generation else { continue }
+                return made
+            }
+            let task = Task { () async throws -> (tree: String, commit: String) in
+                // The incremental snapshot path: the watch hands back the tree already
+                // captured when nothing was written since, and otherwise walks only the
+                // directories that changed, with the event fence and the full-walk
+                // fallback it keeps (see `WorkingTreeWatch`). It is the same tree a full
+                // `captureTree` makes — untracked files, deletions, index changes and
+                // worktree roots included — for a fraction of the cost on a big checkout.
+                let tree = try await git.currentTree()
+                // The commit is the heads' starting point and no branch ever sees it, so it
+                // carries no head's name: several heads share this one.
+                let commit = try await git.commitTree(tree, message: "Ensembyte: a Hydra head's starting point")
+                return (tree, commit)
+            }
+            inFlight[checkout] = (generation, task)
+            let made: (tree: String, commit: String)
+            do {
+                made = try await task.value
+            } catch {
+                // A capture that failed or was cancelled leaves nothing behind: the next
+                // head starts one of its own rather than waiting on a dead task.
+                if inFlight[checkout]?.task == task { inFlight[checkout] = nil }
+                throw error
+            }
+            if inFlight[checkout]?.task == task { inFlight[checkout] = nil }
+            // A landing moved the checkout on while this walked: the tree is not the one
+            // the head was sent for, so it is neither stored nor returned and the walk is
+            // simply made again. Landings are one at a time, so this does not spin.
+            guard (generations[checkout] ?? 0) == generation else { continue }
+            captures[checkout] = Capture(tree: made.tree, commit: made.commit, capturedAt: .now, generation: generation)
+            return made
         }
-        if let running = inFlight[checkout] { return try await running.value }
-        let task = Task { () async throws -> (tree: String, commit: String) in
-            let tree = try await git.captureTree()
-            // The commit is the heads' starting point and no branch ever sees it, so it
-            // carries no head's name: several heads share this one.
-            let commit = try await git.commitTree(tree, message: "Ensembyte: a Hydra head's starting point")
-            return (tree, commit)
-        }
-        inFlight[checkout] = task
-        defer { inFlight[checkout] = nil }
-        let made = try await task.value
-        captures[checkout] = Capture(tree: made.tree, commit: made.commit, capturedAt: .now)
-        return made
     }
 
-    /// The checkout changed under the capture: the next head captures it afresh.
+    /// The checkout changed under the capture: the next head captures it afresh, and a
+    /// capture already under way is not trusted, whatever it comes back with.
     static func invalidate(_ checkout: String) {
         captures[checkout] = nil
+        generations[checkout] = (generations[checkout] ?? 0) + 1
     }
 }
 
-/// What the watchdog over the Swarm-run heads remembers between looks (see
+/// What the watchdog over the Ensembyte-run heads remembers between looks (see
 /// `AppModel.startHydraWatchdog`): its one loop, each head's tool count at the last
 /// look, the heads it has labelled as thinking, and the heads it stopped, whose reports
 /// open with why.
@@ -88,18 +128,37 @@ private enum HydraWatchdog {
 
 extension AppModel {
     /// Whether a chat leads a team right now: Hydra on for the app (the master) and on
-    /// for this chat's own switch. Helpers lead no team of their own.
+    /// for this chat's own switch, in a permission mode its provider suits (see
+    /// `ProviderKind.suitsHydra`) or one the user switched it on in anyway. Helpers lead no
+    /// team of their own.
     func hydraIsOn(_ thread: ChatThread) -> Bool {
         settings.hydraEnabled && thread.hydraEnabled && !thread.isHelper
+            && (thread.provider.suitsHydra(in: thread.runtimeMode) || thread.hydraIgnoresPermissions)
     }
 
-    /// Whether the provider has heads of its own: it runs them inside its session, with
-    /// the pair's model and effort, and keeps the lead's Hydra policy in its system prompt.
-    /// Every other provider gets Swarm-run heads and the delegation block. Whether a given
-    /// chat's heads actually run natively is `HydraLaunch.runsNatively`: a pair that sends
-    /// the heads out on another provider makes them Swarm-run here too.
-    static func hydraIsNative(_ provider: ProviderKind) -> Bool {
-        provider == .claude || provider == .codex || provider == .copilot
+    /// A chat whose Hydra switch is on but that leads no team, because its provider's heads
+    /// do not respect the chat's permission mode and the user has not said they do not mind.
+    func hydraIsHeldByMode(_ thread: ChatThread) -> Bool {
+        settings.hydraEnabled && thread.hydraEnabled && !thread.isHelper && !hydraIsOn(thread)
+    }
+
+    /// Why Hydra is off with a permission mode.
+    static func hydraModeReason(_ provider: ProviderKind) -> String {
+        "\(provider.displayName)'s heads run without asking permission."
+    }
+
+    /// Why Hydra went off with a permission mode, and that it need not stay off.
+    static func hydraModeNote(_ provider: ProviderKind) -> String {
+        "Hydra is off: \(hydraModeReason(provider)) You can still turn it on from the Hydra button."
+    }
+
+    /// Whether the provider defines the lead's Hydra policy at launch, in its system
+    /// prompt, and switches its own sub-agent tool off there (Claude's Agent, Codex's
+    /// collab agents, Copilot's task, omp's task via its gate), so a lead never runs heads
+    /// inside its session. Every head is Ensembyte-run all the same; the other CLIs take the
+    /// policy per message.
+    static func hydraDefinesPolicyAtLaunch(_ provider: ProviderKind) -> Bool {
+        provider == .claude || provider == .codex || provider == .copilot || provider == .omp
     }
 
     /// The pair a chat leads with: the one picked for it in the composer's model picker,
@@ -171,20 +230,29 @@ extension AppModel {
         } else {
             workerEffort = nil
         }
+        // The heads' speed, when the pair picks one past the standard: kept only while the
+        // model the heads run on still lists that tier (or its catalog has not loaded yet).
+        let headsModel = keepsModel ? pair?.workerModel : nil
+        let headsOption = providers.model(headsModel ?? (elsewhere ? nil : thread.model), for: headsProvider)
+            ?? (elsewhere ? providers.defaultModel(for: headsProvider) : nil)
+        let workerSpeed = (keepsModel ? pair?.workerSpeed : nil).flatMap { speed -> String? in
+            guard speed != ModelSpeedTier.standardID else { return nil }
+            guard let headsOption else { return speed }
+            return headsOption.speeds.contains { $0.id == speed } ? speed : nil
+        }
         return HydraLaunch(
             headsProvider: headsProvider,
-            runsNatively: !elsewhere && Self.hydraIsNative(thread.provider),
             headsLabel: label,
-            workerModel: keepsModel ? pair?.workerModel : nil,
+            workerModel: headsModel,
             workerEffort: workerEffort,
+            workerSpeed: workerSpeed,
             // The lower of the pair's cap and the Hydra page's; with neither, the heads run uncapped.
             maxHeads: [pair?.maxHeads, settings.hydraMaxHeads].compactMap { $0 }.min(),
             headProfiles: pair?.headProfiles ?? [],
             isolatesHeads: settings.hydraIsolateHeads,
             autoMerges: settings.hydraAutoMerge,
             reviewsHeads: settings.hydraReviewHeads,
-            projects: ownRefs,
-            antiSlopEnabled: settings.antiSlopEnabled
+            projects: ownRefs
         )
     }
 
@@ -194,7 +262,10 @@ extension AppModel {
     func setHydra(_ on: Bool, for id: UUID) {
         guard let thread = thread(id) else { return }
         guard on else {
-            updateThread(id) { $0.hydraEnabled = false }
+            updateThread(id) {
+                $0.hydraEnabled = false
+                $0.hydraIgnoresPermissions = false
+            }
             settings.hydraDefaultEnabled = false
             return
         }
@@ -202,6 +273,8 @@ extension AppModel {
         updateThread(id) {
             $0.hydraEnabled = true
             $0.hydraPairID = pair?.id
+            // Asked for in a mode that Hydra is off in by default: the user does not mind.
+            $0.hydraIgnoresPermissions = !$0.provider.suitsHydra(in: $0.runtimeMode)
         }
         settings.hydraDefaultEnabled = true
         guard let pair else { return }
@@ -213,36 +286,11 @@ extension AppModel {
         } else if let effort = pair.orchestratorEffort {
             updateThread(id) { $0.effort = effort }
         }
-    }
-
-    /// Returns true when the given thread uses the nested-thread mode for Hydra heads
-    /// (no floating panel) rather than the default floating panel.
-    func isThreadMode(for threadID: UUID) -> Bool {
-        thread(threadID)?.hydraThreadMode ?? false
-    }
-
-    /// Switches a thread between floating-panel mode and nested-thread mode.
-    /// In thread mode the panel stays hidden and heads appear as child threads
-    /// in the sidebar.
-    func setHydraThreadMode(_ threadMode: Bool, for threadID: UUID) {
-        let previous = isThreadMode(for: threadID)
-        guard previous != threadMode else { return }
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
-            updateThread(threadID) {
-                $0.hydraThreadMode = threadMode
-                // In thread mode, always show helpers expanded so heads are visible
-                // in the sidebar. Leave the user's folding preference alone when
-                // switching back to floating mode.
-                if threadMode { $0.foldsHelpers = false }
+        if let thread = self.thread(id), let speed = hydraLeadSpeed(of: pair, option: providers.model(thread.model, for: thread.provider)) {
+            updateThread(id) {
+                $0.fastMode = speed.fastMode
+                $0.speedTier = speed.tier
             }
-        }
-        // When switching to thread mode, dismiss any visible panel so the heads
-        // migrate to the sidebar; when switching back, leave the panel state
-        // untouched — the next head spawned will bring it forward.
-        if threadMode {
-            let runtime = runtime(for: threadID)
-            runtime.isHydraPanelHidden = true
-            runtime.hydraSelectedHeadID = nil
         }
     }
 
@@ -253,14 +301,12 @@ extension AppModel {
         panelHeads(of: parentID)
     }
 
-    /// How many of a lead's Swarm-run heads are still at work.
-    func runningSwarmHeads(of parentID: UUID) -> Int {
-        hydraHeads(of: parentID).count { $0.hydra?.kind == .swarm && $0.hydra?.status == .running }
+    /// How many of a lead's Ensembyte-run heads are still at work.
+    func runningEnsembyteHeads(of parentID: UUID) -> Int {
+        hydraHeads(of: parentID).count { $0.hydra?.kind == .ensembyte && $0.hydra?.status == .running }
     }
 
-    /// How many of a lead's heads are still at work, native and Swarm-run alike. A native
-    /// head lives inside the lead's own session, so this is what says whether stopping the
-    /// lead's turn would take heads down with it.
+    /// How many of a lead's heads are still at work, whatever their kind.
     func runningHydraHeads(of parentID: UUID) -> Int {
         hydraHeads(of: parentID).count { $0.hydra?.status == .running }
     }
@@ -274,10 +320,10 @@ extension AppModel {
     func hydraUnmergedFileCount(of leadID: UUID) -> Int {
         guard let runtime = existingRuntime(for: leadID) else { return 0 }
         var paths = Set(runtime.hydraUnmergedTurns.filter { $0.status != .running }.flatMap { $0.touchedPaths ?? [] })
-        let lastMergedTurnStart = runtime.turns.last { $0.hydraMerged }?.startedAt
         for head in hydraTeam(of: leadID) {
+            // Only the head's own `mergedAt` says a merge took its work; a lead turn's
+            // `hydraMerged` flag is not evidence of one, so no timestamp shortcut here.
             guard let info = head.hydra, info.mergedAt == nil, !(info.landing?.patchPath != nil || info.landing?.error != nil) else { continue }
-            if let lastMergedTurnStart, let finished = info.finishedAt, finished < lastMergedTurnStart { continue }
             for file in info.landing?.files ?? [] { paths.insert(file.path) }
         }
         paths = paths.filter { path in !TouchedPaths.isBuildOutput(path) && projects.contains { TouchedPaths.relative(path, root: $0.path) != nil } }
@@ -291,10 +337,10 @@ extension AppModel {
             .sorted { ($0.hydra?.index ?? 0) < ($1.hydra?.index ?? 0) }
     }
 
-    /// The names of a lead's Swarm-run heads still at work, other than `excluding`.
+    /// The names of a lead's Ensembyte-run heads still at work, other than `excluding`.
     func workingHydraHeadNames(of parentID: UUID, excluding: Set<Int> = []) -> [String] {
         hydraHeads(of: parentID)
-            .filter { $0.hydra?.kind == .swarm && $0.hydra?.status == .running && !excluding.contains($0.hydra?.index ?? -1) }
+            .filter { $0.hydra?.kind == .ensembyte && $0.hydra?.status == .running && !excluding.contains($0.hydra?.index ?? -1) }
             .compactMap { $0.hydra?.persona.name }
     }
 
@@ -308,7 +354,7 @@ extension AppModel {
     /// folder on this Mac inside a git repository, which joins the sidebar. Nil when the
     /// name matches nothing.
     func hydraProject(named reference: String?, for lead: ChatThread) -> Project? {
-        guard let reference, !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return project(lead.projectID) }
+        guard let reference, !reference.trimmed.isEmpty else { return project(lead.projectID) }
         let expanded = (reference as NSString).expandingTildeInPath
         if let named = projects.first(where: { $0.name.caseInsensitiveCompare(expanded) == .orderedSame }) { return named }
         let standard = (expanded as NSString).standardizingPath
@@ -339,18 +385,6 @@ extension AppModel {
 
     // MARK: - Sending heads out
 
-    /// Sends out a head that mirrors one the provider started inside the lead's session.
-    /// Its timeline only rehearses what the session reports, and it works wherever the
-    /// lead does.
-    @discardableResult
-    func spawnNativeHead(from parentID: UUID, spawn: AgentSpawn) -> ChatThread? {
-        guard let head = insertHydraHead(from: parentID, task: spawn.description, kind: .native, origin: .delegated, native: spawn, batchID: nil, profile: spawn.profile) else { return nil }
-        // The brief, when the provider has said what it is; otherwise the timeline starts
-        // on the working line and the brief slots in above once it arrives.
-        runtime(for: head.id).rehearseTurn(spawn.prompt)
-        return head
-    }
-
     /// Sends out a head with a session of its own, on the pair's model and effort. With
     /// isolation on and a git repository to copy, the head first gets a worktree of its
     /// own, made as it is from the checkout of the project the delegation names (the
@@ -359,7 +393,31 @@ extension AppModel {
     /// naming one of the pair's head profiles runs the head on that profile's model,
     /// effort and provider instead of the pair's shared worker fields.
     @discardableResult
-    func spawnSwarmHead(
+
+    /// Returns true when the given thread uses the nested-thread mode for Hydra heads
+    /// (no floating panel) rather than the default floating panel.
+    func isThreadMode(for threadID: UUID) -> Bool {
+        thread(threadID)?.hydraThreadMode ?? false
+    }
+
+    /// Switches a thread between floating-panel mode and nested-thread mode.
+    /// In thread mode the panel stays hidden and heads appear as child threads
+    /// in the sidebar.
+    func setHydraThreadMode(_ threadMode: Bool, for threadID: UUID) {
+        let previous = isThreadMode(for: threadID)
+        guard previous != threadMode else { return }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+            updateThread(threadID) {
+                $0.hydraThreadMode = threadMode
+                // In thread mode, always show helpers expanded so heads are visible
+                // in the sidebar. Leave the user's folding preference alone when
+                // switching back to floating mode.
+                if threadMode { $0.foldsHelpers = false }
+            }
+        }
+    }
+
+    func spawnEnsembyteHead(
         from parentID: UUID,
         task: String,
         origin: HydraHeadInfo.Origin,
@@ -370,17 +428,15 @@ extension AppModel {
         profile: String? = nil,
         brief: @escaping @Sendable (HydraPersona, HydraPrompts.Workplace) -> String
     ) -> ChatThread? {
-        guard let head = insertHydraHead(from: parentID, task: task, kind: .swarm, origin: origin, native: nil, batchID: batchID, preferredIndex: preferredIndex, project: project, profile: profile) else { return nil }
-        Task { await startSwarmHead(head.id, attachments: attachments, brief: brief) }
+        guard let head = insertHydraHead(from: parentID, task: task, origin: origin, batchID: batchID, preferredIndex: preferredIndex, project: project, profile: profile) else { return nil }
+        Task { await startEnsembyteHead(head.id, attachments: attachments, brief: brief) }
         return head
     }
 
     private func insertHydraHead(
         from parentID: UUID,
         task: String,
-        kind: HydraHeadInfo.Kind,
         origin: HydraHeadInfo.Origin,
-        native: AgentSpawn?,
         batchID: UUID?,
         preferredIndex: Int? = nil,
         project: String? = nil,
@@ -426,30 +482,36 @@ extension AppModel {
         let resolved = hydraProject(named: project, for: parent)
         let target = resolved ?? self.project(parent.projectID)
         let sameProject = target?.id == parent.projectID
-        if let reference = project, !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, resolved == nil {
+        if let reference = project, !reference.trimmed.isEmpty, resolved == nil {
             let fallback = self.project(parent.projectID)?.name ?? "this chat's project"
             runtime(for: parentID).appendHydraNote("Hydra: no project named \(reference) is in the sidebar or on this Mac, so \(persona.name) works in \(fallback).")
         }
 
-        // A Swarm-run head goes out on the pair's heads' provider, which may not be the
-        // lead's: there it runs the pair's model or that provider's default, and the lead's
-        // model and effort mean nothing to it. A native head lives in the lead's session.
-        let headsProvider = kind == .swarm ? (routed?.provider ?? launch?.headsProvider ?? parent.provider) : parent.provider
+        // A head goes out on the pair's heads' provider, which may not be the lead's: there
+        // it runs the pair's model or that provider's default, and the lead's model and
+        // effort mean nothing to it.
+        let headsProvider = routed?.provider ?? launch?.headsProvider ?? parent.provider
         let elsewhere = headsProvider != parent.provider
         var head = ChatThread(
             projectID: target?.id ?? parent.projectID,
             provider: headsProvider,
-            model: native?.model ?? routed?.model ?? launch?.workerModel ?? (elsewhere ? providers.defaultModel(for: headsProvider)?.id : parent.model),
+            model: routed?.model ?? launch?.workerModel ?? (elsewhere ? providers.defaultModel(for: headsProvider)?.id : parent.model),
             effort: routed?.effort ?? launch?.workerEffort ?? (elsewhere ? nil : parent.effort),
-            // A Swarm-run head works in its own copy under a brief that forbids git and
+            // A Ensembyte-run head works in its own copy under a brief that forbids git and
             // build-output work, and its landing is a patch the lead reviews: nobody sits
             // at its chat to answer a permission prompt, so it runs with full access. Left
             // on the lead's supervised mode, a head stalled on its first gated tool until
-            // the watchdog stopped it. A native head lives in the lead's session and takes
-            // the lead's mode.
-            runtimeMode: kind == .swarm ? .fullAccess : parent.runtimeMode,
+            // the watchdog stopped it.
+            runtimeMode: .fullAccess,
             fastMode: false
         )
+        // A Ensembyte-run head runs at the pair's heads' speed, when its model has that tier:
+        // its own session launches and sends its turns on it, like any chat's fast mode.
+        if let speed = launch?.workerSpeed,
+           providers.model(head.model, for: headsProvider)?.speeds.contains(where: { $0.id == speed }) ?? false {
+            head.fastMode = true
+            head.speedTier = speed
+        }
         head.parentThreadID = parentID
         head.isInPanel = true
         head.worktreePath = sameProject ? parent.worktreePath : nil
@@ -464,14 +526,11 @@ extension AppModel {
         // A routed head wears its profile in the title: "Hank · audit the parser · deep".
         if let routed { head.title += " · \(routed.name)" }
         head.hasCustomTitle = true
-        var info = HydraHeadInfo(index: index, task: task, kind: kind, origin: origin)
+        var info = HydraHeadInfo(index: index, task: task, kind: .ensembyte, origin: origin)
+        info.tracksProviderHistory = true
         info.profile = routed?.name
-        info.nativeID = native?.id
-        info.nativeTaskID = native?.taskID
-        info.toolUseID = native?.toolUseID
         info.batchID = batchID
-        info.isBackground = native?.isBackground ?? true
-        info.canStop = kind == .swarm || native?.taskID != nil || parent.provider == .codex
+        info.canStop = true
         head.hydra = info
         insertThread(head)
 
@@ -485,8 +544,8 @@ extension AppModel {
         return head
     }
 
-    /// Gives a Swarm-run head its copy of the checkout, then its brief.
-    private func startSwarmHead(_ id: UUID, attachments: [Attachment], brief: @Sendable (HydraPersona, HydraPrompts.Workplace) -> String) async {
+    /// Gives a Ensembyte-run head its copy of the checkout, then its brief.
+    private func startEnsembyteHead(_ id: UUID, attachments: [Attachment], brief: @Sendable (HydraPersona, HydraPrompts.Workplace) -> String) async {
         guard let head = thread(id), let info = head.hydra, let parentID = head.parentThreadID, let lead = thread(parentID),
               let checkout = hydraCheckout(of: head, lead: lead) else { return }
         // A head on another provider than its lead, with no model chosen for it, runs that
@@ -509,7 +568,16 @@ extension AppModel {
         // Stopped while its copy was being made: it never starts.
         guard thread(id)?.hydra?.status == .running else { return }
         let headRuntime = runtime(for: id)
-        headRuntime.sendHydraBrief(brief(info.persona, workplace), attachments: attachments)
+        // The brief goes out now, so the head's execution begins now: whatever it waited
+        // for before this (a slot, a queue, a copy of the checkout) is not its work. An
+        // earlier interval is cleared, so a head steered on for another turn is timed on
+        // this one.
+        updateHydraHead(id) {
+            $0.executionStartedAt = .now
+            $0.executionFinishedAt = nil
+        }
+        let headBrief = brief(info.persona, workplace)
+        headRuntime.sendHydraBrief(headBrief, attachments: attachments)
     }
 
     /// A worktree for `head` holding the checkout exactly as it is, uncommitted and
@@ -551,8 +619,7 @@ extension AppModel {
 
     // MARK: - Reporting back
 
-    /// A head is done: its status and report land on it, and its lead hears about it. A
-    /// native head's result reaches the lead through the provider; a Swarm-run head's
+    /// A head is done: its status and report land on it, and its lead hears about it. The
     /// report is relayed by the lead's runtime, which waits for the rest of a batch.
     func finishHydraHead(_ id: UUID, status: TurnStatus, summary: String?, landing: HydraLanding? = nil) {
         guard let head = thread(id), let info = head.hydra, !info.isFinished else { return }
@@ -567,7 +634,7 @@ extension AppModel {
         case .interrupted: .stopped
         case .running: .running
         }
-        // The progress a native head reported while it ran lands on the record now, once.
+        // The progress the head reported while it ran lands on the record now, once.
         let live = existingRuntime(for: id)
         updateHydraHead(id) {
             $0.status = outcome
@@ -579,22 +646,6 @@ extension AppModel {
                 $0.toolCalls = max($0.toolCalls, live.hydraToolCalls)
                 $0.tokens = max($0.tokens, live.hydraTokens)
             }
-        }
-        if settings.chimeWhenFinished && status != .interrupted {
-            FinishChime.play()
-        }
-        NSApp.requestUserAttention(.informationalRequest)
-        if settings.notifyWhenFinished {
-            let agentName = info.displayName.isEmpty ? "Agent" : info.displayName
-            let title = head.title.isEmpty ? "\(agentName) · Task" : head.title
-            let outcomeText = switch status {
-            case .completed: "Finished."
-            case .failed: "Task failed."
-            case .interrupted: "Task stopped."
-            case .running: ""
-            }
-            let body = info.task.isEmpty ? outcomeText : "\(outcomeText) \(info.task)"
-            notify(threadID: id, title: title, body: body, sound: .default)
         }
         // Opt-in: a finished head leaves the panel on its own, for the sidebar under its
         // lead, instead of waiting for "Clear finished heads". Running heads stay put. It
@@ -629,11 +680,13 @@ extension AppModel {
         }
     }
 
-    /// A Swarm-run head's turn ended: its last reply is its report, and the work in its
-    /// copy lands in the lead's checkout before the lead hears of it. Native heads finish
-    /// through their provider's own events instead.
+    /// A Ensembyte-run head's turn ended: its last reply is its report, and the work in its
+    /// copy lands in the lead's checkout before the lead hears of it.
     func hydraHeadTurnFinished(_ head: ChatThread, status: TurnStatus) {
-        guard let info = head.hydra, info.kind == .swarm else { return }
+        guard let info = head.hydra, info.kind == .ensembyte else { return }
+        // The turn is over, whatever it did: the time its execution took is readable now,
+        // apart from the wait in front of the landing that follows.
+        updateHydraHead(head.id) { $0.executionFinishedAt = .now }
         let headRuntime = existingRuntime(for: head.id)
         // The turn that just closed. A failure is read against it alone, so an error an
         // earlier turn left behind can never be reported as this one's cause.
@@ -653,7 +706,7 @@ extension AppModel {
         // output it did not finish, so it is read from this turn alone.
         let spoken = headRuntime?.entries.last(where: { entry in
             guard case .assistant(let message) = entry.item.content else { return false }
-            return status != .failed || (turnID != nil && entry.turnID == turnID && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            return status != .failed || (turnID != nil && entry.turnID == turnID && !message.text.trimmed.isEmpty)
         })
             .flatMap { entry -> String? in
                 guard case .assistant(let message) = entry.item.content else { return nil }
@@ -665,8 +718,11 @@ extension AppModel {
             updateHydraHead(head.id) { $0.toolCalls = tools }
         }
         // An API session is memory only, and keeping it is what lets the head be steered
-        // on with its brief and its work still in mind; a process goes, and resumes by id.
-        if !head.provider.isAPIKeyBased { headRuntime?.stopSession() }
+        // on with its brief and its work still in mind. Normally a process goes now;
+        // an eligible Codex completion keeps its exact session through landing/archive.
+        // Setting off, failed turns and retry paths retain the immediate-stop behavior.
+        let historySession = status == .completed ? headRuntime?.retainCodexHeadSessionForHistory() : nil
+        if !head.provider.isAPIKeyBased, historySession == nil { headRuntime?.stopHeadSessionAfterProviderHistory() }
         // A head that died at the door, before a tool ran (the agent's own store locked
         // while several started at once, or its process gone before a word), is started
         // again on its brief after a short pause rather than reported as failed: the lead
@@ -696,6 +752,11 @@ extension AppModel {
             return
         }
         Task {
+            defer {
+                if let headRuntime, let historySession {
+                    Task { await headRuntime.stopCompletedCodexHeadSession(historySession) }
+                }
+            }
             // Only finished work lands: a stopped or failed head keeps its half-done edits
             // in its copy, where a later turn can carry on from them.
             var landing: HydraLanding?
@@ -705,11 +766,14 @@ extension AppModel {
             // again, so it is not finished. Marking it so would hand the lead a report for
             // a turn still running and give back the copy the head's tools are writing
             // into. It reports again when this new turn ends.
-            guard existingRuntime(for: head.id)?.isRunning != true else { return }
+            guard !Task.isCancelled, existingRuntime(for: head.id)?.isRunning != true else { return }
             // The head reported; a report arriving on an already-finished head (the user
             // steered it on from the panel) goes to the lead as a fresh one.
             if thread(head.id)?.hydra?.isFinished == true { updateHydraHead(head.id) { $0.status = .running } }
             finishHydraHead(head.id, status: status, summary: report, landing: landing)
+            if let headRuntime, let historySession {
+                headRuntime.archiveCodexHeadHistory(completion: historySession)
+            }
         }
     }
 
@@ -718,7 +782,7 @@ extension AppModel {
     /// passed off as the finished report, and a turn that recorded no error says so.
     private static func failedTurnReport(error: String?, partial: String) -> String {
         var parts = [error ?? "The turn failed without a recorded error."]
-        let partial = partial.trimmingCharacters(in: .whitespacesAndNewlines)
+        let partial = partial.trimmed
         if !partial.isEmpty { parts.append("Partial output before the failure:\n\n\(partial)") }
         return parts.joined(separator: "\n\n")
     }
@@ -813,11 +877,14 @@ extension AppModel {
     /// head's work is never lost to a lead that never comes to rest.
     private func waitForSettledCheckout(_ parentID: UUID, paths: [String]) async {
         guard let leadRuntime = existingRuntime(for: parentID) else { return }
+        // The runtime keeps the files the lead's current turn has touched, so the check is
+        // a set intersection rather than a walk of the turn's timeline on every look: the
+        // landing waits here up to half an hour, at four looks a second.
         let wanted = Set(paths)
         let deadline = Date.now.addingTimeInterval(30 * 60)
         while Date.now < deadline {
             let busy = leadRuntime.phase != .idle && !wanted.isEmpty
-                && !wanted.isDisjoint(with: hydraChatContext(for: parentID).touchedPaths)
+                && !wanted.isDisjoint(with: leadRuntime.hydraCurrentTurnTouchedPaths)
             guard busy || leadRuntime.isHydraMerging else { return }
             // A cancelled task's sleep throws at once, without suspending: swallowing
             // that would turn this into a tight loop on the main actor for the rest of
@@ -831,13 +898,19 @@ extension AppModel {
         var landing = landing
         guard let head = thread(id), let info = head.hydra,
               let parentID = head.parentThreadID, let lead = thread(parentID), let checkout = hydraCheckout(of: head, lead: lead) else { return landing }
+        // The application begins here, after the queue in front of it has cleared (the
+        // caller waits for the previous landing first), and ends when this returns, however
+        // it goes. A landing that never got this far keeps neither stamp, so an unreadable
+        // interval is not mistaken for a fast one.
+        updateHydraHead(id) { $0.landingStartedAt = .now; $0.landingFinishedAt = nil }
+        defer { updateHydraHead(id) { $0.landingFinishedAt = .now } }
         let checkoutGit = Git(checkout)
         // A rebase or a merge is half done in the checkout: a patch laid on top of that
         // would be impossible to tell from the operation's own conflicts, and resolving
         // either would lose the other. The work waits as a patch file instead.
         guard !(await checkoutGit.hasOperationInProgress()) else {
             landing.patchPath = keepHydraPatch(patch.text, of: info, headID: head.id)
-            landing.error = "a rebase or merge is underway in the checkout"
+            landing.error = "a rebase or merge is underway in the checkout, or its git state cannot be read"
             noteHydraLanding(landing, of: info, to: parentID)
             return landing
         }
@@ -899,12 +972,12 @@ extension AppModel {
 
     // MARK: - Stopping and clearing
 
-    /// Stops a head where it runs: a Swarm-run head's own turn, a native head through
-    /// the lead's session.
+    /// Stops a head where it runs: its own turn. A native head from an older version is
+    /// long gone with the session it ran in, and is only marked stopped.
     func stopHydraHead(_ id: UUID) {
         guard let head = thread(id), let info = head.hydra, !info.isFinished else { return }
         switch info.kind {
-        case .swarm:
+        case .ensembyte:
             if let headRuntime = existingRuntime(for: id), headRuntime.isRunning {
                 headRuntime.interrupt()
             } else {
@@ -912,12 +985,7 @@ extension AppModel {
                 finishHydraHead(id, status: .interrupted, summary: nil)
             }
         case .native:
-            guard let parentID = head.parentThreadID, let nativeID = info.nativeID else { return }
-            let leadRuntime = runtime(for: parentID)
-            Task {
-                let stopped = await leadRuntime.stopNativeHead(nativeID)
-                if !stopped { self.updateHydraHead(id) { $0.canStop = false } }
-            }
+            finishHydraHead(id, status: .interrupted, summary: nil)
         }
     }
 
@@ -952,6 +1020,16 @@ extension AppModel {
     /// Removes the copy of the checkout a head worked in. Its work has landed, or its
     /// patch is kept; a head talked to afterwards works in the checkout itself.
     func releaseHydraCopy(of id: UUID) {
+        // Every caller, including manual panel clearing, must keep the session and
+        // its working directory alive until provider history has finished changing.
+        Task { [weak self] in
+            guard let self else { return }
+            await existingRuntime(for: id)?.waitForProviderHistory()
+            releaseHydraCopyAfterHistory(of: id)
+        }
+    }
+
+    private func releaseHydraCopyAfterHistory(of id: UUID) {
         guard let head = thread(id), let info = head.hydra, info.hasOwnCopy, let copy = head.worktreePath,
               let project = project(head.projectID) else { return }
         // A head back at work keeps its copy: `git worktree remove --force` on the folder
@@ -1000,13 +1078,12 @@ extension AppModel {
 
     // MARK: - Watchdog
 
-    /// Keeps an eye on the Swarm-run heads at work, every half minute. One quiet for
+    /// Keeps an eye on the Ensembyte-run heads at work, every half minute. One quiet for
     /// three minutes (no tool, no word of a reply) says so in its row, "Thinking for 3
     /// min…", rather than sitting on its last tool; one quiet for ten with nothing edited
     /// and no tool since the last look has stalled, and is stopped the way the panel's
     /// Stop stops it, with a report that opens by telling the lead why (see
-    /// `finishHydraHead`). Native heads are their provider's to watch. One loop for the
-    /// app; calling this again does nothing.
+    /// `finishHydraHead`). One loop for the app; calling this again does nothing.
     func startHydraWatchdog() {
         guard HydraWatchdog.loop == nil else { return }
         HydraWatchdog.loop = Task { [weak self] in
@@ -1021,7 +1098,7 @@ extension AppModel {
     /// One look at the heads: the label goes on and comes off, a stalled head is stopped.
     private func watchHydraHeads() {
         var toolCounts: [UUID: Int] = [:]
-        for head in threads where head.isHydraHead && head.hydra?.kind == .swarm && head.hydra?.status == .running {
+        for head in threads where head.isHydraHead && head.hydra?.kind == .ensembyte && head.hydra?.status == .running {
             guard let headRuntime = existingRuntime(for: head.id), headRuntime.isRunning else { continue }
             let idle = headRuntime.hydraIdleSeconds
             let tools = headRuntime.hydraToolCalls

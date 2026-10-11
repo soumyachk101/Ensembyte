@@ -6,6 +6,13 @@ enum AppInfo {
     static let stateDirectoryName = isDevelopment ? ".ensembyte-dev" : ".ensembyte"
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.1"
     static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "2"
+    /// The architecture this binary was built for. A release ships one disk image per
+    /// architecture, and the updater offers only the one that runs on this Mac.
+    #if arch(arm64)
+    static let architecture = "arm64"
+    #else
+    static let architecture = "x86_64"
+    #endif
 }
 
 enum TextCleanup {

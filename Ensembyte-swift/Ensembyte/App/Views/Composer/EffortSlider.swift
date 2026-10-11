@@ -66,11 +66,13 @@ struct ModelEffortButton: View {
             isPresented.toggle()
         } label: {
             HStack(spacing: 5) {
-                ProviderIcon(provider: thread.provider, size: 14)
-                if pair != nil {
-                    HydraMarkImage()
-                        .foregroundStyle(Chrome.primaryText.opacity(0.85))
-                        .frame(width: 12, height: 12)
+                if let pair {
+                    // In a pair the chip wears the two of them as one mark: the lead's icon fused
+                    // with the heads', the way the slider's track runs one colour into the other.
+                    HydraFusedPairIcon(lead: pair.provider, heads: model.hydraHeadsProvider(of: pair), size: 15)
+                        .id(pair.id)
+                } else {
+                    ProviderIcon(provider: thread.provider, size: 14)
                 }
                 if thread.fastMode, current?.supportsFast == true {
                     Image(systemName: "bolt.fill")
@@ -123,14 +125,14 @@ struct ModelEffortButton: View {
             // The website captures hang the slider and the switcher from the real chip: the
             // composer's, never a panel's icon-only one, which would leave the popover with
             // nothing to hang from once the panel is gone.
-            if WebsiteCaptures.isEnabled, !compact {
+            if CaptureRun.isEnabled, !compact {
                 AttachmentAnchorCapture { WebsiteCaptures.modelChipAnchor = WeakView($0) }
             }
         }
         // And where the chip is, in the window, by the thread it belongs to: a popover
         // hung from that rect on the window itself outlives any remaking of the chip's view.
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-            if WebsiteCaptures.isEnabled, !compact { WebsiteCaptures.modelChipFrames[thread.id] = frame }
+            if CaptureRun.isEnabled, !compact { WebsiteCaptures.modelChipFrames[thread.id] = frame }
         }
         .task(id: thread.provider) { await registry.loadCatalog(thread.provider) }
     }
@@ -209,16 +211,22 @@ private struct ModelEffortPanel: View {
             fastMode: Binding(
                 get: { thread.fastMode },
                 set: { isOn in
-                    model.updateThread(thread.id) { $0.fastMode = isOn }
+                    // The bolt is plain fast mode: a pair's tier past it goes with the flip.
+                    model.updateThread(thread.id) {
+                        $0.fastMode = isOn
+                        $0.speedTier = nil
+                    }
                     remember(thread.id)
                 }
             ),
             onTitleTap: { showsModels = true },
             onReset: {
                 let leadEffort = pair?.orchestratorEffort.flatMap { option?.efforts.contains($0) == true ? $0 : nil }
+                let leadSpeed = pair.flatMap { model.hydraLeadSpeed(of: $0, option: option) }
                 model.updateThread(thread.id) {
                     $0.effort = leadEffort
-                    $0.fastMode = false
+                    $0.fastMode = leadSpeed?.fastMode ?? false
+                    $0.speedTier = leadSpeed?.tier
                 }
                 remember(thread.id)
             }
@@ -247,6 +255,7 @@ private struct ModelEffortPanel: View {
             thread.model = option.id
             thread.effort = effort
             thread.fastMode = option.supportsFast && preference.fastMode
+            thread.speedTier = nil
         }
         // A model row is the choice of a model alone: the chat leaves any pair it led with.
         model.leaveHydraPair(for: thread.id)
@@ -265,64 +274,29 @@ struct ModelList: View {
     var onEnterPair: (HydraPair) -> Void = { _ in }
     let onBack: () -> Void
 
-    @State private var searchText = ""
-    @State private var selectedProvider: ProviderKind?
-    @State private var hoveredProvider: ProviderKind?
-
     /// A pair row carries two lines, like a model row with its provider under it.
     private static let pairRowHeight: CGFloat = 46
     /// What `PopoverSectionHeader` takes: an 11 pt line with its own padding above and below.
     private static let sectionHeaderHeight: CGFloat = 22
 
     var body: some View {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Dynamically collect all available providers, ensuring current thread's provider is included
-        let available = model.providers.availableProviders
-        let providers: [ProviderKind] = {
-            var list = available
-            if !list.contains(thread.provider) {
-                list.append(thread.provider)
-            }
-            return list.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
-        }()
-
-        let activeProvider = providers.contains(selectedProvider ?? thread.provider) ? (selectedProvider ?? thread.provider) : (providers.first ?? thread.provider)
-
-        // Get all models for the active provider
-        let activeModels = model.providers.models(for: activeProvider)
-        let entries: [ModelCatalog.Entry] = activeModels.compactMap { option in
-            let entry = ModelCatalog.Entry(provider: activeProvider, option: option)
-            if query.isEmpty || ModelsSettingsPage.matches(entry.option, id: entry.option.id, provider: entry.provider, query: query) {
-                return entry
-            }
-            return nil
-        }
-
+        let entries = ModelCatalog.entries(model, including: thread)
         // The pairs are Hydra's: on offer while it is on, out of sight otherwise.
-        let allPairs = model.hydraIsOn(thread) ? model.hydraPickerPairs : []
-        let pairs = allPairs.filter { pair in
-            guard pair.provider == activeProvider || pair.headsProvider == activeProvider else { return false }
-            guard !query.isEmpty else { return true }
-            let title = HydraPairSummary.title(pair, registry: model.providers)
-            let pairDetail = detail(for: pair)
-            let fields = [title, pairDetail, pair.provider.displayName, pair.headsProvider.displayName]
-            return fields.contains { $0.localizedCaseInsensitiveContains(query) }
-        }
-
+        let pairs = model.hydraIsOn(thread) ? model.hydraPickerPairs : []
         // A chat leads with one pair or runs one model, never both: the checkmark sits on
         // the pair while the chat is in one, even though the pair's lead model is a row too.
         let leadsWithPair = pairs.contains { model.leadsWithHydraPair($0, thread: thread) }
+        let showsProviders = Set(entries.map(\.provider)).count > 1
         // Fixed row heights let the popover size itself in one pass instead of measuring and resizing.
-        let rowHeight: CGFloat = 36
+        let rowHeight: CGFloat = showsProviders || (hasHistory && entries.contains { $0.provider != thread.provider }) ? 46 : 34
+        // The pairs section is part of that one pass: its two headers and its rows are
+        // counted here, so the popover opens at the size it keeps.
         let pairsHeight = pairs.isEmpty ? 0 : Self.sectionHeaderHeight * 2 + CGFloat(pairs.count) * (Self.pairRowHeight + 1)
-        let targetHeight: CGFloat = min(max(72 + pairsHeight + CGFloat(max(entries.count, pairs.isEmpty ? 1 : 0)) * (rowHeight + 1), 180), 450)
-
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .frame(width: 20, height: 20)
                         .contentShape(.rect)
                 }
@@ -330,155 +304,73 @@ struct ModelList: View {
                 .foregroundStyle(Chrome.secondaryText)
                 .help("Back")
                 Text("Select model")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(.body))
                     .foregroundStyle(Chrome.secondaryText)
                 Spacer()
-                HStack(spacing: 5) {
-                    ProviderIcon(provider: activeProvider, size: 14)
-                    Text(verbatim: activeProvider.displayName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Chrome.primaryText)
-                    Text("\(entries.count)")
-                        .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
-                        .foregroundStyle(Chrome.secondaryText)
-                }
             }
             .padding(.horizontal, 8)
             .padding(.top, 8)
-            .padding(.bottom, 6)
+            .padding(.bottom, 4)
 
-            SidebarSearchField(text: $searchText, prompt: "Search models…")
-                .padding(.horizontal, 6)
-                .padding(.bottom, 6)
-
-            HStack(alignment: .top, spacing: 6) {
-                if providers.count > 1 {
-                    ScrollView(.vertical) {
-                        VStack(spacing: 4) {
-                            ForEach(providers, id: \.self) { provider in
-                                let count = model.providers.models(for: provider).count
-                                Button {
-                                    selectedProvider = provider
-                                } label: {
-                                    ProviderIcon(provider: provider, size: 19)
-                                        .frame(width: 34, height: 34)
-                                        .background {
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .fill(activeProvider == provider ? Chrome.overlay(0.14) : (hoveredProvider == provider ? Chrome.overlay(0.06) : Color.clear))
-                                        }
-                                        .contentShape(.rect)
-                                }
-                                .buttonStyle(.plain)
-                                .help("\(provider.displayName) · \(count) models")
-                                .accessibilityLabel("\(provider.displayName), \(count) models")
-                                .accessibilityAddTraits(activeProvider == provider ? .isSelected : [])
-                                .onHover { hovering in
-                                    withAnimation(Chrome.hover) {
-                                        hoveredProvider = hovering ? provider : nil
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(width: 36, height: targetHeight, alignment: .top)
-                }
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        if !pairs.isEmpty {
-                            PopoverSectionHeader("Pairs")
-                            ForEach(pairs) { pair in
-                                HydraPairListRow(
-                                    pair: pair,
-                                    title: HydraPairSummary.title(pair, registry: model.providers),
-                                    detail: detail(for: pair),
-                                    rowHeight: Self.pairRowHeight,
-                                    isSelected: model.leadsWithHydraPair(pair, thread: thread),
-                                    isEnabled: true
-                                ) {
-                                    onEnterPair(pair)
-                                }
-                            }
-                            if !entries.isEmpty {
-                                PopoverSectionHeader("Models")
-                            }
-                        }
-                        ForEach(entries) { entry in
-                            ModelListRow(
-                                entry: entry,
-                                detail: nil,
-                                showsIcon: false,
-                                rowHeight: rowHeight,
-                                isSelected: !leadsWithPair && entry.provider == thread.provider && entry.option.id == thread.model,
-                                isEnabled: true
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    if !pairs.isEmpty {
+                        PopoverSectionHeader("Pairs")
+                        ForEach(pairs) { pair in
+                            let locked = hasHistory && pair.provider != thread.provider
+                            HydraPairListRow(
+                                pair: pair,
+                                title: HydraPairSummary.title(pair, registry: model.providers),
+                                detail: locked ? "New chats only" : detail(for: pair),
+                                rowHeight: Self.pairRowHeight,
+                                isSelected: model.leadsWithHydraPair(pair, thread: thread),
+                                isEnabled: !locked
                             ) {
-                                onChoose(entry)
+                                onEnterPair(pair)
                             }
                         }
-                        if entries.isEmpty && pairs.isEmpty {
-                            if model.providers.loadingCatalogs.contains(activeProvider) {
-                                VStack(spacing: 8) {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                    Text("Loading models…")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(Chrome.secondaryText)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 24)
-                            } else if !query.isEmpty {
-                                Text("No models found")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Chrome.secondaryText)
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(16)
-                            } else {
-                                VStack(spacing: 8) {
-                                    Text("No models available")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(Chrome.secondaryText)
-                                    Button("Load models") {
-                                        Task { await model.providers.loadCatalog(activeProvider, force: true) }
-                                    }
-                                    .buttonStyle(.link)
-                                    .font(.system(size: 12))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(16)
-                            }
+                        PopoverSectionHeader("Models")
+                    }
+                    ForEach(entries) { entry in
+                        let locked = hasHistory && entry.provider != thread.provider
+                        ModelListRow(
+                            entry: entry,
+                            detail: locked ? "New chats only" : (showsProviders ? entry.provider.displayName : nil),
+                            showsIcon: showsProviders,
+                            rowHeight: rowHeight,
+                            isSelected: !leadsWithPair && entry.provider == thread.provider && entry.option.id == thread.model,
+                            isEnabled: !locked
+                        ) {
+                            onChoose(entry)
                         }
                     }
+                    if entries.isEmpty {
+                        Text("Loading models…")
+                            .font(.system(.body))
+                            .foregroundStyle(Chrome.secondaryText)
+                            .padding(10)
+                    }
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: targetHeight)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: min(pairsHeight + CGFloat(max(entries.count, 1)) * (rowHeight + 1), 440))
         }
         .padding(6)
         .task {
             // A pair on another provider, or with its heads on one, names its models from
             // that provider's catalogue, which this chat may never have loaded.
-            for provider in Set(allPairs.flatMap { [$0.provider, $0.headsProvider] }) where provider != thread.provider {
+            for provider in Set(pairs.flatMap { [$0.provider, $0.headsProvider] }) where provider != thread.provider {
                 await model.providers.loadCatalog(provider)
             }
-            for provider in model.providers.availableProviders where provider != thread.provider {
-                await model.providers.loadCatalog(provider)
-            }
-        }
-        .task(id: activeProvider) {
-            await model.providers.loadCatalog(activeProvider)
-        }
-        .onChange(of: thread.provider) { _, provider in
-            selectedProvider = provider
         }
     }
 
-    /// The line under a pair's title: the providers, and the efforts when any is set. The
-    /// title names the models, so this never repeats them, unless the user named the pair:
-    /// then the title is that name and the models come first here.
+    /// The line under a pair's title: the providers, and the efforts and speeds when any is
+    /// set. The title names the models, so this never repeats them, unless the user named
+    /// the pair: then the title is that name and the models come first here.
     private func detail(for pair: HydraPair) -> String {
         let models = pair.customName == nil ? nil : HydraPairSummary.modelsTitle(pair, registry: model.providers)
-        return [models, HydraPairSummary.providers(pair), HydraPairSummary.efforts(pair)].compactMap { $0 }.joined(separator: " · ")
+        return [models, HydraPairSummary.providers(pair), HydraPairSummary.efforts(pair), HydraPairSummary.speeds(pair, registry: model.providers)].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -499,9 +391,7 @@ private struct HydraPairListRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                HydraMarkImage()
-                    .foregroundStyle(Chrome.primaryText)
-                    .frame(width: 14, height: 14)
+                HydraFusedPairIcon(lead: pair.provider, heads: pair.headsProvider, size: 16, animates: false)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: title)
@@ -509,22 +399,13 @@ private struct HydraPairListRow: View {
                         .foregroundStyle(Chrome.primaryText)
                         .lineLimit(1)
                     Text(verbatim: detail)
-                        .font(.system(size: 12))
+                        .font(.system(.callout))
                         .foregroundStyle(Chrome.secondaryText)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 12)
-                if pair.sendsHeadsElsewhere {
-                    HStack(spacing: 3) {
-                        ProviderIcon(provider: pair.provider, size: 12)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 7, weight: .semibold))
-                        ProviderIcon(provider: pair.headsProvider, size: 12)
-                    }
-                    .foregroundStyle(Chrome.secondaryText)
-                }
                 Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(Chrome.primaryText)
                     .opacity(isSelected ? 1 : 0)
             }
@@ -558,7 +439,7 @@ private struct ModelListRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if showsIcon {
                     ProviderIcon(provider: entry.provider, size: 14)
                         .foregroundStyle(Chrome.secondaryText)
@@ -566,33 +447,30 @@ private struct ModelListRow: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: entry.option.shortName)
-                        .font(.system(size: 13.5, weight: .regular))
+                        .font(.system(size: 14))
                         .foregroundStyle(Chrome.primaryText)
-                        .lineLimit(1)
                     if let detail {
                         Text(verbatim: detail)
-                            .font(.system(size: 11.5))
+                            .font(.system(.callout))
                             .foregroundStyle(Chrome.secondaryText)
-                            .lineLimit(1)
                     }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 12)
                 if entry.option.supportsFast {
                     Image(systemName: "bolt")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Chrome.secondaryText.opacity(0.8))
+                        .font(.system(.footnote))
+                        .foregroundStyle(Chrome.secondaryText)
                 }
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(Chrome.primaryText)
                     .opacity(isSelected ? 1 : 0)
-                    .frame(width: 14)
             }
             .padding(.horizontal, 10)
             .frame(height: rowHeight)
             .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isHovering && isEnabled ? Chrome.overlay(0.08) : Color.clear)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isHovering && isEnabled ? Chrome.overlay(0.1) : Color.clear)
             }
             .contentShape(.rect)
         }
@@ -699,11 +577,11 @@ struct EffortSliderCard: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text(verbatim: title)
-                                .font(.system(size: 17, weight: .medium))
+                                .font(.system(.title2, weight: .medium))
                                 .contentTransition(.numericText())
                             if onTitleTap != nil {
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(.callout, weight: .semibold))
                                     .foregroundStyle(Chrome.secondaryText)
                             }
                         }
@@ -736,7 +614,7 @@ struct EffortSliderCard: View {
                             ProviderIcon(provider: provider, size: 12)
                         }
                         Text(verbatim: pair?.title ?? modelName)
-                            .font(.system(size: 13))
+                            .font(.system(.body))
                             .foregroundStyle(Chrome.primaryText.opacity(0.7))
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -748,7 +626,7 @@ struct EffortSliderCard: View {
 
             if efforts.isEmpty {
                 Text("This model has one reasoning level.")
-                    .font(.system(size: 12))
+                    .font(.system(.callout))
                     .foregroundStyle(Chrome.secondaryText)
                     .frame(height: EffortSlider.thumbSize)
             } else {
@@ -770,7 +648,7 @@ struct EffortSliderCard: View {
             // Whose effort this is, so a pair's slider is never taken for the heads'.
             if let pair, !efforts.isEmpty {
                 Text(verbatim: pair.caption)
-                    .font(.system(size: 11))
+                    .font(.system(.subheadline))
                     .foregroundStyle(Chrome.secondaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -794,7 +672,7 @@ private struct FastModeButton: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isOn.toggle() }
         } label: {
             Image(systemName: isOn ? "bolt.fill" : "bolt")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.body, weight: .semibold))
                 .foregroundStyle(isOn ? Color.yellow : Chrome.secondaryText)
                 .symbolEffect(.bounce, value: isOn)
                 .frame(width: 30, height: 30)
@@ -821,7 +699,7 @@ private struct RoundIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(.body, weight: .medium))
                 .foregroundStyle(Chrome.secondaryText)
                 .frame(width: 30, height: 30)
                 .background { Circle().fill(isHovering ? Chrome.overlay(0.1) : Color.clear) }
@@ -854,6 +732,7 @@ struct EffortSlider: View {
     let accessibilityTitle: String
 
     @State private var dragX: CGFloat?
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
 
     private var look: TrackLook {
         let isMax = count > 1 && index == count - 1
@@ -887,7 +766,7 @@ struct EffortSlider: View {
                     .fill(look.fill)
                     .frame(width: x + inset, height: Self.trackHeight)
                     .overlay(alignment: .leading) {
-                        if look.kind != .plain || look.pair != nil {
+                        if !performanceMode && (look.kind != .plain || look.pair != nil) {
                             TrackEffect(look: look)
                                 .frame(width: x + inset, height: Self.trackHeight)
                                 .clipShape(Capsule(style: .continuous))
@@ -908,17 +787,27 @@ struct EffortSlider: View {
                 // disc beneath the lens rather than a shadow on it, because a shadow that
                 // changes colour and radius on glass makes the lens flash as the look changes.
                 ZStack {
-                    Circle()
-                        .fill(look.glow)
-                        .blur(radius: look.kind == .plain ? 4 : 8)
-                        .offset(y: 1)
-                    Circle()
-                        .fill(.clear)
-                        .glassEffect(.regular.tint(Color.white.opacity(look.isLightFill ? 0.55 : 0.32)).interactive(), in: Circle())
-                        // On a white fill the lens needs an edge to read against it.
-                        .overlay {
-                            Circle().strokeBorder(Color.black.opacity(look.isLightFill ? 0.14 : 0), lineWidth: 1)
-                        }
+                    if !performanceMode {
+                        Circle()
+                            .fill(look.glow)
+                            .blur(radius: look.kind == .plain ? 4 : 8)
+                            .offset(y: 1)
+                    }
+                    if !performanceMode {
+                        Circle()
+                            .fill(.clear)
+                            .glassEffect(.regular.tint(Color.white.opacity(look.isLightFill ? 0.55 : 0.32)).interactive(), in: Circle())
+                            // On a white fill the lens needs an edge to read against it.
+                            .overlay {
+                                Circle().strokeBorder(Color.black.opacity(look.isLightFill ? 0.14 : 0), lineWidth: 1)
+                            }
+                    } else {
+                        Circle()
+                            .fill(Color(nsColor: .controlColor))
+                            .overlay {
+                                Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                            }
+                    }
                 }
                 .frame(width: Self.thumbSize, height: Self.thumbSize)
                 .scaleEffect(dragX == nil ? 1 : 1.06)
@@ -994,7 +883,7 @@ enum EffortBrand: Hashable {
         case .deepseek: .deepseek
         case .meta: .meta
         case .antigravity: .antigravity
-        case .codex, .cursor, .grok, .opencode, .devin, .copilot, .commandcode, .pi, .zai: .silver
+        case .codex, .cursor, .grok, .opencode, .opencodeGo, .devin, .copilot, .commandcode, .pi, .omp, .zai: .silver
         case nil: .purple
         }
     }
@@ -1167,37 +1056,42 @@ struct TrackLook: Hashable {
 /// per frame was most of what a frame cost.
 struct TrackEffect: View {
     let look: TrackLook
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var startedAt = Date.now
     @State private var traits = TraitCache()
 
     var body: some View {
-        let kind = look.kind
-        let spark = look.spark
-        let pair = look.pair
-        let paused = reduceMotion || !FrontMonitor.shared.isVisible
-        TimelineView(.animation(minimumInterval: 1.0 / (kind == .supercharged && pair == nil ? 30 : 60), paused: paused)) { timeline in
-            let time = timeline.date.timeIntervalSince(startedAt)
-            Canvas { context, size in
-                guard size.width > 8 else { return }
-                if let pair {
-                    Self.drawFusion(context, size: size, time: time, lead: look.brand.fillColor, heads: pair.colors)
-                }
-                let traits = traits.traits(width: Double(size.width))
-                if kind == .supercharged || kind == .fusion {
-                    Self.drawParticles(context, size: size, time: time, color: spark, particles: traits.particles)
-                }
-                if kind == .fast || kind == .fusion {
-                    Self.drawStreaks(context, size: size, time: time, streaks: traits.streaks)
-                    Self.drawBolts(context, size: size, time: time)
-                }
-                if kind == .fusion {
-                    Self.drawSheen(context, size: size, time: time, color: spark)
+        if performanceMode {
+            EmptyView()
+        } else {
+            let kind = look.kind
+            let spark = look.spark
+            let pair = look.pair
+            let paused = reduceMotion || !FrontMonitor.shared.isVisible
+            TimelineView(.animation(minimumInterval: 1.0 / (kind == .supercharged && pair == nil ? 30 : 60), paused: paused)) { timeline in
+                let time = timeline.date.timeIntervalSince(startedAt)
+                Canvas { context, size in
+                    guard size.width > 8 else { return }
+                    if let pair {
+                        Self.drawFusion(context, size: size, time: time, lead: look.brand.fillColor, heads: pair.colors)
+                    }
+                    let traits = traits.traits(width: Double(size.width))
+                    if kind == .supercharged || kind == .fusion {
+                        Self.drawParticles(context, size: size, time: time, color: spark, particles: traits.particles)
+                    }
+                    if kind == .fast || kind == .fusion {
+                        Self.drawStreaks(context, size: size, time: time, streaks: traits.streaks)
+                        Self.drawBolts(context, size: size, time: time)
+                    }
+                    if kind == .fusion {
+                        Self.drawSheen(context, size: size, time: time, color: spark)
+                    }
                 }
             }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     struct Particle: Equatable {

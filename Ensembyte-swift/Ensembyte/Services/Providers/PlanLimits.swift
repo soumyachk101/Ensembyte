@@ -1,6 +1,5 @@
+import CryptoKit
 import Foundation
-import LocalAuthentication
-import Security
 
 /// A provider's subscription limits: each rolling window, how much of it is used and when it resets.
 struct PlanLimits: Sendable, Equatable {
@@ -64,11 +63,11 @@ enum ResetCreditError: LocalizedError {
 
 @MainActor
 enum PlanLimitsReader {
-    /// Codex, Claude, Antigravity, Copilot, Command Code, Z.ai and Pi report plan limits.
-    /// Pi reports the limits of the providers it is signed into. Cursor,
+    /// Codex, Claude, Antigravity, Copilot, Command Code, Z.ai, Pi and omp report plan limits.
+    /// Pi and omp report the limits of the providers they are signed into. Cursor,
     /// OpenCode, Grok, DeepSeek, Meta and Devin expose none.
     static func exposesLimits(_ provider: ProviderKind) -> Bool {
-        provider == .codex || provider == .claude || provider == .antigravity || provider == .copilot || provider == .commandcode || provider == .zai || provider == .pi
+        provider == .codex || provider == .claude || provider == .antigravity || provider == .copilot || provider == .commandcode || provider == .zai || provider == .pi || provider == .omp
     }
 
     static func read(_ provider: ProviderKind, executable: URL, environment: [String: String]) async -> PlanLimits? {
@@ -79,7 +78,8 @@ enum PlanLimitsReader {
         case .copilot: try? await CopilotSession.readPlanLimits(executable: executable, environment: environment)
         case .commandcode: await CommandCodeAPI.planLimits(environment: environment)
         case .pi: await PiPlanLimits.read(environment: environment)
-        case .cursor, .opencode, .grok, .deepseek, .meta, .zai, .devin: nil
+        case .omp: await OmpPlanLimits.read(executable: executable, environment: environment)
+        case .cursor, .opencode, .opencodeGo, .grok, .deepseek, .meta, .zai, .devin: nil
         }
     }
 
@@ -114,7 +114,7 @@ enum PlanLimitsReader {
     /// spells get the wording its own CLI uses. Anything else falls back to `planName(_:)`.
     nonisolated static func codexPlanName(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
-        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        switch raw.trimmed.lowercased() {
         case "pro": return "Pro 20x"
         case "prolite", "pro lite": return "Pro 5x"
         case "ent26", "hc": return "Enterprise"
@@ -157,7 +157,15 @@ enum PlanLimitsReader {
     }
 
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-    private static let keychainService = "Claude Code-credentials"
+    /// The Keychain item Claude Code keeps its login in: `Claude Code-credentials`, with the
+    /// first eight hex digits of the SHA-256 of `CLAUDE_CONFIG_DIR` after it when the home
+    /// is relocated, so every config home is its own login.
+    nonisolated static func claudeKeychainService(configDirectory: String?) -> String {
+        guard let configDirectory else { return "Claude Code-credentials" }
+        let digest = SHA256.hash(data: Data(configDirectory.precomposedStringWithCanonicalMapping.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "Claude Code-credentials-" + hex.prefix(8)
+    }
 
     private static func readClaudeUsageEndpoint(executable: URL, environment: [String: String]) async -> PlanLimits? {
         guard var login = await claudeLogin(environment: environment) else { return nil }
@@ -182,11 +190,11 @@ enum PlanLimitsReader {
 
     /// The stored Claude Code login: `.credentials.json`, or the macOS Keychain item the CLI writes.
     private static func claudeLogin(environment: [String: String]) async -> ClaudeLogin? {
-        var directories: [String] = []
-        if let configured = environment["CLAUDE_CONFIG_DIR"], !configured.isEmpty {
-            directories.append(configured)
-        }
-        directories.append((LoginEnvironment.homeDirectory as NSString).appendingPathComponent(".claude"))
+        // A relocated home is a login of its own (an added account): its file and its
+        // Keychain item only, never the default login's, or every account reads one usage.
+        let configured = environment["CLAUDE_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+        let directories = configured.map { [$0] } ?? [(LoginEnvironment.homeDirectory as NSString).appendingPathComponent(".claude")]
+        let keychainService = claudeKeychainService(configDirectory: configured)
         for directory in directories {
             let file = URL(fileURLWithPath: directory).appendingPathComponent(".credentials.json")
             if let data = try? Data(contentsOf: file), let login = parseLogin(data) {
@@ -194,38 +202,18 @@ enum PlanLimitsReader {
             }
         }
 
-        let context = LAContext()
-        context.interactionNotAllowed = true
-        var attempts: [[String: Any]] = []
+        let security = URL(fileURLWithPath: "/usr/bin/security")
+        var attempts: [[String]] = []
         if let user = environment["USER"] ?? environment["LOGNAME"], !user.isEmpty {
-            attempts.append([
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: keychainService,
-                kSecAttrAccount as String: user,
-                kSecReturnData as String: true,
-                kSecUseAuthenticationContext as String: context,
-                kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
-            ])
+            attempts.append(["find-generic-password", "-s", keychainService, "-a", user, "-w"])
         }
-        attempts.append([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecReturnData as String: true,
-            kSecUseAuthenticationContext as String: context,
-            kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
-        ])
-        for query in attempts {
-            var item: CFTypeRef?
-            guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-                  let data = item as? Data else { continue }
-            let text: String
-            if let str = String(data: data, encoding: .utf8) {
-                text = str
-            } else {
-                text = String(data: data, encoding: .ascii) ?? ""
-            }
-            let loginData = text.hasPrefix("{") ? Data(text.utf8) : (hexDecoded(text) ?? Data(text.utf8))
-            if let login = parseLogin(loginData) {
+        attempts.append(["find-generic-password", "-s", keychainService, "-w"])
+        for arguments in attempts {
+            guard let result = try? await Shell.run(security, arguments, environment: environment, timeout: 5),
+                  result.succeeded else { continue }
+            let text = result.output.trimmed
+            let data = text.hasPrefix("{") ? Data(text.utf8) : (hexDecoded(text) ?? Data(text.utf8))
+            if let login = parseLogin(data) {
                 return login
             }
         }
@@ -293,14 +281,14 @@ enum PlanLimitsReader {
             watchdog.cancel()
             process.terminate()
         }
-        process.send(["type": "control_request", "request_id": "swarm-code-init", "request": ["subtype": "initialize", "hooks": .null]])
+        process.send(["type": "control_request", "request_id": "ensembyte-code-init", "request": ["subtype": "initialize", "hooks": .null]])
         for await message in process.messages {
             guard message["type"]?.string == "control_response" else { continue }
             let response = message["response"] ?? .null
             switch response["request_id"]?.string {
-            case "swarm-code-init":
-                process.send(["type": "control_request", "request_id": "swarm-code-usage", "request": ["subtype": "get_usage"]])
-            case "swarm-code-usage":
+            case "ensembyte-code-init":
+                process.send(["type": "control_request", "request_id": "ensembyte-code-usage", "request": ["subtype": "get_usage"]])
+            case "ensembyte-code-usage":
                 let usage = response["response"] ?? .null
                 let rateLimits = usage["rate_limits"] ?? .null
                 return parseClaudeUsage(rateLimits, limits: rateLimits["limits"]?.array ?? [], planName: planName(usage["subscription_type"]?.string))
@@ -353,6 +341,6 @@ enum PlanLimitsReader {
     /// Claude writes microsecond timestamps, which the ISO 8601 parser does not take, so the fraction is dropped.
     nonisolated static func parseDate(_ text: String) -> Date? {
         let trimmed = text.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
-        return ISO8601DateFormatter().date(from: trimmed)
+        return ISO8601.date(from: trimmed)
     }
 }

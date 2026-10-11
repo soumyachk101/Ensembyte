@@ -60,7 +60,7 @@ enum SidebarMode: String, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .column: "A column beside the chat; the sidebar button in the toolbar shows and hides it"
+        case .column: "A column beside the chat; the list button in the toolbar shows and hides it"
         case .floating: "With the column collapsed, the thread list floats as a panel over the chat and stays where you leave it"
         case .panelOnly: "No column and no toolbar button; the floating panel is the sidebar"
         }
@@ -69,6 +69,22 @@ enum SidebarMode: String, CaseIterable, Identifiable {
 
 /// How the activity list shows which project a thread belongs to: the project's own mark
 /// in front of the thread's name on one line, or the project's name under it.
+enum TimelineHapticStyle: String, CaseIterable, Identifiable {
+    case soft
+    case strong
+    case none
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .soft: "Soft"
+        case .strong: "Strong"
+        case .none: "None"
+        }
+    }
+}
+
 enum ActivityThreadStyle: String, CaseIterable, Identifiable {
     /// The project's emoji or SF Symbol before the thread's name: one line per thread.
     case icon
@@ -125,17 +141,22 @@ final class AppSettings {
         static let threadFinishAction = "threadFinishAction"
         static let settleSound = "settleSound"
         static let showReasoning = "showReasoning"
+        static let chronologicalTimeline = "chronologicalTimeline"
         static let antiSlopEnabled = "antiSlopEnabled"
-        static let showsWorkingCard = "showsWorkingCard"
-        static let chatZoom = "chatZoom"
+        static let timelineHapticStyle = "timelineHapticStyle"
+        static let appZoom = "appZoom"
         static let sidebarActivityView = "sidebarActivityView"
+        static let codexVoice = "codexVoice"
         static let activityThreadStyle = "activityThreadStyle"
         static let settledCollapsed = "settledSectionCollapsed"
         static let appTheme = "appTheme"
         static let backdropOpacity = "backdropOpacity"
         static let appearance = "appearance"
+        static let performanceMode = "performanceMode"
+        static let performanceModeKey = performanceMode
         static let binaryPaths = "providerBinaryPaths"
         static let disabledProviders = "disabledProviders"
+        static let unmonitoredProviders = "unmonitoredProviderUpdates"
         static let models = "lastModels"
         static let efforts = "lastEfforts"
         static let lastHydraPair = "lastHydraPairID"
@@ -162,6 +183,7 @@ final class AppSettings {
         static let hydraReviewHeads = "hydraReviewHeads"
         static let hydraAutoClearFinished = "hydraAutoClearFinished"
         static let hydraAutoHidesIdleHeads = "hydraAutoHidesIdleHeads"
+        static let hydraArchivesCodexHeads = "hydraArchivesCodexHeads"
         static let hydraShowsHeadDetails = "hydraShowsHeadDetails"
         static let hydraAutoPopsHeads = "hydraAutoPopsHeads"
         static let hydraTempersHeadEffort = "hydraTempersHeadEffort"
@@ -176,15 +198,11 @@ final class AppSettings {
         static let hydraPairs = "hydraPairs"
         static let hasSeenTour = "hasSeenTour"
         static let hasSeenHydraIntro = "hasSeenHydraIntro"
-        static let reducedMotion = "reducedMotion"
     }
 
     static let modelListLimit = 15
 
-    /// Whether turns open in arrival order rather than folded.
-    var chronologicalTimeline: Bool = false
-
-    @ObservationIgnored private let defaults = WebsiteCaptures.defaults ?? .standard
+    @ObservationIgnored private let defaults = CaptureRun.defaults ?? .standard
 
     /// The provider last chosen in a composer's model picker (or by a Hydra pair): what a
     /// new thread starts on when there is no thread to follow. Not a setting of its own
@@ -234,20 +252,26 @@ final class AppSettings {
         didSet { defaults.set(showReasoning, forKey: Key.showReasoning) }
     }
 
+    /// The running turn's rows in arrival order — replies and tool runs interleaved as
+    /// they happened — instead of every step before the last tool call drawn into the
+    /// working line.
+    var chronologicalTimeline: Bool {
+        didSet { defaults.set(chronologicalTimeline, forKey: Key.chronologicalTimeline) }
+    }
+
     var antiSlopEnabled: Bool {
         didSet { defaults.set(antiSlopEnabled, forKey: Key.antiSlopEnabled) }
     }
 
-    /// The running turn's line as the head panel's progress card (the task, the stave bar
-    /// of the turn's steps, the time); off, it is the one-line badge with the words and the time.
-    var showsWorkingCard: Bool {
-        didSet { defaults.set(showsWorkingCard, forKey: Key.showsWorkingCard) }
+    /// The style of haptic feedback played when hovering over timeline ticks and progress bars.
+    var timelineHapticStyle: TimelineHapticStyle {
+        didSet { defaults.set(timelineHapticStyle.rawValue, forKey: Key.timelineHapticStyle) }
     }
 
-    /// How large the conversation reads: a step of `ChatZoom` (see its percentages), which the slider in
-    /// the chat's chrome row moves. The row and the chat box keep their own size.
-    var chatZoom: Int {
-        didSet { defaults.set(chatZoom, forKey: Key.chatZoom) }
+    /// The app-wide zoom in percent: the whole window scales, the way a browser's zoom
+    /// does, rather than the conversation's type alone.
+    var appZoom: Int {
+        didSet { defaults.set(appZoom, forKey: Key.appZoom) }
     }
 
     /// The floating panels' size once one has been resized by hand; nil leaves them to
@@ -261,6 +285,11 @@ final class AppSettings {
                 defaults.removeObject(forKey: Key.panelSize)
             }
         }
+    }
+
+    /// The Codex voice style for the next voice session; nil is Codex's own default.
+    var codexVoice: String? {
+        didSet { defaults.set(codexVoice, forKey: Key.codexVoice) }
     }
 
     /// The sidebar lists every thread by when it was last active, instead of by project.
@@ -293,6 +322,11 @@ final class AppSettings {
         didSet { defaults.set(backdropOpacity, forKey: Key.backdropOpacity) }
     }
     static let defaultBackdropOpacity = 0.5
+
+    /// Disables window transparency, blurs, glows and background effects for lowest GPU usage.
+    var performanceMode: Bool {
+        didSet { defaults.set(performanceMode, forKey: Key.performanceMode) }
+    }
 
     var textGeneration: TextGenerationChoice {
         didSet { defaults.set(textGeneration.rawValue, forKey: Key.textGeneration) }
@@ -362,9 +396,7 @@ final class AppSettings {
     /// Settings lag, and two of them before the window exists made launch wait on securityd.
     var deepseekAPIKeyInput: String {
         didSet {
-            guard !isReadingKeychain, deepseekAPIKeyInput != oldValue else { return }
-            let kept = DeepSeekKeychain.setAPIKey(deepseekAPIKeyInput)
-            storeAPIKeyFallback(kept ? "" : deepseekAPIKeyInput, forKey: Key.deepseekAPIKey)
+            storeAPIKeyChange(deepseekAPIKeyInput, from: oldValue, provider: .deepseek, fallbackKey: Key.deepseekAPIKey)
         }
     }
 
@@ -373,9 +405,7 @@ final class AppSettings {
     /// Stored in the Keychain when available, with a UserDefaults fallback for migration.
     var metaAPIKeyInput: String {
         didSet {
-            guard !isReadingKeychain, metaAPIKeyInput != oldValue else { return }
-            let kept = MetaKeychain.setAPIKey(metaAPIKeyInput)
-            storeAPIKeyFallback(kept ? "" : metaAPIKeyInput, forKey: Key.metaAPIKey)
+            storeAPIKeyChange(metaAPIKeyInput, from: oldValue, provider: .meta, fallbackKey: Key.metaAPIKey)
         }
     }
 
@@ -386,9 +416,7 @@ final class AppSettings {
     /// Settings lag, and two of them before the window exists made launch wait on securityd.
     var zaiAPIKeyInput: String {
         didSet {
-            guard !isReadingKeychain, zaiAPIKeyInput != oldValue else { return }
-            let kept = ZaiKeychain.setAPIKey(zaiAPIKeyInput)
-            storeAPIKeyFallback(kept ? "" : zaiAPIKeyInput, forKey: Key.zaiAPIKey)
+            storeAPIKeyChange(zaiAPIKeyInput, from: oldValue, provider: .zai, fallbackKey: Key.zaiAPIKey)
         }
     }
 
@@ -397,9 +425,7 @@ final class AppSettings {
     /// with a UserDefaults fallback for a Mac whose Keychain refused it.
     var commandcodeAPIKeyInput: String {
         didSet {
-            guard !isReadingKeychain, commandcodeAPIKeyInput != oldValue else { return }
-            let kept = CommandCodeKeychain.setAPIKey(commandcodeAPIKeyInput)
-            storeAPIKeyFallback(kept ? "" : commandcodeAPIKeyInput, forKey: Key.commandcodeAPIKey)
+            storeAPIKeyChange(commandcodeAPIKeyInput, from: oldValue, provider: .commandcode, fallbackKey: Key.commandcodeAPIKey)
         }
     }
 
@@ -437,11 +463,15 @@ final class AppSettings {
     /// One Keychain round trip per key.
     private nonisolated static func readKeys(fallbacks: (deepseek: String, meta: String, zai: String, commandcode: String)) -> StoredKeys {
         StoredKeys(
-            deepseek: StoredKey(keychain: DeepSeekKeychain.apiKey(fallback: ""), fallback: fallbacks.deepseek),
-            meta: StoredKey(keychain: MetaKeychain.apiKey(fallback: ""), fallback: fallbacks.meta),
-            zai: StoredKey(keychain: ZaiKeychain.apiKey(fallback: ""), fallback: fallbacks.zai),
-            commandcode: StoredKey(keychain: CommandCodeKeychain.apiKey(fallback: ""), fallback: fallbacks.commandcode)
+            deepseek: storedKey(for: .deepseek, fallback: fallbacks.deepseek),
+            meta: storedKey(for: .meta, fallback: fallbacks.meta),
+            zai: storedKey(for: .zai, fallback: fallbacks.zai),
+            commandcode: storedKey(for: .commandcode, fallback: fallbacks.commandcode)
         )
+    }
+
+    private nonisolated static func storedKey(for provider: ProviderKind, fallback: String) -> StoredKey {
+        StoredKey(keychain: APIKeychain.key(for: provider, fallback: ""), fallback: fallback)
     }
 
     /// The stored keys, from the Keychain the first time anything asks for one. The fill
@@ -478,6 +508,14 @@ final class AppSettings {
         if keys.commandcode.inKeychain { defaults.removeObject(forKey: Key.commandcodeAPIKey) }
     }
 
+    /// One provider key changed: hand it to the Keychain and keep a plaintext copy in
+    /// the defaults only for a Mac whose Keychain refused it.
+    private func storeAPIKeyChange(_ value: String, from oldValue: String, provider: ProviderKind, fallbackKey: String) {
+        guard !isReadingKeychain, value != oldValue else { return }
+        let kept = APIKeychain.setKey(value, for: provider)
+        storeAPIKeyFallback(kept ? "" : value, forKey: fallbackKey)
+    }
+
     /// The plaintext copy in defaults, for a Mac whose Keychain refused the key; an empty
     /// value removes it, so a key the Keychain holds never sits in the defaults too.
     private func storeAPIKeyFallback(_ value: String, forKey key: String) {
@@ -495,6 +533,11 @@ final class AppSettings {
 
     private(set) var disabledProviders: [String] {
         didSet { defaults.set(disabledProviders, forKey: Key.disabledProviders) }
+    }
+
+    /// Providers whose CLI is not checked for updates; every other one is.
+    private(set) var unmonitoredProviders: [String] {
+        didSet { defaults.set(unmonitoredProviders, forKey: Key.unmonitoredProviders) }
     }
 
     private(set) var lastModels: [String: String] {
@@ -540,14 +583,6 @@ final class AppSettings {
     /// The first chat's Hydra intro was read (see `HydraIntroPopover`).
     var hasSeenHydraIntro: Bool {
         didSet { defaults.set(hasSeenHydraIntro, forKey: Key.hasSeenHydraIntro) }
-    }
-
-    /// Disable spring animations for panels and transitions.
-    var reducedMotion: Bool {
-        didSet {
-            defaults.set(reducedMotion, forKey: Key.reducedMotion)
-            Chrome.reducedMotionOverride = reducedMotion
-        }
     }
 
     /// With Hydra on, a follow-up queued while a turn runs goes to a head at once
@@ -605,6 +640,11 @@ final class AppSettings {
     /// default, so the heads stay in the sidebar until it is asked for.
     var hydraAutoHidesIdleHeads: Bool {
         didSet { defaults.set(hydraAutoHidesIdleHeads, forKey: Key.hydraAutoHidesIdleHeads) }
+    }
+
+    /// Provider-side history, independent of Ensembyte's sidebar. Never sweeps old heads.
+    var hydraArchivesCodexHeads: Bool {
+        didSet { defaults.set(hydraArchivesCodexHeads, forKey: Key.hydraArchivesCodexHeads) }
     }
 
     /// A head's panel shows its whole conversation instead of the progress bar. Off unless
@@ -705,7 +745,7 @@ final class AppSettings {
     }
 
     init() {
-        let defaults = WebsiteCaptures.defaults ?? .standard
+        let defaults = CaptureRun.defaults ?? .standard
         defaultProvider = ProviderKind(rawValue: defaults.string(forKey: Key.defaultProvider) ?? "") ?? .codex
         defaultRuntimeMode = RuntimeMode(rawValue: defaults.string(forKey: Key.runtimeMode) ?? "") ?? .fullAccess
         defaultWorkspaceMode = WorkspaceMode(rawValue: defaults.string(forKey: Key.workspaceMode) ?? "") ?? .local
@@ -716,13 +756,16 @@ final class AppSettings {
         threadFinishAction = ThreadFinishAction(rawValue: defaults.string(forKey: Key.threadFinishAction) ?? "") ?? .settle
         settleSound = defaults.object(forKey: Key.settleSound) as? Bool ?? true
         showReasoning = defaults.object(forKey: Key.showReasoning) as? Bool ?? false
+        chronologicalTimeline = defaults.object(forKey: Key.chronologicalTimeline) as? Bool ?? false
         antiSlopEnabled = defaults.object(forKey: Key.antiSlopEnabled) as? Bool ?? true
-        showsWorkingCard = defaults.object(forKey: Key.showsWorkingCard) as? Bool ?? false
-        chatZoom = ChatZoom.clamped(defaults.object(forKey: Key.chatZoom) as? Int ?? ChatZoom.defaultIndex)
+        timelineHapticStyle = TimelineHapticStyle(rawValue: defaults.string(forKey: Key.timelineHapticStyle) ?? "") ?? .soft
+        appZoom = AppZoom.normalized(defaults.object(forKey: Key.appZoom) as? Int ?? 100)
         sidebarActivityView = defaults.bool(forKey: Key.sidebarActivityView)
+        codexVoice = defaults.string(forKey: Key.codexVoice)
         activityThreadStyle = ActivityThreadStyle(rawValue: defaults.string(forKey: Key.activityThreadStyle) ?? "") ?? .icon
         settledCollapsed = defaults.object(forKey: Key.settledCollapsed) as? Bool ?? true
         backdropOpacity = defaults.object(forKey: Key.backdropOpacity) as? Double ?? Self.defaultBackdropOpacity
+        performanceMode = defaults.bool(forKey: Key.performanceMode)
         // The old System/Light/Dark choice maps straight onto the same themes.
         let initialTheme = AppTheme(rawValue: defaults.string(forKey: Key.appTheme) ?? "")
             ?? AppTheme(rawValue: defaults.string(forKey: Key.appearance) ?? "")
@@ -747,6 +790,7 @@ final class AppSettings {
         commandcodeAPIKeyInput = ""
         binaryPaths = defaults.dictionary(forKey: Key.binaryPaths) as? [String: String] ?? [:]
         disabledProviders = defaults.stringArray(forKey: Key.disabledProviders) ?? []
+        unmonitoredProviders = defaults.stringArray(forKey: Key.unmonitoredProviders) ?? []
         lastModels = defaults.dictionary(forKey: Key.models) as? [String: String] ?? [:]
         lastEfforts = defaults.dictionary(forKey: Key.efforts) as? [String: String] ?? [:]
         lastHydraPairID = defaults.string(forKey: Key.lastHydraPair).flatMap(UUID.init(uuidString:))
@@ -767,6 +811,7 @@ final class AppSettings {
         hydraReviewHeads = defaults.object(forKey: Key.hydraReviewHeads) as? Bool ?? false
         hydraAutoClearFinished = defaults.object(forKey: Key.hydraAutoClearFinished) as? Bool ?? false
         hydraAutoHidesIdleHeads = defaults.object(forKey: Key.hydraAutoHidesIdleHeads) as? Bool ?? false
+        hydraArchivesCodexHeads = defaults.object(forKey: Key.hydraArchivesCodexHeads) as? Bool ?? false
         hydraShowsHeadDetails = defaults.object(forKey: Key.hydraShowsHeadDetails) as? Bool ?? false
         hydraAutoPopsHeads = defaults.object(forKey: Key.hydraAutoPopsHeads) as? Bool ?? false
         hydraTempersHeadEffort = defaults.object(forKey: Key.hydraTempersHeadEffort) as? Bool ?? true
@@ -786,8 +831,6 @@ final class AppSettings {
         usagePanelDock = defaults.string(forKey: Key.usagePanelDock).flatMap(PanelDockCorner.init(rawValue:)) ?? .bottomLeading
         usagePanelHeight = defaults.object(forKey: Key.usagePanelHeight).flatMap { $0 as? Double }.map { CGFloat($0) }
         hydraPairs = Self.load([Lenient<HydraPair>].self, forKey: Key.hydraPairs)?.compactMap(\.value) ?? []
-        reducedMotion = defaults.object(forKey: Key.reducedMotion) as? Bool ?? false
-        Chrome.reducedMotionOverride = reducedMotion
     }
 
     // MARK: - Hydra pairs
@@ -867,7 +910,7 @@ final class AppSettings {
     }
 
     private static func load<Value: Decodable>(_ type: Value.Type, forKey key: String) -> Value? {
-        guard let data = (WebsiteCaptures.defaults ?? .standard).data(forKey: key) else { return nil }
+        guard let data = (CaptureRun.defaults ?? .standard).data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(type, from: data)
     }
 
@@ -887,6 +930,15 @@ final class AppSettings {
     func setEnabled(_ enabled: Bool, for provider: ProviderKind) {
         disabledProviders.removeAll { $0 == provider.rawValue }
         if !enabled { disabledProviders.append(provider.rawValue) }
+    }
+
+    func monitorsUpdates(_ provider: ProviderKind) -> Bool {
+        !unmonitoredProviders.contains(provider.rawValue)
+    }
+
+    func setMonitorsUpdates(_ monitors: Bool, for provider: ProviderKind) {
+        unmonitoredProviders.removeAll { $0 == provider.rawValue }
+        if !monitors { unmonitoredProviders.append(provider.rawValue) }
     }
 
     func lastModel(for provider: ProviderKind) -> String? {

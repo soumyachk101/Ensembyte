@@ -325,57 +325,91 @@ struct WelcomeView: View {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var detailSize: CGSize = .zero
+    /// The voice stage's arrival, 0 hidden to 1 covering the chat, and whether it is drawn.
+    @State private var voiceReveal: CGFloat = 0
+    @State private var voiceStageShown = false
 
     var body: some View {
         let sidebar = model.sidebar
+        // Settings takes the window over: its page list stands in the sidebar's place and
+        // the page fills the detail pane. The chats stay laid out underneath, out of sight
+        // and out of reach, so going back finds the thread, its scroll and the sidebar as
+        // they were.
+        let settingsShown = SettingsNavigation.shared.isPresented
         // With the sidebar floating, the collapsed column hands its list to a panel over
         // the chat rather than the toolbar popover; only-floating drops the column altogether.
         let onlyFloats = model.settings.sidebarFloats && model.settings.sidebarOnlyFloats
-        let floats = model.settings.sidebarFloats && (onlyFloats || !sidebar.isVisible)
+        let floats = model.settings.sidebarFloats && (onlyFloats || !sidebar.isVisible) && !settingsShown
         HStack(spacing: 0) {
-            // The rows are laid out at the sidebar's width once, and the slide moves the clip
-            // alone, so no row re-wraps per frame.
-            SidebarView()
-                .frame(width: sidebar.width)
-                .frame(width: onlyFloats ? 0 : sidebar.renderedWidth, alignment: .trailing)
-                .clipped()
-                .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { sidebar.noteLaidOutWidth($0) }
-                .overlay(alignment: .trailing) {
-                    SidebarResizeHandle(
-                        isActive: !onlyFloats && sidebar.isVisible,
-                        onBegin: { sidebar.beginDrag() },
-                        onChange: { sidebar.drag(by: $0) },
-                        onEnd: { sidebar.endDrag() }
-                    )
-                    .frame(width: SidebarResizeHandle.hitWidth)
-                    .padding(.top, Chrome.trafficLightTop + Chrome.trafficLightDiameter)
-                }
-
-            DetailView()
-                .frame(minWidth: 0, maxWidth: .infinity)
-                // The sheet keeps to its own bounds. A conversation gliding sideways to make
-                // room for a panel (`ReserveSlide` carries it on an offset), a panel settling
-                // into a corner of a pane that just changed size, and rows re-wrapping in a
-                // live resize all reach past the sheet for a few frames, and drew over the
-                // sidebar or off the window's edge until they landed.
-                .clipped()
-                .padding(.leading, sidebar.isVisible && !onlyFloats ? 0 : Chrome.sheetInset)
-                .padding(.trailing, Chrome.sheetInset)
-                .padding(.vertical, Chrome.sheetInset)
-                .onGeometryChange(for: CGSize.self, of: { $0.size }) { detailSize = $0 }
-                .overlay(alignment: .topLeading) {
-                    if floats, detailSize != .zero {
-                        FloatingSidebarPanel(area: detailSize, canClose: !onlyFloats) { sidebar.toggle() }
-                            .transition(.scale(scale: 0.94).combined(with: .opacity))
+            ZStack(alignment: .leading) {
+                // The rows are laid out at the sidebar's width once, and the slide moves the clip
+                // alone, so no row re-wraps per frame.
+                SidebarView()
+                    .frame(width: sidebar.width)
+                    .frame(width: onlyFloats ? 0 : sidebar.renderedWidth, alignment: .trailing)
+                    .clipped()
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { sidebar.noteLaidOutWidth($0) }
+                    .overlay(alignment: .trailing) {
+                        SidebarResizeHandle(
+                            isActive: !onlyFloats && sidebar.isVisible && !settingsShown,
+                            onBegin: { sidebar.beginDrag() },
+                            onChange: { sidebar.drag(by: $0) },
+                            onEnd: { sidebar.endDrag() }
+                        )
+                        .frame(width: SidebarResizeHandle.hitWidth)
+                        .padding(.top, Chrome.trafficLightTop + Chrome.trafficLightDiameter)
                     }
+                    .opacity(settingsShown ? 0 : 1)
+                    .allowsHitTesting(!settingsShown)
+                    .accessibilityHidden(settingsShown)
+                if settingsShown {
+                    SettingsSidebar()
+                        .frame(width: settingsSidebarWidth)
+                        .transition(.offset(x: -16).combined(with: .opacity))
                 }
-                .animation(Chrome.panelSlide, value: floats)
+            }
+            .frame(width: settingsShown ? settingsSidebarWidth : nil, alignment: .leading)
+
+            ZStack {
+                DetailView()
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    // The stage has no fill of its own on the glass: what it covers fades out
+                    // and only the window shows through.
+                    .opacity(1 - voiceReveal)
+                    .overlay {
+                        if voiceStageShown {
+                            VoiceStage(reveal: voiceReveal)
+                        }
+                    }
+                    // The sheet keeps to its own bounds. A conversation gliding sideways to make
+                    // room for a panel (`ReserveSlide` carries it on an offset), a panel settling
+                    // into a corner of a pane that just changed size, and rows re-wrapping in a
+                    // live resize all reach past the sheet for a few frames, and drew over the
+                    // sidebar or off the window's edge until they landed.
+                    .clipped()
+                    .onGeometryChange(for: CGSize.self, of: { $0.size }) { detailSize = $0 }
+                    .overlay(alignment: .topLeading) {
+                        if floats, detailSize != .zero {
+                            FloatingSidebarPanel(area: detailSize, canClose: !onlyFloats) { sidebar.toggle() }
+                                .transition(.scale(scale: 0.94).combined(with: .opacity))
+                        }
+                    }
+                    .animation(Chrome.panelSlide, value: floats)
+                if settingsShown {
+                    SettingsDetail()
+                        .transition(.offset(x: 16).combined(with: .opacity))
+                }
+            }
+            .padding(.leading, settingsShown || (sidebar.isVisible && !onlyFloats) ? 0 : Chrome.sheetInset)
+            .padding(.trailing, Chrome.sheetInset)
+            .padding(.vertical, Chrome.sheetInset)
         }
         // While the sidebar is hidden, dragging the window's leading edge pulls it back out.
         .overlay(alignment: .leading) {
             SidebarResizeHandle(
-                isActive: !onlyFloats && !sidebar.isVisible,
+                isActive: !onlyFloats && !sidebar.isVisible && !settingsShown,
                 onBegin: { sidebar.beginDrag() },
                 onChange: { sidebar.drag(by: $0) },
                 onEnd: { sidebar.endDrag() }
@@ -383,8 +417,16 @@ struct RootView: View {
             .frame(width: SidebarResizeHandle.hitWidth)
             .padding(.top, Chrome.trafficLightTop + Chrome.trafficLightDiameter)
         }
+        // Going to another thread from Settings (⌘1 to ⌘9, a new thread, the palette, a
+        // notification) leaves Settings for it. Not the first selection: the library loads
+        // after launch and restores the last thread then, which must not close a Settings
+        // page a relaunch opened on purpose. The palette and notifications go back
+        // themselves for that case.
+        .onChange(of: model.selectedThreadID) { old, _ in
+            if old != nil { WindowManager.shared.hideSettings() }
+        }
         .background { WindowBackdrop(opacity: model.settings.backdropOpacity, wallpaper: WallpaperStore.shared.image) }
-        .background { WindowChromeConfigurator(sidebarVisible: sidebar.holdsTrafficLights, sidebarDragging: sidebar.isDragging) }
+        .background { WindowChromeConfigurator(sidebarVisible: settingsShown || sidebar.holdsTrafficLights, sidebarDragging: sidebar.isDragging) }
         // Clipped after the backdrop is painted, so the glass and its edge stop at the window's own curve.
         .clipShape(RoundedRectangle(cornerRadius: Chrome.windowCornerRadius, style: .continuous))
         .ignoresSafeArea()
@@ -396,33 +438,26 @@ struct RootView: View {
                 CommandPalette()
             }
         }
-        .overlay(alignment: .top) {
-            if let toast = model.currentToast {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.green)
-                        .font(.system(size: 14, weight: .semibold))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(toast.title)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.primary)
-                        if !toast.message.isEmpty {
-                            Text(toast.message)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
-                .shadow(color: Color.black.opacity(0.25), radius: 14, x: 0, y: 7)
-                .padding(.top, 14)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .onTapGesture {
-                    model.dismissToast()
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                ToastPill(message: toast.message)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(Chrome.panelSlide, value: model.toast?.id)
+        .onChange(of: model.voice.stageOpen, initial: true) { _, open in
+            if open {
+                voiceStageShown = true
+                withAnimation(reduceMotion ? nil : VoiceStageMetrics.enter) { voiceReveal = 1 }
+            } else if reduceMotion {
+                voiceReveal = 0
+                voiceStageShown = false
+            } else {
+                withAnimation(VoiceStageMetrics.exit) {
+                    voiceReveal = 0
+                } completion: {
+                    if !model.voice.stageOpen { voiceStageShown = false }
                 }
             }
         }
@@ -460,6 +495,35 @@ struct RootView: View {
         }
         return !folders.isEmpty || !files.isEmpty
     }
+
+    /// The Settings page list keeps the chat sidebar's width, so the swap leaves the page
+    /// edge where the chat's was, but never narrower than its longest row needs.
+    private var settingsSidebarWidth: CGFloat {
+        max(model.sidebar.width, 212)
+    }
+}
+
+/// A short notice floating over the window: glass, one or two lines, never in the way of a click.
+struct ToastPill: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle")
+                .font(.system(.callout))
+                .foregroundStyle(Chrome.secondaryText)
+            Text(verbatim: message)
+                .font(.system(.callout))
+                .foregroundStyle(Chrome.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .frame(maxWidth: 560)
+        .chromeGlassFieldCapsule()
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// Whether the chat column a view sits in is the one on screen. The columns of the threads
@@ -481,7 +545,7 @@ struct DetailView: View {
     var body: some View {
         if let threadID = model.selectedThreadID, model.thread(threadID) != nil {
             let running = Set(model.threads.compactMap { model.existingRuntime(for: $0.id)?.isRunning == true ? $0.id : nil })
-            ThreadColumns(threadID: threadID, prebuilt: prebuilt, running: running, model: model, liveResize: liveResize)
+            ThreadColumns(threadID: threadID, prebuilt: prebuilt, running: running, isCovered: SettingsNavigation.shared.isPresented, model: model, liveResize: liveResize)
                 .onChange(of: threadID) { _, _ in prebuilt = [] }
                 .task(id: threadID) {
                     // The neighbours, and at launch the sidebar's top rows, one at a time, once
@@ -536,6 +600,9 @@ private struct ThreadColumns: NSViewRepresentable {
     /// Threads with a turn under way. A hidden column of one goes: its rows would stream
     /// unseen, at the same cost as on screen.
     let running: Set<UUID>
+    /// Settings is over the pane: the columns go hidden once it has faded in, so none of
+    /// their buttons answers a chord meant for a page.
+    let isCovered: Bool
     let model: AppModel
     let liveResize: WindowLiveResize
 
@@ -545,6 +612,7 @@ private struct ThreadColumns: NSViewRepresentable {
 
     func updateNSView(_ pane: NSView, context: Context) {
         let columns = context.coordinator
+        columns.cover(pane, isCovered)
         columns.show(threadID, in: pane, model: model, liveResize: liveResize)
         columns.dropHidden(where: { running.contains($0) || model.thread($0) == nil || model.existingRuntime(for: $0) == nil })
         columns.prebuild(prebuilt.filter { model.thread($0) != nil && !running.contains($0) }, in: pane, model: model, liveResize: liveResize)
@@ -573,6 +641,24 @@ private struct ThreadColumns: NSViewRepresentable {
         /// a view tree down costs a frame's worth of time, better spent after the frame.
         private var retired: [FrameHostingView] = []
         private var retirement: Task<Void, Never>?
+        private var covering: Task<Void, Never>?
+
+        /// Hides the pane once Settings has faded in over it, and shows it the moment
+        /// Settings starts to go, so the chat fades back in under it.
+        func cover(_ pane: NSView, _ isCovered: Bool) {
+            guard isCovered else {
+                covering?.cancel()
+                covering = nil
+                pane.isHidden = false
+                return
+            }
+            guard !pane.isHidden, covering == nil else { return }
+            covering = Task { [weak pane] in
+                try? await Task.sleep(for: .milliseconds(450))
+                guard !Task.isCancelled else { return }
+                pane?.isHidden = true
+            }
+        }
 
         func show(_ id: UUID, in pane: NSView, model: AppModel, liveResize: WindowLiveResize) {
             guard id != shown else { return }
@@ -713,8 +799,7 @@ private struct ProviderStatusRow: View {
 private struct OpenProvidersSettingsButton: View {
     var body: some View {
         Button("Add key") {
-            WindowManager.shared.showSettings()
-            SettingsNavigation.shared.requestedPage = .providers
+            WindowManager.shared.showSettings(page: .providers)
         }
         .buttonStyle(.glass)
         .help("Open Settings > Providers")

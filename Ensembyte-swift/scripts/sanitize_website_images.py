@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Sanitizes all website images, tour assets, video posters, and release screenshots for Swarm Code:
-1. Replaces all residual text occurrences of "Droppy Code", "getdroppy.app", and "DroppyCode build"
+1. Replaces all residual text occurrences of "Ensembyte", "getlegacy.app", and "Ensembyte build"
    with "Swarm Code", "swarmcode.dev", and "SwarmCode build".
-2. Replaces Droppy water-droplet app icons with the official Swarm Code app icon.
+2. Replaces Legacy water-droplet app icons with the official Swarm Code app icon.
 3. Fixes window.webp with a seamless, unified "Welcome to Swarm Code" modal title and terminal line.
 4. Preserves authentic Hydra features, marks, buttons, cards, and head glyphs.
    DOES NOT place any Swarm bee logos over Hydra marks!
@@ -68,10 +68,10 @@ def sanitize_window():
     im = Image.open(SRC_DIR / "window.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
     
-    # 1. Terminal line: replace 'DroppyCode build' with 'SwarmCode build'
+    # 1. Terminal line: replace 'Ensembyte build' with 'SwarmCode build'
     inpaint_line(arr, 834, 946, 696, 718)
     
-    # 2. Modal title: replace entire 'Welcome to Droppy Code' line seamlessly
+    # 2. Modal title: replace entire 'Welcome to Ensembyte' line seamlessly
     # Bounding box is x=720..1360, y=895..965. Center is at x=1040.
     inpaint_line(arr, 720, 1360, 895, 965)
     

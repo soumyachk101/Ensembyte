@@ -86,7 +86,7 @@ final class WallpaperStore {
         let stored = defaults.object(forKey: Key.softness) as? Double ?? 0
         softness = min(1, max(0, stored))
         if let name = defaults.string(forKey: Key.file), !name.isEmpty {
-            let url = Storage.wallpaperDirectory.appendingPathComponent(name)
+            let url = StoragePaths.wallpaperDirectory.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: url.path) {
                 fileURL = url
                 render()
@@ -125,9 +125,9 @@ final class WallpaperStore {
             let scoped = source.startAccessingSecurityScopedResource()
             defer { if scoped { source.stopAccessingSecurityScopedResource() } }
             let ext = source.pathExtension.isEmpty ? "jpg" : source.pathExtension.lowercased()
-            let destination = Storage.wallpaperDirectory.appendingPathComponent("wallpaper-\(UUID().uuidString).\(ext)")
+            let destination = StoragePaths.wallpaperDirectory.appendingPathComponent("wallpaper-\(UUID().uuidString).\(ext)")
             do {
-                try FileManager.default.createDirectory(at: Storage.wallpaperDirectory, withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(at: StoragePaths.wallpaperDirectory, withIntermediateDirectories: true)
                 try FileManager.default.copyItem(at: source, to: destination)
             } catch {
                 try? FileManager.default.removeItem(at: destination)

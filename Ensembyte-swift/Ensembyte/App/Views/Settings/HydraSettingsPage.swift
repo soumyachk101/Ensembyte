@@ -19,12 +19,12 @@ struct HydraSettingsPage: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
                             Text("Hydra")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.system(.title3, weight: .semibold))
                                 .foregroundStyle(Chrome.primaryText)
                             InfoHoverButton(help: "How Hydra works") { HydraInfoPopover(topic: .hydra) }
                         }
                         Text("One chat leads a team of heads on big jobs.")
-                            .font(.system(size: 11))
+                            .font(.system(.subheadline))
                             .foregroundStyle(Chrome.secondaryText)
                             .lineLimit(1)
                     }
@@ -39,7 +39,7 @@ struct HydraSettingsPage: View {
             // each row repeating why it is off.
             if !settings.hydraEnabled {
                 Text("Switch Hydra on to set up its heads.")
-                    .font(.system(size: 11))
+                    .font(.system(.subheadline))
                     .foregroundStyle(Chrome.secondaryText)
                     .padding(.horizontal, 4)
             }
@@ -114,7 +114,7 @@ struct HydraSettingsPage: View {
                         HStack(spacing: 6) {
                             HydraGlyph(persona: HydraRoster.persona(at: 0), size: 30)
                             Image(systemName: "arrow.right")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(Chrome.secondaryText)
                             HStack(spacing: -8) {
                                 ForEach(1..<4, id: \.self) { index in
@@ -125,10 +125,10 @@ struct HydraSettingsPage: View {
                         .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("One leads, the others build")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.body, weight: .semibold))
                                 .foregroundStyle(Chrome.primaryText)
                             Text("A pair says which model leads and which runs the heads. Put a deep thinker over quick hands on one provider, or lead on one provider and send the heads out on another: the strongest lead with the fastest team, every time.")
-                                .font(.system(size: 11))
+                                .font(.system(.subheadline))
                                 .foregroundStyle(Chrome.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -156,7 +156,7 @@ struct HydraSettingsPage: View {
                     }
                 }
                 Text("Pairs sit at the top of the model picker: a tap puts the chat in one. Right-click a project in the sidebar to start each of its new chats on one pair.")
-                    .font(.system(size: 11))
+                    .font(.system(.subheadline))
                     .foregroundStyle(Chrome.secondaryText)
                     .padding(.horizontal, 4)
             }
@@ -164,20 +164,41 @@ struct HydraSettingsPage: View {
         .disabled(!settings.hydraEnabled)
         .opacity(settings.hydraEnabled ? 1 : 0.5)
         .animation(.smooth(duration: 0.2), value: settings.hydraEnabled)
-        ChromeSection(title: "Where heads run") {
+        ChromeSection(title: "Provider history") {
             ChromeCard {
-                ChromeRow(title: "Claude, Codex and Copilot", detail: "In the provider's own session, through the lead's own agent tools.") {
-                    HStack(alignment: .center, spacing: 6) {
-                        ProviderIcon(provider: .claude, size: 14)
-                        ProviderIcon(provider: .codex, size: 14)
-                        // Copilot's mark is wider than tall, so it fills less of a
-                        // square frame; size it up to share the same optical height.
-                        ProviderIcon(provider: .copilot, size: 16.75)
+                ChromeRow(
+                    title: "Codex local session history",
+                    detail: "For new delegated Codex heads after successful completion. Archived sessions keep their IDs and resume on the next message. Lead chats, older sessions and heads with user follow-ups stay visible."
+                ) {
+                    ChromeVisualPicker(options: [(false, "Keep visible"), (true, "Auto-archive")], selection: $settings.hydraArchivesCodexHeads) { archive in
+                        Image(systemName: archive ? "archivebox" : "eye")
                     }
-                    .foregroundStyle(Chrome.secondaryText)
                 }
                 ChromeRowDivider()
-                ChromeRow(title: "Other providers", detail: "As threads of their own, asked for at the end of the lead's reply.") {
+                ChromeRow(title: "Claude Code and Antigravity", detail: "Keep visible. Their connected streaming CLIs do not expose a verified archive operation that preserves resume history.") {
+                    Text("Unavailable")
+                        .foregroundStyle(Chrome.secondaryText)
+                }
+                ChromeRowDivider()
+                ChromeRow(title: "Permanent deletion", detail: "Disabled. Codex deletion also deletes descendant sessions, without an atomic safeguard against newly active work. Claude Code and Antigravity have no verified deletion operation for these connected sessions.") {
+                    Button("Delete…", role: .destructive) {}
+                        .disabled(true)
+                }
+            }
+            Text("These controls affect Codex's local CLI/app session history, independently of Ensembyte's sidebar. They do not manage conversations on provider websites. Heads with descendants or an unconfirmed idle state are not archived. Changing this setting never sweeps existing history.")
+                .font(.system(.subheadline))
+                .foregroundStyle(Chrome.secondaryText)
+                .padding(.horizontal, 4)
+            ForEach(model.threads.filter { $0.provider == .codex && $0.hydra?.providerHistoryIssue != nil }) { head in
+                Text("\(head.title): \(head.hydra?.providerHistoryIssue ?? "")")
+                    .font(.system(.subheadline))
+                    .foregroundStyle(Chrome.secondaryText)
+                    .padding(.horizontal, 4)
+            }
+        }
+        ChromeSection(title: "Where heads run") {
+            ChromeCard {
+                ChromeRow(title: "Every provider", detail: "In Ensembyte, as threads of their own, asked for at the end of the lead's reply. A lead never runs heads inside its own session: Claude's, Codex's and Copilot's own sub-agent tools are off while it leads.") {
                     EmptyView()
                 }
                 ChromeRowDivider()
@@ -253,15 +274,15 @@ private struct HydraPairRow: View {
                     HydraPairIcons(pair: pair)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: HydraPairSummary.title(pair, registry: registry))
-                            .font(.system(size: 13))
+                            .font(.system(.body))
                             .foregroundStyle(Chrome.primaryText)
                         Text(verbatim: summary(registry: registry))
-                            .font(.system(size: 11))
+                            .font(.system(.subheadline))
                             .foregroundStyle(Chrome.secondaryText)
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 12))
+                        .font(.system(.callout))
                         .foregroundStyle(Chrome.secondaryText)
                         .opacity(isHovering ? 1 : 0)
                 }
@@ -278,7 +299,7 @@ private struct HydraPairRow: View {
                 withAnimation(Chrome.panelSlide) { model.removeHydraPair(pair.id) }
             } label: {
                 Image(systemName: "minus.circle")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(.callout, weight: .medium))
                     .foregroundStyle(Chrome.secondaryText)
                     .frame(width: 24, height: 24)
                     .contentShape(.rect)
@@ -297,13 +318,14 @@ private struct HydraPairRow: View {
     }
 
     /// The row's second line: only what the title and the icons do not already say. The
-    /// title names the models, the icons the providers, so this reads the efforts, a head
-    /// cap when one is set, and a warning when the heads' provider is not set up. Defaults
-    /// say nothing: a pair with no effort chosen and no cap has one short line.
+    /// title names the models, the icons the providers, so this reads the efforts and
+    /// speeds, a head cap when one is set, and a warning when the heads' provider is not
+    /// set up. Defaults say nothing: a pair with no effort chosen and no cap has one short line.
     private func summary(registry: ProviderRegistry) -> String {
         var parts = [HydraPairSummary.providers(pair)]
         if pair.customName != nil { parts.insert(HydraPairSummary.modelsTitle(pair, registry: registry), at: 0) }
         if let efforts = HydraPairSummary.efforts(pair) { parts.append(efforts) }
+        if let speeds = HydraPairSummary.speeds(pair, registry: registry) { parts.append(speeds) }
         if let cap = pair.maxHeads {
             parts.append(cap == 1 ? "One head at a time" : "Up to \(cap) heads")
         }
@@ -356,6 +378,10 @@ private struct HydraPairEditor: View {
             // Heads with no model chosen inherit the chat's, and its efforts; on another
             // provider they run its default model, so its efforts are the ones on offer.
             let workerEfforts = Self.efforts(of: workerOption, fallback: pair.sendsHeadsElsewhere ? Self.efforts(of: registry.defaultModel(for: pair.headsProvider), fallback: Self.allEfforts(headsOptions)) : leadEfforts)
+            // The speeds follow the same models: a lead on any model offers every tier the
+            // provider's models list, heads the tiers of the model they run on.
+            let leadSpeeds = leadOption?.speeds ?? Self.allSpeeds(options)
+            let workerSpeeds = workerOption?.speeds ?? (pair.sendsHeadsElsewhere ? registry.defaultModel(for: pair.headsProvider)?.speeds ?? Self.allSpeeds(headsOptions) : leadSpeeds)
             VStack(alignment: .leading, spacing: 0) {
                 // The name is the header: the pair's own word for itself, over what it
                 // stands for in the picker when it has none.
@@ -367,13 +393,13 @@ private struct HydraPairEditor: View {
                     .textFieldStyle(.plain)
                     .focused($isNameFocused)
                     .focusEffectDisabled()
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.title3, weight: .semibold))
                     .foregroundStyle(Chrome.primaryText)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .background(Chrome.overlay(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     Text("Shown in the picker and the composer")
-                        .font(.system(size: 11))
+                        .font(.system(.subheadline))
                         .foregroundStyle(Chrome.secondaryText)
                         .padding(.horizontal, 2)
                 }
@@ -391,6 +417,7 @@ private struct HydraPairEditor: View {
                                     $0.provider = provider
                                     $0.orchestratorModel = nil
                                     $0.orchestratorEffort = nil
+                                    $0.orchestratorSpeed = nil
                                     // Heads on the old lead provider go with it; heads on a
                                     // provider of their own keep their model and effort, and
                                     // when that provider is the new lead's, they are simply
@@ -398,6 +425,7 @@ private struct HydraPairEditor: View {
                                     if $0.workerProvider == nil {
                                         $0.workerModel = nil
                                         $0.workerEffort = nil
+                                        $0.workerSpeed = nil
                                     } else if $0.workerProvider == provider {
                                         $0.workerProvider = nil
                                     }
@@ -419,6 +447,9 @@ private struct HydraPairEditor: View {
                                     if let effort = $0.orchestratorEffort, let option = registry.model(id, for: $0.provider), !option.efforts.contains(effort) {
                                         $0.orchestratorEffort = nil
                                     }
+                                    if let speed = $0.orchestratorSpeed, speed != ModelSpeedTier.standardID, let option = registry.model(id, for: $0.provider), !option.speeds.contains(where: { $0.id == speed }) {
+                                        $0.orchestratorSpeed = nil
+                                    }
                                 }
                             }
                         ),
@@ -437,6 +468,17 @@ private struct HydraPairEditor: View {
                         )
                     }
                 }
+                if !leadSpeeds.isEmpty {
+                    editorRow("Speed") {
+                        GlassPickerButton(
+                            options: [(String?.none, "Chat's speed"), (Optional(ModelSpeedTier.standardID), "Standard")] + leadSpeeds.map { (Optional($0.id), $0.name) },
+                            selection: Binding(
+                                get: { pair.orchestratorSpeed },
+                                set: { speed in model.updateHydraPair(pairID) { $0.orchestratorSpeed = speed } }
+                            )
+                        )
+                    }
+                }
                 sectionLabel("Heads")
                 editorRow("Provider") {
                     GlassPickerButton(
@@ -451,6 +493,7 @@ private struct HydraPairEditor: View {
                                     $0.workerProvider = chosen
                                     $0.workerModel = nil
                                     $0.workerEffort = nil
+                                    $0.workerSpeed = nil
                                 }
                                 if let provider { Task { await registry.loadCatalog(provider) } }
                             }
@@ -468,6 +511,9 @@ private struct HydraPairEditor: View {
                                     $0.workerModel = id
                                     if let effort = $0.workerEffort, let option = registry.model(id, for: $0.headsProvider), !option.efforts.contains(effort) {
                                         $0.workerEffort = nil
+                                    }
+                                    if let speed = $0.workerSpeed, let option = registry.model(id, for: $0.headsProvider), !option.speeds.contains(where: { $0.id == speed }) {
+                                        $0.workerSpeed = nil
                                     }
                                 }
                             }
@@ -487,6 +533,17 @@ private struct HydraPairEditor: View {
                         )
                     }
                 }
+                if !workerSpeeds.isEmpty {
+                    editorRow("Speed") {
+                        GlassPickerButton(
+                            options: [(String?.none, "Standard")] + workerSpeeds.map { (Optional($0.id), $0.name) },
+                            selection: Binding(
+                                get: { pair.workerSpeed == ModelSpeedTier.standardID ? nil : pair.workerSpeed },
+                                set: { speed in model.updateHydraPair(pairID) { $0.workerSpeed = speed } }
+                            )
+                        )
+                    }
+                }
                 editorRow("At once") {
                     GlassPickerButton(
                         options: [(Int?.none, "As many as it takes")] + HydraPair.maxHeadsRange.map { (Optional($0), String($0)) },
@@ -499,7 +556,7 @@ private struct HydraPairEditor: View {
                 ForEach(Self.catalogProviders(pair), id: \.self) { provider in
                     if registry.models(for: provider).isEmpty {
                         Text(registry.loadingCatalogs.contains(provider) ? "Loading \(provider.displayName)'s models…" : "No models loaded for \(provider.displayName) yet.")
-                            .font(.system(size: 11))
+                            .font(.system(.subheadline))
                             .foregroundStyle(Chrome.secondaryText)
                             .padding(.horizontal, 14)
                             .padding(.top, 8)
@@ -523,13 +580,13 @@ private struct HydraPairEditor: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: title)
-                    .font(.system(size: 13))
+                    .font(.system(.body))
                     .foregroundStyle(Chrome.primaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if let detail {
                     Text(verbatim: detail)
-                        .font(.system(size: 11))
+                        .font(.system(.subheadline))
                         .foregroundStyle(Chrome.secondaryText)
                 }
             }
@@ -549,7 +606,7 @@ private struct HydraPairEditor: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
             Text(verbatim: title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(Chrome.secondaryText)
                 .padding(.horizontal, 14)
                 .padding(.top, 10)
@@ -569,6 +626,16 @@ private struct HydraPairEditor: View {
         var seen: [String] = []
         for option in options {
             for effort in option.efforts where !seen.contains(effort) { seen.append(effort) }
+        }
+        return seen
+    }
+
+    /// Every speed tier any of the provider's models lists, each once, in the order the
+    /// first lists them.
+    private static func allSpeeds(_ options: [ModelOption]) -> [ModelSpeedTier] {
+        var seen: [ModelSpeedTier] = []
+        for option in options {
+            for tier in option.speeds where !seen.contains(where: { $0.id == tier.id }) { seen.append(tier) }
         }
         return seen
     }

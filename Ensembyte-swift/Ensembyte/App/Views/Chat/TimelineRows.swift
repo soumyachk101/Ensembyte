@@ -68,6 +68,30 @@ struct UserMessageRow: View {
     /// timeline, which reads the provider and the turn list once for every row.
     let canRevert: Bool
 
+    @Environment(\.revealTimelineEnd) private var revealBox
+    @Environment(\.timelineBlockID) private var blockID
+    @State private var fallbackExpanded = false
+    private var promptExpanded: Bool {
+        get { revealBox?.presentation.prompts[entry.id] ?? fallbackExpanded }
+        nonmutating set {
+            if let revealBox { revealBox.presentation.prompts[entry.id] = newValue }
+            else { fallbackExpanded = newValue }
+        }
+    }
+
+    private func promptPreview(_ text: String) -> String {
+        if let cached = revealBox?.presentation.previews[entry.id] { return cached }
+        let lines = text.split(separator: "\n", maxSplits: 8, omittingEmptySubsequences: false)
+        let firstLines = lines.prefix(8).joined(separator: "\n")
+        var preview = String(firstLines.prefix(600))
+        if preview.count < firstLines.count, let boundary = preview.lastIndex(where: { $0.isWhitespace }) {
+            preview = String(preview[..<boundary])
+        }
+        if preview != text { preview = preview.trimmingCharacters(in: .whitespacesAndNewlines) + "…" }
+        revealBox?.presentation.previews[entry.id] = preview
+        return preview
+    }
+
     @State private var isHovering = false
     @State private var isConfirmingRevert = false
     /// Carries the edit-from-here intent out of the context menu without retaining the row.
@@ -90,6 +114,7 @@ struct UserMessageRow: View {
                     AttachmentStrip(attachments: message.attachments)
                 }
                 let parts = ReplyQuote.peel(message.text)
+                let preview = promptPreview(parts.body)
                 if !parts.quotes.isEmpty {
                     // The quotes the message led with, as the chips the chat box showed them in,
                     // so a reply reads as a reply and the bubble keeps only the typed words.
@@ -97,10 +122,10 @@ struct UserMessageRow: View {
                         ForEach(parts.quotes) { quote in
                             HStack(spacing: 5) {
                                 Image(systemName: "text.quote")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(Chrome.secondaryText)
                                 Text(verbatim: quote.excerpt)
-                                    .font(.system(size: 11))
+                                    .font(.system(.subheadline))
                                     .foregroundStyle(Chrome.primaryText.opacity(0.9))
                                     .lineLimit(1)
                                     .truncationMode(.tail)
@@ -119,13 +144,23 @@ struct UserMessageRow: View {
                     // The user's own words render like the answers do: a domain types as a link
                     // with its favicon in front. `hugsContent` keeps the bubble hugging its text
                     // instead of filling the row.
-                    InlineText(parts.body, hugsContent: true)
+                    InlineText(promptExpanded ? parts.body : preview, hugsContent: true)
                         .textSelection(.enabled)
                         .padding(.leading, 14)
                         // The tail hangs past the body; the text keeps its inset from the body.
                         .padding(.trailing, 14 + UserBubble.tail)
                         .padding(.vertical, 9)
                         .background(.tint.opacity(0.14), in: UserBubble())
+                }
+                if preview != parts.body {
+                    Button(promptExpanded ? "Show less" : "Show more") {
+                        revealBox?.disclosure(blockID, false)
+                        promptExpanded.toggle()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.chat(.callout))
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, UserBubble.tail)
                 }
                 HStack(spacing: 2) {
                     if canRevert, let turnID = entry.turnID {
@@ -234,7 +269,6 @@ struct UserMessageRow: View {
 /// team's work merged) takes the same row with the Hydra mark in the glyphs' place; a note
 /// that leads with the merge request's address links to it from the pill.
 struct HydraReportRow: View {
-    @Environment(\.chatZoom) private var zoom
     let message: UserMessage
 
     @State private var isShowingReport = false
@@ -248,7 +282,7 @@ struct HydraReportRow: View {
         // short human summary with the heads first, never the file-heavy detail.
         let parts = message.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
         let title = personas.isEmpty ? Self.withoutTrailingStop(String(parts.first ?? "Hydra")) : Self.reportSummary(names: names, text: message.text)
-        let body = personas.isEmpty ? String(parts.count > 1 ? parts[1] : "").trimmingCharacters(in: .whitespacesAndNewlines) : message.text
+        let body = personas.isEmpty ? String(parts.count > 1 ? parts[1] : "").trimmed : message.text
         // A merge note puts the merge request's address on the body's first line: that becomes
         // a link on the pill, and the chevron stays only for what the note says after it.
         let link = personas.isEmpty ? Self.leadingURL(in: body) : nil
@@ -277,13 +311,13 @@ struct HydraReportRow: View {
                     }
                     Text(verbatim: title)
                         .foregroundColor(Chrome.primaryText.opacity(0.9))
-                        .font(.chat(.callout, weight: .medium, zoom: zoom))
+                        .font(.chat(.callout, weight: .medium))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     if !details.isEmpty {
                         Image(systemName: "chevron.right")
-                            .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                            .foregroundStyle(.tertiary)
+                            .font(.chat(.caption2, weight: .semibold))
+                            .foregroundStyle(Chrome.secondaryText)
                     }
                 }
                 .contentShape(.rect)
@@ -305,7 +339,7 @@ struct HydraReportRow: View {
             if let link {
                 Link(destination: link) {
                     Text("Open")
-                        .font(.chat(.caption, weight: .semibold, zoom: zoom))
+                        .font(.chat(.caption, weight: .semibold))
                         .foregroundStyle(Chrome.secondaryText)
                 }
                 .help("Open in the browser")
@@ -384,13 +418,27 @@ struct HydraReportRow: View {
     /// The body past its first line: what a note says after the address it leads with.
     nonisolated static func withoutFirstLine(_ body: String) -> String {
         guard let newline = body.firstIndex(where: \.isNewline) else { return "" }
-        return String(body[newline...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(body[newline...]).trimmed
     }
 }
 
 /// The finished heads the block names, in the order it draws them: one small pill
 /// each, the report one tap away. The heads still at work get no pill here: the
 /// floating panel already shows them, and a row saying the same thing was noise.
+struct BackgroundTasksWorkingRow: View {
+    let descriptions: [String]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            MiniSpinner(cellSize: 2.4)
+            Text("Waiting on a background task: \(descriptions.first ?? "a background command")\(descriptions.count > 1 ? " and \(descriptions.count - 1) more" : "")")
+                .font(.chat(.callout))
+                .foregroundStyle(Chrome.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct HydraHeadsWorkingRow: View {
     @Environment(AppModel.self) private var model
     let heads: [Int]
@@ -437,7 +485,6 @@ struct HydraHeadsWorkingRow: View {
 /// A head finished while its batch still works: its outcome now, its report one tap away.
 /// The working pill's small twin, without the shimmer.
 private struct FinishedHeadPill: View {
-    @Environment(\.chatZoom) private var zoom
     let head: HydraHeadInfo
 
     @State private var isShowingReport = false
@@ -453,13 +500,13 @@ private struct FinishedHeadPill: View {
         } label: {
             HStack(spacing: 8) {
                 HydraGlyph(persona: head.persona, size: 18, status: head.status)
-                (HydraNameStyle.text(head.persona, base: Chrome.primaryText.opacity(0.75)) + Text(verbatim: head.status == .failed ? " failed" : (head.status == .stopped ? " was stopped" : " finished working")))
-                    .font(.chat(.callout, weight: .medium, zoom: zoom))
+                Text("\(HydraNameStyle.text(head.persona, base: Chrome.primaryText.opacity(0.75)))\(Text(verbatim: head.status == .failed ? " failed" : (head.status == .stopped ? " was stopped" : " finished working")))")
+                    .font(.chat(.callout, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Image(systemName: "chevron.right")
-                    .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                    .foregroundStyle(.tertiary)
+                    .font(.chat(.caption2, weight: .semibold))
+                    .foregroundStyle(Chrome.secondaryText)
             }
             .padding(.leading, TimelineMetrics.pillLeading)
             .padding(.trailing, TimelineMetrics.pillTrailing)
@@ -480,13 +527,14 @@ private struct FinishedHeadPill: View {
 /// A shimmer sweeping across the content on a loop: a narrow bright band sliding
 /// left to right, masked to the content itself. Still when reduced motion is on.
 private struct HydraShimmer: ViewModifier {
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
     @State private var width: CGFloat = 0
 
     /// One pass of the band, from off the left edge to off the right.
     private static let sweep: TimeInterval = 1.8
 
     func body(content: Content) -> some View {
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || performanceMode {
             content
         } else {
             // The band lives in a layer the size of the text and is masked to the text
@@ -527,7 +575,6 @@ private struct HydraShimmer: ViewModifier {
 /// turn has no assistant output yet the head is still cooking, so the pill reads so with
 /// the thinking shimmer; once the head has answered it reads as the brief.
 struct HydraBriefRow: View {
-    @Environment(\.chatZoom) private var zoom
     let message: UserMessage
     let entry: TimelineEntry
     let runtime: ThreadRuntime
@@ -566,13 +613,13 @@ struct HydraBriefRow: View {
                             Text(verbatim: title)
                         }
                     }
-                    .font(.chat(.callout, weight: .medium, zoom: zoom))
+                    .font(.chat(.callout, weight: .medium))
                     .foregroundStyle(Chrome.primaryText.opacity(0.9))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     Image(systemName: "chevron.right")
-                        .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                        .foregroundStyle(.tertiary)
+                        .font(.chat(.caption2, weight: .semibold))
+                        .foregroundStyle(Chrome.secondaryText)
                 }
                 .padding(.leading, TimelineMetrics.pillLeading)
                 .padding(.trailing, TimelineMetrics.pillTrailing)
@@ -629,11 +676,10 @@ private struct HydraReportPopover: View {
                         .equatable()
                 }
             }
-            // The note reads at the popover's own compact size, not the chat's.
-            .font(.system(size: 12))
+            // The note reads at the popover's own compact size.
+            .font(.system(.callout))
             .environment(\.markdownPointSize, 12)
             .environment(\.markdownDimmed, false)
-            .environment(\.chatZoom, 1)
             .textSelection(.enabled)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -650,9 +696,9 @@ private struct HydraReportPopover: View {
 /// and adds each head as its brief closes; while nothing has closed yet, or when the
 /// block cannot be read, it says the heads are being summoned and nothing more.
 struct HydraDelegationBlock: View {
-    @Environment(\.chatZoom) private var zoom
     let json: String
     var sent = false
+    @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
 
     var body: some View {
         let reading = Self.reading(of: json)
@@ -667,11 +713,11 @@ struct HydraDelegationBlock: View {
                     .frame(width: 16, height: 16)
                     .accessibilityHidden(true)
                 Text(verbatim: Self.title(for: delegations, streaming: streaming, sent: sent))
-                    .font(.chat(.callout, weight: .medium, zoom: zoom))
+                    .font(.chat(.callout, weight: .medium))
                     .contentTransition(.opacity)
                 if sent {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.chat(.callout, weight: .medium, zoom: zoom))
+                        .font(.chat(.callout, weight: .medium))
                         .foregroundStyle(.green)
                         .transition(.scale.combined(with: .opacity))
                         .accessibilityLabel("sent")
@@ -686,7 +732,7 @@ struct HydraDelegationBlock: View {
                         HStack(alignment: .center, spacing: TimelineMetrics.iconSpacing) {
                             Color.clear.frame(width: 16, height: 16)
                             Text("Writing the next brief…")
-                                .font(.chat(.caption, zoom: zoom))
+                                .font(.chat(.caption))
                                 .foregroundStyle(Chrome.secondaryText)
                         }
                     }
@@ -699,7 +745,7 @@ struct HydraDelegationBlock: View {
         .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: TimelineMetrics.pillRadius, style: .continuous))
         .overlay {
             // Out: one wave of the accent flows through the card, as through the heads panel.
-            if sent {
+            if !performanceMode, sent {
                 DotFieldSweep(tint: Chrome.accentNSColor)
                     .clipShape(RoundedRectangle(cornerRadius: TimelineMetrics.pillRadius, style: .continuous))
                     .transition(.opacity)
@@ -725,7 +771,7 @@ struct HydraDelegationBlock: View {
                     .accessibilityHidden(true)
             }
             Text(verbatim: delegation.task)
-                .font(.chat(.caption, zoom: zoom))
+                .font(.chat(.caption))
                 .foregroundStyle(Chrome.primaryText.opacity(0.75))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -735,7 +781,7 @@ struct HydraDelegationBlock: View {
                         .accessibilityHidden(true)
                     Text(verbatim: project)
                 }
-                .font(.chat(.caption2, weight: .medium, zoom: zoom))
+                .font(.chat(.caption2, weight: .medium))
                 .foregroundStyle(Chrome.secondaryText)
                 .lineLimit(1)
                 .padding(.leading, 2)
@@ -759,13 +805,13 @@ struct HydraDelegationBlock: View {
 
     /// The roster persona the lead announced for an entry, when it is a roster name.
     private static func persona(named name: String?) -> HydraPersona? {
-        guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let name, !name.trimmed.isEmpty else { return nil }
         return HydraRoster.persona(named: name)
     }
 
     /// A project the brief names, as its name: a path reads as its last folder.
     private static func projectName(_ project: String?) -> String? {
-        guard let project = project?.trimmingCharacters(in: .whitespacesAndNewlines), !project.isEmpty else { return nil }
+        guard let project = project?.trimmed, !project.isEmpty else { return nil }
         let name = project.contains("/") ? (project as NSString).lastPathComponent : project
         return name.isEmpty ? project : name
     }
@@ -795,7 +841,6 @@ enum HydraMergePhase: Equatable {
 
 /// A merge outcome note read for the pill: the title it leads with, the merge request's
 /// address when the body leads with one, and what the note says past that.
-@MainActor
 private struct HydraMergeOutcome {
     let title: String
     /// The note past its title, for the popover.
@@ -808,7 +853,7 @@ private struct HydraMergeOutcome {
     init(_ message: UserMessage) {
         let parts = message.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
         title = HydraReportRow.withoutTrailingStop(String(parts.first ?? "Hydra"))
-        body = String(parts.count > 1 ? parts[1] : "").trimmingCharacters(in: .whitespacesAndNewlines)
+        body = String(parts.count > 1 ? parts[1] : "").trimmed
         link = HydraReportRow.leadingURL(in: body)
         details = link == nil ? body : HydraReportRow.withoutFirstLine(body)
     }
@@ -847,7 +892,7 @@ struct HydraMergeTrack: View {
 }
 
 /// The track as drawn from its three continuous values; SwiftUI interpolates them.
-private struct HydraMergeTrackBody: View, @preconcurrency Animatable {
+private struct HydraMergeTrackBody: View, Animatable {
     /// The head's place along the track in dots: whole at rest on a dot, fractional in
     /// flight between two.
     var position: CGFloat
@@ -930,7 +975,6 @@ private struct HydraMergeTrackBody: View, @preconcurrency Animatable {
 /// this one row keeps its identity across the change and morphs: the contents crossfade
 /// while the capsule glides to the new width. It holds no condition of its own.
 struct HydraMergeRow: View {
-    @Environment(\.chatZoom) private var zoom
     let runtime: ThreadRuntime
     let phase: HydraMergePhase
 
@@ -1061,12 +1105,12 @@ struct HydraMergeRow: View {
             // outgoing text neither holds the pill wide until its fade ends (it snapped
             // narrower afterwards) nor runs past the slot over the time beside it.
             Text(verbatim: stage)
-                .font(.chat(.callout, weight: .medium, zoom: zoom))
+                .font(.chat(.callout, weight: .medium))
                 .hidden()
                 .overlay(alignment: .leading) {
                     ZStack(alignment: .leading) {
                         Text(verbatim: stage)
-                            .font(.chat(.callout, weight: .medium, zoom: zoom))
+                            .font(.chat(.callout, weight: .medium))
                             .foregroundStyle(Chrome.primaryText.opacity(0.9))
                             .modifier(HydraShimmer())
                             .fixedSize()
@@ -1092,7 +1136,7 @@ struct HydraMergeRow: View {
     private func mergingLabel(stage: String) -> some View {
         HStack(spacing: 8) {
             Text(verbatim: stage)
-                .font(.chat(.callout, weight: .medium, zoom: zoom))
+                .font(.chat(.callout, weight: .medium))
                 .animation(Self.change, value: stage)
         }
     }
@@ -1149,21 +1193,21 @@ struct HydraMergeRow: View {
     private func outcomeTitle(_ outcome: HydraMergeOutcome) -> some View {
         HStack(spacing: 8) {
             Text(verbatim: outcome.title)
-                .font(.chat(.callout, weight: .medium, zoom: zoom))
+                .font(.chat(.callout, weight: .medium))
                 .foregroundStyle(Chrome.primaryText.opacity(0.9))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if !outcome.details.isEmpty {
                 Image(systemName: "chevron.right")
-                    .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                    .foregroundStyle(.tertiary)
+                    .font(.chat(.caption2, weight: .semibold))
+                    .foregroundStyle(Chrome.secondaryText)
             }
         }
     }
 
     private var openLabel: some View {
         Text("Open")
-            .font(.chat(.caption, weight: .semibold, zoom: zoom))
+            .font(.chat(.caption, weight: .semibold))
             .foregroundStyle(Chrome.secondaryText)
     }
 }
@@ -1358,7 +1402,6 @@ struct AttachmentThumbnail: View {
 }
 
 struct AssistantMessageRow: View {
-    @Environment(\.chatZoom) private var zoom
     let entry: TimelineEntry
     /// The turn's summary, set only on the turn's last reply. Precomputed by the
     /// timeline, so rows never scan the thread.
@@ -1375,8 +1418,8 @@ struct AssistantMessageRow: View {
                 HStack(spacing: 8) {
                     if let summary {
                         Text(TurnEndRow.label(for: summary))
-                            .font(.chat(.caption, zoom: zoom))
-                            .foregroundStyle(.tertiary)
+                            .font(.chat(.caption))
+                            .foregroundStyle(Chrome.secondaryText)
                     }
                     Spacer(minLength: 8)
                 }
@@ -1446,128 +1489,6 @@ private struct FoldedAnswerView: View {
     }
 }
 
-/// Consecutive tool calls, rendered inline with no card: a summary header
-/// ("Edited files, ran commands") whose chevron collapses the rows. A group the
-/// agent has moved on from (reply text follows it) starts collapsed, so past work
-/// reads as one tappable line above the answer; the live group stays expanded.
-/// A lone tool renders as its row alone.
-struct WorkGroup: View {
-    @Environment(\.chatZoom) private var zoom
-    let entries: [TimelineEntry]
-    let runtime: ThreadRuntime
-    var workingDirectory: String?
-    var startsCollapsed = false
-    @State private var isCollapsed: Bool
-    @State private var showsAll = false
-    @Environment(\.revealTimelineEnd) private var revealBox
-
-    init(entries: [TimelineEntry], runtime: ThreadRuntime, workingDirectory: String? = nil, startsCollapsed: Bool = false) {
-        self.entries = entries
-        self.runtime = runtime
-        self.workingDirectory = workingDirectory
-        self.startsCollapsed = startsCollapsed
-        _isCollapsed = State(initialValue: startsCollapsed)
-    }
-
-    var body: some View {
-        if entries.count == 1, let only = entries.first {
-            ToolRow(entry: only, runtime: runtime, workingDirectory: workingDirectory)
-        } else {
-            VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
-                Button {
-                    if isCollapsed {
-                        withAnimation(.snappy(duration: 0.24)) {
-                            isCollapsed = false
-                        }
-                        revealBox?.action()
-                    } else {
-                        withAnimation(.snappy(duration: 0.24)) {
-                            isCollapsed = true
-                        }
-                    }
-                } label: {
-                    HStack(spacing: TimelineMetrics.iconSpacing) {
-                        Image(systemName: WorkGroupSummary.symbol(for: entries))
-                            .font(.chat(.caption, zoom: zoom))
-                            .foregroundStyle(.secondary)
-                            .frame(width: TimelineMetrics.iconWidth)
-                        Text(WorkGroupSummary.text(for: entries))
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(isCollapsed ? 0 : 90))
-                    }
-                    .font(.chat(.callout, zoom: zoom))
-                    .padding(.trailing, 12)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .help(isCollapsed ? "Show these steps" : "Hide these steps")
-                .accessibilityLabel(Text(isCollapsed ? "Show these steps" : "Hide these steps"))
-                if !isCollapsed {
-                    WorkSteps(entries: entries, runtime: runtime, workingDirectory: workingDirectory, showsAll: $showsAll)
-                }
-            }
-            .onChange(of: startsCollapsed) { _, collapsed in
-                // One-way: arriving reply text collapses the group, but a group
-                // the reader opened never snaps shut on its own.
-                if collapsed { isCollapsed = true }
-            }
-        }
-    }
-}
-
-/// A tool group's rows: only the two latest steps show, the rest fold under
-/// one "N earlier steps" line until tapped. Shared by the expanded work group
-/// and the running turn's working line.
-struct WorkSteps: View {
-    @Environment(\.chatZoom) private var zoom
-    let entries: [TimelineEntry]
-    let runtime: ThreadRuntime
-    var workingDirectory: String?
-    @Binding var showsAll: Bool
-    @Environment(\.revealTimelineEnd) private var revealBox
-
-    var body: some View {
-        let hidden = showsAll ? 0 : max(0, entries.count - 2)
-        if hidden > 0 {
-            Button {
-                withAnimation(.snappy(duration: 0.24)) {
-                    showsAll = true
-                    revealBox?.action()
-                }
-            } label: {
-                HStack(spacing: TimelineMetrics.iconSpacing) {
-                    Image(systemName: "ellipsis")
-                        .font(.chat(.caption, zoom: zoom))
-                        .foregroundStyle(.secondary)
-                        .frame(width: TimelineMetrics.iconWidth)
-                    Text(hidden == 1 ? "1 earlier step" : "\(hidden) earlier steps")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.chat(.callout, zoom: zoom))
-                .padding(.trailing, 12)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-        }
-        ForEach(entries.suffix(entries.count - hidden)) { entry in
-            if case .assistant(let message) = entry.item.content {
-                // What the agent said between two steps, read as a step of the work: small
-                // and dimmed like its thinking, in line with the tool rows.
-                MarkdownView(text: message.text, isStreaming: message.isStreaming).equatable()
-                    .foregroundStyle(.secondary)
-                    .environment(\.markdownPointSize, 12)
-                    .environment(\.markdownDimmed, true)
-                    .padding(.leading, TimelineMetrics.iconWidth + TimelineMetrics.iconSpacing)
-            } else {
-                ToolRow(entry: entry, runtime: runtime, workingDirectory: workingDirectory)
-            }
-        }
-    }
-}
-
 /// The heads a turn sent out, one tool row each, as a plain list: no header, no
 /// chevron, never folded. Sits below the turn's steps and replies while the turn runs
 /// and under the folded turn once it is over, so a head never disappears with the steps.
@@ -1586,69 +1507,14 @@ struct HydraHeadsList: View {
     }
 }
 
-/// The "Edited files, ran commands" line above a tool group, derived from the
-/// calls' kinds rather than their localized titles. First part capitalized, the
-/// rest lowered, in a fixed kind order. A kind with a call still running reads
-/// in the present tense ("Editing files, ran commands").
-///
-/// Main-actor isolated like the entries it reads: `TimelineEntry.item` lives on
-/// the main actor, so this can only run where view bodies run.
-@MainActor
-enum WorkGroupSummary {
-    private static let order: [ToolCall.Kind] = [.edit, .read, .command, .search, .web, .mcp, .agent, .other]
-
-    static func text(for entries: [TimelineEntry]) -> String {
-        // Kind → whether a call of it is still running, in one pass; this runs once a
-        // second under the working indicator.
-        var running: [ToolCall.Kind: Bool] = [:]
-        for entry in entries {
-            guard case .tool(let call) = entry.item.content else { continue }
-            running[call.kind, default: false] = running[call.kind, default: false] || call.status == .running
-        }
-        var parts: [String] = []
-        for kind in order {
-            guard let isRunning = running[kind] else { continue }
-            parts.append(label(for: kind, running: isRunning))
-        }
-        if parts.isEmpty { return "Worked" }
-        guard parts.count > 1 else { return parts[0] }
-        let rest = parts.dropFirst().map { part -> String in
-            guard let head = part.first else { return part }
-            return String(head).lowercased() + String(part.dropFirst())
-        }
-        return ([parts[0]] + rest).joined(separator: ", ")
-    }
-
-    static func symbol(for entries: [TimelineEntry]) -> String {
-        let kinds = Set(entries.compactMap { entry -> ToolCall.Kind? in
-            guard case .tool(let call) = entry.item.content else { return nil }
-            return call.kind
-        })
-        let order: [ToolCall.Kind] = [.edit, .read, .command, .search, .web, .mcp, .agent, .other]
-        guard let first = order.first(where: { kinds.contains($0) }) else { return "wrench.and.screwdriver" }
-        return ToolPresentation.symbol(for: first)
-    }
-
-    private static func label(for kind: ToolCall.Kind, running: Bool) -> String {
-        switch kind {
-        case .edit: running ? "Editing files" : "Edited files"
-        case .read: running ? "Reading files" : "Read files"
-        case .command: running ? "Running commands" : "Ran commands"
-        case .search: running ? "Searching" : "Searched"
-        case .web: running ? "Browsing" : "Browsed"
-        case .mcp: running ? "Calling tools" : "Called tools"
-        case .agent: running ? "Delegating tasks" : "Delegated tasks"
-        case .other: running ? "Using tools" : "Used tools"
-        }
-    }
-}
-
 struct ToolRow: View {
-    @Environment(\.chatZoom) private var zoom
     @Environment(AppModel.self) private var model
     let entry: TimelineEntry
     let runtime: ThreadRuntime
     var workingDirectory: String?
+    /// Set on the edit lines a command's row shows under itself: the files the command
+    /// changed, drawn as an edit tool's row over them (see `shownCall`).
+    var commandEdits: [FileEdit]?
     @State private var isExpanded = false
     /// The row's label (icon through chevron), so the changes popover hangs from the
     /// text that was tapped, and the panel that shows an image the agent looked at.
@@ -1664,9 +1530,13 @@ struct ToolRow: View {
     /// Whether the steps popover of the head this row sent out is open.
     @State private var isShowingHead = false
     @Environment(\.revealTimelineEnd) private var revealBox
+    /// Drawn as a step of a work group's tree (see `ActivityGroup`).
+    @Environment(\.activityTreeStyle) private var treeStyle
+    @State private var isHovering = false
 
     var body: some View {
-        if case .tool(let call) = entry.item.content {
+        if case .tool(let reported) = entry.item.content {
+            let call = shownCall(reported)
             // A row that carries a diff never unfolds: the diff opens in the changes
             // popover, below the row's label. A read of an image opens the image itself
             // the same way, whatever text came with it, and so does any other row with an
@@ -1692,7 +1562,7 @@ struct ToolRow: View {
             let diffEdits = edits
             let slot = preview
             let rt = runtime
-            VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
+            VStack(alignment: .leading, spacing: treeStyle ? 8 : TimelineMetrics.rowSpacing) {
                 if isTappable {
                     Button {
                         [weak slot, weak rt, revealBox, presented = $isShowingHead, expanded = $isExpanded] in
@@ -1722,9 +1592,47 @@ struct ToolRow: View {
                     ToolDetailView(call: call, workingDirectory: workingDirectory)
                         .padding(.trailing, 12)
                 }
+                // What a command changed reads as the edit tools' work does: one edit line
+                // per file under the command, each opening its own diff, with the rest
+                // past a handful gathered on one line.
+                if commandEdits == nil, reported.kind == .command {
+                    let changed = reported.edits.filter { !$0.path.isEmpty }
+                    let shown = changed.count > Self.commandEditLines ? Self.commandEditLines - 1 : changed.count
+                    ForEach(changed.prefix(shown), id: \.path) { edit in
+                        ToolRow(entry: entry, runtime: runtime, workingDirectory: workingDirectory, commandEdits: [edit])
+                    }
+                    if changed.count > shown {
+                        ToolRow(entry: entry, runtime: runtime, workingDirectory: workingDirectory, commandEdits: Array(changed.dropFirst(shown)))
+                    }
+                }
             }
             .onDisappear { [weak slot] in slot?.close() }
         }
+    }
+
+    /// How many edit lines a command's row shows under itself before the rest share one.
+    private static let commandEditLines = 6
+
+    /// The call this row draws. A command's own row leaves out the files it changed, which
+    /// follow as edit lines, so it still unfolds to its output; an edit line is an edit
+    /// tool's finished call over its files, named by the one file or by how many there are.
+    private func shownCall(_ reported: ToolCall) -> ToolCall {
+        guard reported.kind == .command else { return reported }
+        guard let commandEdits else {
+            var command = reported
+            command.edits = []
+            return command
+        }
+        let title = if commandEdits.count == 1, let only = commandEdits.first {
+            workingDirectory.map { ToolTitles.relativePath(only.path, to: $0) } ?? only.path
+        } else {
+            "\(commandEdits.count) more files"
+        }
+        var edit = ToolCall(kind: .edit, title: title, status: .completed)
+        edit.edits = commandEdits
+        edit.startedAt = reported.startedAt
+        edit.finishedAt = reported.finishedAt
+        return edit
     }
 
     /// The head a delegation call is sending out, read from the call itself before its
@@ -1732,13 +1640,13 @@ struct ToolRow: View {
     /// the face; otherwise the team's first face stands in and the row speaks of "a head".
     /// The task is the title past the name.
     private static func departingHead(for call: ToolCall) -> (persona: HydraPersona, name: String?, task: String) {
-        let title = call.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = call.title.trimmed
         // "Subagent" and the like are the tool's own word for itself, not a task.
         let generic: Set<String> = ["subagent", "agent", "task", ""]
         if let colon = title.firstIndex(of: ":") {
-            let name = String(title[..<colon]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = String(title[..<colon]).trimmed
             if let persona = HydraRoster.persona(named: name) {
-                let task = String(title[title.index(after: colon)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let task = String(title[title.index(after: colon)...]).trimmed
                 return (persona, persona.name, task)
             }
         }
@@ -1772,15 +1680,14 @@ struct ToolRow: View {
         // The slot alone: the hover responder and the anchor view must not keep this
         // row's entry (and its text) alive after it scrolls away.
         let previewSlot = preview
-        let isHydraOn = model.thread(runtime.threadID).map(model.hydraIsOn) ?? false
         // A row that sent out a head wears the head's glyph and name, in the badge the
         // finished turn's card and the working line wear, rather than as a line of text.
-        let head = isHydraOn && call.kind == .agent ? runtime.hydraHead(forTool: entry.id).flatMap { model.thread($0)?.hydra } : nil
+        let head = call.kind == .agent ? runtime.hydraHead(forTool: entry.id).flatMap { model.thread($0)?.hydra } : nil
         // Before the head's thread is linked to the call (the moment it goes out, or a
         // call that failed to send one), the row still wears a head's glyph and speaks of
         // sending it out: the name from the call's own title when it leads with one from
         // the roster, else the team's first face. Never a spinner and "Delegating Subagent".
-        let departing: (persona: HydraPersona, name: String?, task: String)? = isHydraOn && call.kind == .agent && head == nil ? Self.departingHead(for: call) : nil
+        let departing: (persona: HydraPersona, name: String?, task: String)? = call.kind == .agent && head == nil ? Self.departingHead(for: call) : nil
         let mcp = ToolPresentation.mcpParts(call)
         let isBadge = head != nil || departing != nil || mcp != nil
         HStack(spacing: TimelineMetrics.iconSpacing) {
@@ -1793,32 +1700,46 @@ struct ToolRow: View {
                 } else if let mcp {
                     MCPGlyph(entry: mcp.entry, size: 18, isRunning: call.status == .running, status: call.status)
                 } else {
-                    ToolStatusIcon(call: call, symbol: imagePath != nil && call.kind == .read ? "photo" : nil)
+                    ToolStatusIcon(call: call, symbol: imagePath != nil && call.kind == .read ? "photo" : nil, showsProgress: !treeStyle)
                 }
-                // One text run after the icon, so the row reads as
-                // icon + space + text instead of three spaced items.
-                Text(head.map { "\(call.status == .running ? "Sending out" : "Sent out") \($0.persona.name): \(call.title)" }
-                    ?? departing.map { Self.departureLabel(for: call, name: $0.name, task: $0.task) }
-                    ?? mcp.map { ToolPresentation.mcpLabel(entry: $0.entry, tool: $0.tool, running: call.status == .running) }
-                    ?? ToolPresentation.label(for: call))
-                    .font(isBadge ? .chat(.callout, weight: .medium, zoom: zoom) : .chat(.callout, zoom: zoom))
-                    .foregroundStyle(isBadge ? AnyShapeStyle(Chrome.primaryText.opacity(0.9)) : AnyShapeStyle(.secondary))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if treeStyle, !isBadge {
+                    // A step of the tree: the call's verb, then what it ran on, quieter.
+                    // One line: a command written over several reads as one, cut at the end.
+                    let subject = ToolPresentation.subject(for: call).split(whereSeparator: \.isNewline).joined(separator: " ")
+                    let verb = Text(ToolPresentation.treeVerb(for: call)).foregroundStyle(Chrome.primaryText.opacity(0.85))
+                    Text("\(verb) \(Text(verbatim: subject).foregroundStyle(Chrome.secondaryText))")
+                        .font(.chat(.callout))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                } else {
+                    // One text run after the icon, so the row reads as
+                    // icon + space + text instead of three spaced items.
+                    Text(head.map { "\(call.status == .running ? "Sending out" : "Sent out") \($0.persona.name): \(call.title)" }
+                        ?? departing.map { Self.departureLabel(for: call, name: $0.name, task: $0.task) }
+                        ?? mcp.map { ToolPresentation.mcpLabel(entry: $0.entry, tool: $0.tool, running: call.status == .running) }
+                        ?? ToolPresentation.label(for: call))
+                        .font(isBadge ? .chat(.callout, weight: .medium) : .chat(.callout))
+                        .foregroundStyle(isBadge ? AnyShapeStyle(Chrome.primaryText.opacity(0.9)) : AnyShapeStyle(.secondary))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 if let stats = ToolPresentation.stats(for: call) {
                     DiffStatLabel(additions: stats.additions, deletions: stats.deletions)
                 }
                 // Beside the subject, not out at the trailing edge: the chevron
                 // belongs to the row's own text.
+                // In the tree it waits for the pointer, so a column of steps reads as words.
                 if opensPopover || opensHead {
                     Image(systemName: "chevron.down")
-                        .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                        .foregroundStyle(.tertiary)
+                        .font(.chat(.caption2, weight: .semibold))
+                        .foregroundStyle(Chrome.secondaryText)
+                        .opacity(treeStyle && !isHovering ? 0 : 1)
                 } else if showsOutput {
                     Image(systemName: "chevron.right")
-                        .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                        .foregroundStyle(.tertiary)
+                        .font(.chat(.caption2, weight: .semibold))
+                        .foregroundStyle(Chrome.secondaryText)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .opacity(treeStyle && !isHovering && !isExpanded ? 0 : 1)
                 }
             }
             .padding(.leading, isBadge ? TimelineMetrics.pillLeading : 0)
@@ -1830,8 +1751,9 @@ struct ToolRow: View {
                         .fill(.quaternary.opacity(0.32))
                 }
             }
-            .onHover { [needed = $needsAnchor] hovering in
+            .onHover { [needed = $needsAnchor, hovered = $isHovering, treeStyle] hovering in
                 if hovering, !needed.wrappedValue { needed.wrappedValue = true }
+                if treeStyle { hovered.wrappedValue = hovering }
             }
             .background {
                 if opensPopover, needsAnchor {
@@ -1844,15 +1766,15 @@ struct ToolRow: View {
             Spacer(minLength: 8)
             if call.status == .failed, let exitCode = call.exitCode {
                 Text("exit \(exitCode)")
-                    .font(.chat(.caption, zoom: zoom).monospacedDigit())
+                    .font(.chat(.caption).monospacedDigit())
                     .foregroundStyle(Chrome.danger)
             } else if call.status == .declined {
                 Text("Declined")
-                    .font(.chat(.caption, zoom: zoom))
+                    .font(.chat(.caption))
                     .foregroundStyle(Chrome.warning)
             }
         }
-        .font(.chat(.callout, zoom: zoom))
+        .font(.chat(.callout))
         .padding(.trailing, 12)
     }
 
@@ -1887,7 +1809,6 @@ private struct HeadStepsPopoverModifier: ViewModifier {
 /// Reads the head's own runtime straight from the model, so the list grows while the
 /// head still works.
 struct HydraHeadStepsPopover: View {
-    @Environment(\.chatZoom) private var zoom
     let headID: UUID
     @Environment(AppModel.self) private var model
 
@@ -1899,7 +1820,7 @@ struct HydraHeadStepsPopover: View {
         let steps = Self.steps(in: model.runtime(for: headID).entries)
         let report = hydra.flatMap { head -> String? in
             guard head.isFinished else { return nil }
-            let text = (head.summary ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = (head.summary ?? "").trimmed
             return text.isEmpty ? nil : text
         }
         PopoverScroll(maxHeight: Self.maxHeight) {
@@ -1908,7 +1829,7 @@ struct HydraHeadStepsPopover: View {
                     header(hydra)
                     if !hydra.task.isEmpty {
                         Text(verbatim: hydra.task)
-                            .font(.chat(.callout, zoom: zoom))
+                            .font(.chat(.callout))
                             .foregroundStyle(Chrome.primaryText)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1918,7 +1839,7 @@ struct HydraHeadStepsPopover: View {
                     sectionTitle("Steps")
                     if steps.isEmpty {
                         Text("No steps yet.")
-                            .font(.chat(.callout, zoom: zoom))
+                            .font(.chat(.callout))
                             .foregroundStyle(Chrome.secondaryText)
                     } else {
                         ForEach(steps) { entry in
@@ -1930,7 +1851,7 @@ struct HydraHeadStepsPopover: View {
                     VStack(alignment: .leading, spacing: 8) {
                         sectionTitle("Report")
                         Text(verbatim: report)
-                            .font(.chat(.callout, zoom: zoom))
+                            .font(.chat(.callout))
                             .foregroundStyle(Chrome.primaryText)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1948,11 +1869,11 @@ struct HydraHeadStepsPopover: View {
         HStack(alignment: .center, spacing: TimelineMetrics.iconSpacing) {
             HydraGlyph(persona: hydra.persona, size: 22, isRunning: hydra.status == .running, status: hydra.status)
             Text(verbatim: hydra.persona.name)
-                .font(.chat(.headline, zoom: zoom))
+                .font(.chat(.headline))
                 .foregroundStyle(Chrome.primaryText)
             Spacer(minLength: 12)
             Text(verbatim: Self.statusLine(for: hydra))
-                .font(.chat(.caption, zoom: zoom))
+                .font(.chat(.caption))
                 .foregroundStyle(Chrome.secondaryText)
                 .lineLimit(1)
         }
@@ -1960,7 +1881,7 @@ struct HydraHeadStepsPopover: View {
 
     private func sectionTitle(_ title: String) -> some View {
         Text(verbatim: title)
-            .font(.chat(.caption, weight: .semibold, zoom: zoom))
+            .font(.chat(.caption, weight: .semibold))
             .foregroundStyle(Chrome.secondaryText)
     }
 
@@ -1980,8 +1901,8 @@ struct HydraHeadStepsPopover: View {
                 }
                 .frame(width: TimelineMetrics.iconWidth)
                 Text(verbatim: mcp.map { ToolPresentation.mcpLabel(entry: $0.entry, tool: $0.tool, running: call.status == .running) } ?? ToolPresentation.label(for: call))
-                    .font(.chat(.callout, zoom: zoom))
-                    .foregroundStyle(.secondary)
+                    .font(.chat(.callout))
+                    .foregroundStyle(Chrome.secondaryText)
                     .lineLimit(2)
                     .truncationMode(.middle)
                 if let stats = ToolPresentation.stats(for: call) {
@@ -1990,25 +1911,25 @@ struct HydraHeadStepsPopover: View {
             }
         case .assistant(let message):
             Text(verbatim: message.text)
-                .font(.chat(.callout, zoom: zoom))
+                .font(.chat(.callout))
                 .foregroundStyle(Chrome.primaryText)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case .user(let message):
             // A later brief: the lead steering the head on.
             Text(verbatim: message.text)
-                .font(.chat(.callout, zoom: zoom))
+                .font(.chat(.callout))
                 .foregroundStyle(Chrome.secondaryText)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case .notice(let notice):
             HStack(alignment: .firstTextBaseline, spacing: TimelineMetrics.iconSpacing) {
                 Image(systemName: Self.noticeSymbol(for: notice.level))
-                    .font(.chat(.caption, zoom: zoom))
+                    .font(.chat(.caption))
                     .foregroundStyle(Self.noticeColor(for: notice.level))
                     .frame(width: TimelineMetrics.iconWidth)
                 Text(verbatim: notice.message)
-                    .font(.chat(.callout, zoom: zoom))
+                    .font(.chat(.callout))
                     .foregroundStyle(Self.noticeColor(for: notice.level))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2049,9 +1970,9 @@ struct HydraHeadStepsPopover: View {
                     sawBrief = true
                     return false
                 }
-                return !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                return !message.text.trimmed.isEmpty
             case .assistant(let message):
-                return !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                return !message.text.trimmed.isEmpty
             case .tool, .notice:
                 return true
             case .reasoning, .turnEnd, .plan, .todos:
@@ -2078,14 +1999,19 @@ struct HydraHeadStepsPopover: View {
 }
 
 private struct ToolStatusIcon: View {
-    @Environment(\.chatZoom) private var zoom
     let call: ToolCall
     /// Stands in for the kind's symbol: a photo for a read that looked at one.
     var symbol: String?
+    /// A running call spins; in a work group's tree it keeps its symbol, and the group's
+    /// title says the work is under way.
+    var showsProgress = true
 
     var body: some View {
         Group {
             switch call.status {
+            case .running where !showsProgress:
+                Image(systemName: symbol ?? ToolPresentation.symbol(for: call.kind))
+                    .foregroundStyle(Chrome.secondaryText)
             case .running:
                 ProgressView()
                     .controlSize(.mini)
@@ -2097,16 +2023,15 @@ private struct ToolStatusIcon: View {
                     .foregroundStyle(Chrome.warning)
             case .completed:
                 Image(systemName: symbol ?? ToolPresentation.symbol(for: call.kind))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Chrome.secondaryText)
             }
         }
-        .font(.chat(.caption, zoom: zoom))
+        .font(.chat(.caption))
         .frame(width: TimelineMetrics.iconWidth)
     }
 }
 
 private struct ToolDetailView: View {
-    @Environment(\.chatZoom) private var zoom
     let call: ToolCall
     var workingDirectory: String?
 
@@ -2134,8 +2059,8 @@ private struct ToolDetailView: View {
             }
             if let detail = call.detail, !detail.isEmpty {
                 Text(detail)
-                    .font(.chat(.caption, design: .monospaced, zoom: zoom))
-                    .foregroundStyle(.secondary)
+                    .font(.chat(.caption, design: .monospaced))
+                    .foregroundStyle(Chrome.secondaryText)
                     .textSelection(.enabled)
                     .lineLimit(12)
             }
@@ -2143,8 +2068,8 @@ private struct ToolDetailView: View {
                 if let diff = edit.diff, !diff.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(edit.path)
-                            .font(.chat(.caption, zoom: zoom))
-                            .foregroundStyle(.secondary)
+                            .font(.chat(.caption))
+                            .foregroundStyle(Chrome.secondaryText)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                         DiffLinesView(file: DiffDetailCache.file(diff: diff, path: edit.path), showsLineNumbers: false)
@@ -2163,7 +2088,7 @@ private struct ToolDetailView: View {
                 let visible = collapsed ? Self.head(of: output, lines: Self.outputLineLimit) : output
                 VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
                     Text(visible)
-                        .font(.chat(.caption, design: .monospaced, zoom: zoom))
+                        .font(.chat(.caption, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
@@ -2173,7 +2098,7 @@ private struct ToolDetailView: View {
                             showsFullOutput.toggle()
                         }
                         .buttonStyle(.link)
-                        .font(.chat(.caption, zoom: zoom))
+                        .font(.chat(.caption))
                     }
                 }
             }
@@ -2202,6 +2127,11 @@ enum ToolPresentation {
     /// "Editing Write file" — a leading word that only restates the kind goes, so it
     /// reads "Edited file".
     static func label(for call: ToolCall) -> String {
+        [verb(for: call), subject(for: call)].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    /// What the call ran on: its title, less a leading word that only restates the kind.
+    static func subject(for call: ToolCall) -> String {
         let roots: [String] = switch call.kind {
         case .command: ["run", "bash", "shell", "exec", "execute", "command"]
         case .read: ["read", "view", "open", "cat"]
@@ -2212,12 +2142,26 @@ enum ToolPresentation {
         case .agent: ["delegate", "agent", "task"]
         case .other: ["use"]
         }
-        var subject = call.title
         let words = call.title.split(separator: " ", maxSplits: 1)
         if let first = words.first?.lowercased(), roots.contains(first) {
-            subject = words.count > 1 ? String(words[1]) : ""
+            return words.count > 1 ? String(words[1]) : ""
         }
-        return [verb(for: call), subject].filter { !$0.isEmpty }.joined(separator: " ")
+        return call.title
+    }
+
+    /// The verb a step of the work tree leads with: the call's own name for itself, the
+    /// same whether it still runs or is done (the group's title carries that).
+    static func treeVerb(for call: ToolCall) -> String {
+        switch call.kind {
+        case .command: "Run"
+        case .read: "Read"
+        case .edit: "Edit"
+        case .search: "Search"
+        case .web: "Fetch"
+        case .mcp: "Call"
+        case .agent: "Delegate"
+        case .other: "Use"
+        }
     }
 
     static func verb(for call: ToolCall) -> String {
@@ -2257,8 +2201,8 @@ enum ToolPresentation {
     static func mcpParts(_ call: ToolCall) -> (entry: MCPCatalogEntry, tool: String)? {
         guard call.kind == .mcp else { return nil }
         guard let range = call.title.range(of: " · ") else { return nil }
-        let server = String(call.title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let tool = String(call.title[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let server = String(call.title[..<range.lowerBound]).trimmed
+        let tool = String(call.title[range.upperBound...]).trimmed
         guard !server.isEmpty, !tool.isEmpty else { return nil }
         guard let entry = MCPCatalog.entry(matching: server) else { return nil }
         return (entry, tool)
@@ -2270,7 +2214,6 @@ enum ToolPresentation {
 }
 
 struct PlanCard: View {
-    @Environment(\.chatZoom) private var zoom
     let entry: TimelineEntry
     let runtime: ThreadRuntime
 
@@ -2295,7 +2238,7 @@ struct PlanCard: View {
                 detail: {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Plan").font(.chat(.headline, zoom: zoom))
+                            Text("Plan").font(.chat(.headline))
                             Spacer()
                             CopyButton(text: plan.markdown)
                         }
@@ -2354,9 +2297,7 @@ struct PlanCard: View {
 }
 
 struct TodoListRow: View {
-    @Environment(\.chatZoom) private var zoom
     let entry: TimelineEntry
-    var runtime: ThreadRuntime? = nil
 
     var body: some View {
         if case .todos(let steps) = entry.item.content, !steps.isEmpty {
@@ -2365,8 +2306,8 @@ struct TodoListRow: View {
                     Image(systemName: "checklist")
                     Text("\(steps.count { $0.status == .done }) of \(steps.count) done")
                 }
-                .font(.chat(.caption, zoom: zoom))
-                .foregroundStyle(.secondary)
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.secondaryText)
                 ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: Self.symbol(for: step.status))
@@ -2374,11 +2315,8 @@ struct TodoListRow: View {
                         Text(step.text)
                             .foregroundStyle(step.status == .done ? .secondary : .primary)
                             .strikethrough(step.status == .done, color: .secondary)
-                        if !step.files.isEmpty {
-                            TodoStepChangesBadge(step: step, turnID: entry.turnID, runtime: runtime)
-                        }
                     }
-                    .font(.chat(.callout, zoom: zoom))
+                    .font(.chat(.callout))
                 }
             }
             .padding(14)
@@ -2403,66 +2341,7 @@ struct TodoListRow: View {
     }
 }
 
-private struct TodoStepChangesBadge: View {
-    @Environment(\.chatZoom) private var zoom
-    let step: TodoStep
-    let turnID: UUID?
-    let runtime: ThreadRuntime?
-
-    @State private var anchor = WeakView()
-    @State private var needsAnchor = false
-    @State private var isHovering = false
-
-    var body: some View {
-        let count = step.files.count
-        let additions = step.files.reduce(0) { $0 + $1.additions }
-        let deletions = step.files.reduce(0) { $0 + $1.deletions }
-        let title = count == 1 ? "1 file" : "\(count) files"
-        let anchorBox = anchor
-        let rt = runtime
-        let files = step.files
-        let turn = turnID
-
-        Button {
-            guard let view = anchorBox.value else { return }
-            rt?.showDiff(on: view, edge: .minY, turn: turn, focusEdits: files)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "pencil")
-                    .font(.chat(.caption2, zoom: zoom))
-                    .foregroundStyle(Chrome.secondaryText)
-                Text(title)
-                    .font(.chat(.caption, weight: .medium, zoom: zoom))
-                    .foregroundStyle(Chrome.primaryText.opacity(0.85))
-                if additions > 0 || deletions > 0 {
-                    DiffStatLabel(additions: additions, deletions: deletions)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Chrome.overlay(isHovering ? 0.22 : 0.12), in: .rect(cornerRadius: 6, style: .continuous))
-            .contentShape(.rect(cornerRadius: 6, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(runtime == nil)
-        .help("Show changes for this task (\(files.map(\.path).joined(separator: ", ")))")
-        .onHover { hovering in
-            if hovering && !needsAnchor { needsAnchor = true }
-            withAnimation(.easeOut(duration: 0.12)) { isHovering = hovering }
-        }
-        .background {
-            if needsAnchor {
-                AttachmentAnchorCapture { [weak anchorBox] in anchorBox?.value = $0 }
-            }
-        }
-    }
-}
-
 struct NoticeRow: View {
-    @Environment(\.chatZoom) private var zoom
     let entry: TimelineEntry
 
     var body: some View {
@@ -2474,7 +2353,7 @@ struct NoticeRow: View {
                     .textSelection(.enabled)
                     .foregroundStyle(notice.level == .info ? .secondary : .primary)
             }
-            .font(.chat(.callout, zoom: zoom))
+            .font(.chat(.callout))
             .padding(.leading, notice.level == .info ? 0 : TimelineMetrics.pillLeading)
             .padding(.trailing, notice.level == .info ? 0 : TimelineMetrics.pillTrailing)
             .padding(.vertical, notice.level == .info ? 0 : TimelineMetrics.pillVertical)
@@ -2511,7 +2390,6 @@ struct NoticeRow: View {
 }
 
 struct TurnEndRow: View {
-    @Environment(\.chatZoom) private var zoom
     let summary: TurnSummary
     /// Whether the turn produced a reply. Set by the timeline; when true the duration
     /// lives on the reply's hover line instead.
@@ -2520,8 +2398,8 @@ struct TurnEndRow: View {
     var body: some View {
         if !hasReply {
             Text(Self.label(for: summary))
-                .font(.chat(.caption, zoom: zoom))
-                .foregroundStyle(.tertiary)
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -2559,7 +2437,6 @@ private struct MutedRoundGlyph: View {
 }
 
 struct TurnFinishedBlock: View {
-    @Environment(\.chatZoom) private var zoom
     let runtime: ThreadRuntime
     let turnID: UUID
     let summary: TurnSummary
@@ -2576,7 +2453,24 @@ struct TurnFinishedBlock: View {
     /// rather than opening to the steps from the folded answer.
     let chronological: Bool
 
-    @State private var isExpanded: Bool
+    @Environment(\.timelineBlockID) private var blockID
+    @State private var fallbackExpanded: Bool
+    private var isExpanded: Bool {
+        get { revealBox?.presentation.finished[turnID] ?? fallbackExpanded }
+        nonmutating set {
+            if let revealBox { revealBox.presentation.finished[turnID] = newValue }
+            else { fallbackExpanded = newValue }
+        }
+    }
+    @State private var stepLimit = 60
+
+    /// The paging row's words: the next page, or what is left when less than a page is.
+    static func earlierStepsLabel(hidden: Int) -> String {
+        let next = min(60, hidden)
+        return next == hidden
+            ? (hidden == 1 ? "Show 1 earlier step" : "Show \(hidden) earlier steps")
+            : "Show 60 earlier steps (\(hidden) hidden)"
+    }
 
     init(runtime: ThreadRuntime, turnID: UUID, summary: TurnSummary, userEntries: [TimelineEntry], content: [TimelineEntry], workingDirectory: String?, canUndo: Bool, chronological: Bool) {
         self.runtime = runtime
@@ -2587,7 +2481,7 @@ struct TurnFinishedBlock: View {
         self.workingDirectory = workingDirectory
         self.canUndo = canUndo
         self.chronological = chronological
-        _isExpanded = State(initialValue: chronological)
+        _fallbackExpanded = State(initialValue: chronological)
     }
     @Environment(\.revealTimelineEnd) private var revealBox
     /// What the body last derived from the turn, keyed on its entries' identities and the
@@ -2600,6 +2494,7 @@ struct TurnFinishedBlock: View {
     private struct DerivedKey: Equatable {
         var ids: [ObjectIdentifier]
         var expanded: Bool
+        var stepLimit: Int
     }
 
     @State private var legacyChanges: FileChangeSummary?
@@ -2607,49 +2502,41 @@ struct TurnFinishedBlock: View {
     /// Everything the body derives from the turn's content, gathered in one pass per
     /// render instead of a filter per use.
     private struct Derived {
-        /// Every reply with something to read, narration included, in order.
-        var assistantEntries: [TimelineEntry] = []
-        /// The turn's conclusive answer: the replies that follow its last tool call.
-        /// Prose between tool calls narrates work the collapsed turn doesn't show, and
-        /// stays with the steps behind the chevron. A turn that ended on a tool (stopped
-        /// or failed mid-work) keeps the last words it said rather than showing nothing.
-        var answerEntries: [TimelineEntry] = []
-        var collapsedPlans: [TimelineEntry] = []
-        /// Errors and warnings stay visible even when collapsed, so a failed turn
-        /// never hides what went wrong. Plain info notices stay in the expanded view.
-        var collapsedNotices: [TimelineEntry] = []
+        /// What the turn said, in order and folded or not: every reply with something to
+        /// read (the heads a lead sent out are drawn in its reply), its plans, and its
+        /// errors and warnings, so a failed turn never hides what went wrong. The chevron
+        /// opens the steps alone; plain info notices stay with them.
+        var conversation: [TimelineEntry] = []
         var hasEdits = false
         var hasResponse = false
         /// The heads the turn sent out, always shown below the final response, folded or not.
         var headEntries: [TimelineEntry] = []
-        /// The turn's full steps, built only while they are showing. The heads are not
-        /// among them: they have their list of their own below the response.
+        /// The turn's steps, built only while they are showing. Neither the conversation
+        /// nor the heads are among them: both stay in view below.
         var detailGroups: [TimelineGroup] = []
 
         @MainActor
-        init(content: [TimelineEntry], expanded: Bool) {
+        init(content: [TimelineEntry], expanded: Bool, stepLimit: Int) {
+            let narration = TimelineGroup.narration(in: content)
             for entry in content {
                 switch entry.kind {
+                case .assistant where narration.contains(ObjectIdentifier(entry)):
+                    // A line narrating the steps is one of them, behind the chevron.
+                    continue
                 case .assistant:
                     // A message still streaming when its turn failed can be blank. Asked
                     // character by character, which stops at the first word: trimming made
                     // a second copy of every reply in the turn on every render of the block.
                     guard case .assistant(let message) = entry.item.content,
                           message.text.contains(where: { !$0.isWhitespace }) else { continue }
-                    assistantEntries.append(entry)
-                    answerEntries.append(entry)
-                    hasResponse = true
+                    conversation.append(entry)
                 case .plan:
-                    collapsedPlans.append(entry)
+                    conversation.append(entry)
                 case .notice:
                     if case .notice(let notice) = entry.item.content, notice.level != .info {
-                        collapsedNotices.append(entry)
+                        conversation.append(entry)
                     }
                 case .tool:
-                    // Reaching for a tool ends the answer so far: whatever the model says
-                    // next is about the work, until it stops calling tools and concludes.
-                    // Plans, notices and checklists don't interrupt it.
-                    answerEntries.removeAll(keepingCapacity: true)
                     guard case .tool(let call) = entry.item.content else { continue }
                     if call.kind == .agent { headEntries.append(entry) }
                     if !call.edits.isEmpty { hasEdits = true }
@@ -2657,61 +2544,63 @@ struct TurnFinishedBlock: View {
                     break
                 }
             }
-            if answerEntries.isEmpty, let last = assistantEntries.last { answerEntries = [last] }
-            if !collapsedPlans.isEmpty || !collapsedNotices.isEmpty { hasResponse = true }
+            hasResponse = !conversation.isEmpty
             if expanded {
-                detailGroups = TimelineGroup.build(content, showReasoning: false).filter {
-                    if case .heads = $0 { return false }
-                    return true
+                let shown = Set(conversation.map(ObjectIdentifier.init))
+                detailGroups = TimelineGroup.build(Array(content.suffix(stepLimit)), showReasoning: true).filter {
+                    switch $0 {
+                    case .heads: false
+                    case .single(let entry): !shown.contains(ObjectIdentifier(entry)) && entry.kind != .assistant
+                    case .work: true
+                    }
                 }
             }
         }
     }
 
     var body: some View {
-        let key = DerivedKey(ids: content.map(ObjectIdentifier.init), expanded: isExpanded)
-        let derived = (self.derived?.key == key ? self.derived?.value : nil) ?? Derived(content: content, expanded: isExpanded)
+        let key = DerivedKey(ids: content.map(ObjectIdentifier.init), expanded: isExpanded, stepLimit: stepLimit)
+        let derived = (self.derived?.key == key ? self.derived?.value : nil) ?? Derived(content: content, expanded: isExpanded, stepLimit: stepLimit)
         let showsHeads = !derived.headEntries.isEmpty
         // The files as the turn's own diff saw them, or as an older turn's were worked out
         // once (see the task below).
         let changes = summary.changes ?? legacyChanges
         let hasFiles = changes?.files.isEmpty == false
-        let showsBody = showsHeads || hasFiles || (isExpanded ? !derived.detailGroups.isEmpty : derived.hasResponse)
+        let showsSteps = isExpanded && !derived.detailGroups.isEmpty
+        let showsBody = showsHeads || hasFiles || derived.hasResponse || showsSteps
         VStack(alignment: .leading, spacing: 0) {
             ForEach(userEntries) { entry in
                 UserMessageRow(entry: entry, runtime: runtime, canRevert: canUndo)
                     .padding(.bottom, TimelineMetrics.rowSpacing)
             }
             Button {
-                withAnimation(.snappy(duration: 0.24)) {
+                revealBox?.disclosure(blockID, false)
+                withAnimation(ActivityMetrics.fold) {
                     isExpanded.toggle()
-                    if isExpanded { revealBox?.action() }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Text(TurnEndRow.label(for: summary))
-                        .font(.chat(.callout, zoom: zoom))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
-                .contentShape(.rect)
+                // The same line as a work group's header: the chevron on the trunk.
+                ActivityHeaderLabel(title: TurnEndRow.label(for: summary), isOpen: isExpanded)
             }
             .buttonStyle(.plain)
+            .onAppear { stepLimit = revealBox?.stepLimits[turnID] ?? 60 }
             .help(isExpanded ? "Hide this turn's steps" : "Show this turn's steps")
             .accessibilityLabel(Text(isExpanded ? "Hide this turn's steps" : "Show this turn's steps"))
 
             if showsBody {
-                Divider()
-                    .opacity(0.6)
-                    // Half a row gap on each side, so the header and the body sit one
-                    // row gap apart with the rule in between.
-                    .padding(.vertical, TimelineMetrics.rowSpacing / 2)
+                // Flat under the header, like a work group's steps: no rule, no card.
+                Color.clear.frame(height: TimelineMetrics.rowSpacing / 2)
 
-                if isExpanded {
+                if showsSteps {
                 VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
+                    if content.count > stepLimit {
+                        Button(Self.earlierStepsLabel(hidden: content.count - stepLimit)) {
+                            stepLimit += 60
+                            revealBox?.stepLimits[turnID] = stepLimit
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    }
                     ForEach(derived.detailGroups) { group in
                         switch group {
                         case .single(let entry):
@@ -2719,43 +2608,38 @@ struct TurnFinishedBlock: View {
                             case .assistant:
                                 AssistantMessageRow(entry: entry, summary: nil, runtime: runtime)
                             case .tool:
-                                WorkGroup(entries: [entry], runtime: runtime, workingDirectory: workingDirectory)
+                                ActivityGroup(id: "work-\(entry.id)", entries: [entry], runtime: runtime, workingDirectory: workingDirectory)
                             case .plan:
                                 PlanCard(entry: entry, runtime: runtime)
                             case .todos:
-                                TodoListRow(entry: entry, runtime: runtime)
+                                TodoListRow(entry: entry)
                             case .notice:
                                 NoticeRow(entry: entry)
                             case .user, .reasoning, .turnEnd:
                                 EmptyView()
                             }
-                        case .work(_, let entries, let startsCollapsed):
-                            WorkGroup(entries: entries, runtime: runtime, workingDirectory: workingDirectory, startsCollapsed: startsCollapsed)
+                        case .work(let id, let entries, _):
+                            ActivityGroup(id: id, entries: entries, runtime: runtime, workingDirectory: workingDirectory)
                         case .heads:
                             // Never among the steps: the heads list below shows them.
                             EmptyView()
                         }
                     }
                 }
-                .padding(14)
-                .background {
-                    RoundedRectangle(cornerRadius: TimelineMetrics.pillRadius, style: .continuous)
-                        .fill(.quaternary.opacity(0.32))
-                }
                 .padding(.bottom, derived.hasResponse || showsHeads ? TimelineMetrics.rowSpacing : 0)
-            } else if derived.hasResponse {
+            }
+            if derived.hasResponse {
                 VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
-                    ForEach(derived.answerEntries) { entry in
-                        if case .assistant(let message) = entry.item.content, !message.text.isEmpty {
-                            // The answer of a folded turn: the same menu as a reply row.
+                    ForEach(derived.conversation) { entry in
+                        switch entry.item.content {
+                        case .assistant(let message):
+                            // A reply of a finished turn: the same menu as a reply row.
                             FoldedAnswerView(text: message.text, runtime: runtime)
+                        case .plan:
+                            PlanCard(entry: entry, runtime: runtime)
+                        default:
+                            NoticeRow(entry: entry)
                         }
-                    }
-                    ForEach(derived.collapsedPlans) { entry in
-                        PlanCard(entry: entry, runtime: runtime)
-                    }
-                    ForEach(derived.collapsedNotices) { entry in
-                        NoticeRow(entry: entry)
                     }
                 }
                 .padding(.bottom, TimelineMetrics.rowSpacing)
@@ -2798,7 +2682,6 @@ struct TurnFinishedBlock: View {
 }
 
 private struct TurnFileCard: View {
-    @Environment(\.chatZoom) private var zoom
     /// The turn's files, header totals included: one list, so the count in the title and
     /// the rows behind it can never disagree.
     let changes: FileChangeSummary
@@ -2830,13 +2713,13 @@ private struct TurnFileCard: View {
                         .frame(width: 18, height: 18)
                         .foregroundStyle(Chrome.secondaryText)
                     Text(verbatim: title)
-                        .font(.chat(.callout, weight: .medium, zoom: zoom))
+                        .font(.chat(.callout, weight: .medium))
                         .foregroundStyle(Chrome.primaryText.opacity(0.9))
                     DiffStatLabel(additions: changes.additions, deletions: changes.deletions)
                     if !files.isEmpty {
                         Image(systemName: "chevron.right")
-                            .font(.chat(.caption2, weight: .semibold, zoom: zoom))
-                            .foregroundStyle(.tertiary)
+                            .font(.chat(.caption2, weight: .semibold))
+                            .foregroundStyle(Chrome.secondaryText)
                     }
                 }
                 .contentShape(.rect)
@@ -2862,7 +2745,7 @@ private struct TurnFileCard: View {
                         Text("Revert up to this point?")
                             .font(.system(size: 14, weight: .semibold))
                         Text("Files go back to how they were before this turn, and the turn leaves the conversation.")
-                            .font(.system(size: 12))
+                            .font(.system(.callout))
                             .foregroundStyle(Chrome.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
@@ -2915,14 +2798,14 @@ private struct TurnFileCard: View {
             ForEach(files.prefix(12), id: \.path) { file in
                 HStack(spacing: 8) {
                     Text(verbatim: file.path)
-                        .font(.chat(.callout, zoom: zoom))
+                        .font(.chat(.callout))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: 8)
                     if file.isBinary {
                         Text("Binary")
-                            .font(.chat(.caption, zoom: zoom))
-                            .foregroundStyle(.secondary)
+                            .font(.chat(.caption))
+                            .foregroundStyle(Chrome.secondaryText)
                     } else {
                         DiffStatLabel(additions: file.additions, deletions: file.deletions)
                     }
@@ -2932,8 +2815,8 @@ private struct TurnFileCard: View {
             }
             if files.count > 12 {
                 Text(files.count == 13 ? "and 1 more file" : "and \(files.count - 12) more files")
-                    .font(.chat(.callout, zoom: zoom))
-                    .foregroundStyle(.secondary)
+                    .font(.chat(.callout))
+                    .foregroundStyle(Chrome.secondaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
             }

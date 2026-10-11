@@ -126,11 +126,21 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     var title: String
     var createdAt: Date
     var updatedAt: Date
-    var provider: ProviderKind
+    /// A move to a provider that cannot honour the thread's permission mode (see
+    /// `ProviderKind.supports`) takes the mode down to one it can, and says so to
+    /// `PermissionLowering`.
+    var provider: ProviderKind {
+        didSet { runtimeMode = Self.supportedMode(runtimeMode, on: provider) }
+    }
     var model: String?
     var effort: String?
     var fastMode: Bool
-    var runtimeMode: RuntimeMode
+    /// Which of the model's faster tiers fast mode runs on, when a pair picked one past
+    /// the plain fast tier (Codex's Ultrafast); nil is the model's own fast tier.
+    var speedTier: String?
+    var runtimeMode: RuntimeMode {
+        didSet { runtimeMode = Self.supportedMode(runtimeMode, on: provider) }
+    }
     var interactionMode: InteractionMode
     var worktreePath: String?
     var branch: String?
@@ -159,6 +169,9 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     /// Whether the helper is showing in its parent's floating panel. While it is, it is kept
     /// out of the sidebar, the palette, the recent picks and the unread count.
     var isInPanel = false
+    /// The chat a voice call runs in: its Codex session never runs Codex's own sub-agents,
+    /// whatever the user's config enables, and carries the voice orchestrator's brief.
+    var isVoiceSession = false
     /// Whether this thread's helpers are shown one by one under it in the sidebar. Off
     /// until the user opens them: folded, one line under the chat names the team, and a
     /// click on it unfolds them. Saved under its own key, so chats from before the fold
@@ -177,6 +190,9 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     /// without this flag decodes as on whatever its stored value says; every save from
     /// here on writes the flag, and its stored value is then the user's own choice.
     var hydraEnabledIsExplicit = true
+    /// The user turned Hydra on in a permission mode the provider's heads do not respect
+    /// (`ProviderKind.suitsHydra`) and does not mind: it stays on there until switched off.
+    var hydraIgnoresPermissions = false
     /// The pair an old thread picked while Hydra had per-chat switches. Kept for
     /// decoding; new threads use the best fit for their provider and model.
     var hydraPairID: UUID?
@@ -194,6 +210,11 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     /// A Hydra head, whichever side of the panel it is on.
     var isHydraHead: Bool { hydra != nil }
 
+    /// Eligible for a standalone sidebar or palette entry. Hydra heads never stand alone,
+    /// even after leaving their panel or when their lead is missing or archived.
+    /// Sidebar layouts separately nest ordinary helpers under their visible parents.
+    var isStandaloneListCandidate: Bool { !isArchived && !isInPanel && !isHydraHead }
+
     /// Defaults key holding the per-chat Hydra default; `AppSettings` reads it from here.
     static let hydraDefaultKey = "hydraDefaultEnabled"
 
@@ -202,6 +223,14 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     static func hydraDefaultEnabled() -> Bool {
         let defaults = CaptureRun.defaults ?? .standard
         return defaults.object(forKey: hydraDefaultKey) as? Bool ?? true
+    }
+
+    /// The mode a thread on `provider` keeps: the one asked for, or the one below it when the
+    /// provider cannot honour it, which `PermissionLowering` is told about.
+    private static func supportedMode(_ mode: RuntimeMode, on provider: ProviderKind) -> RuntimeMode {
+        let supported = provider.supported(mode)
+        if supported != mode { PermissionLowering.note(provider: provider, from: mode, to: supported) }
+        return supported
     }
 
     init(projectID: UUID, provider: ProviderKind, model: String?, effort: String?, runtimeMode: RuntimeMode, fastMode: Bool = false) {
@@ -214,7 +243,7 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
         self.model = model
         self.effort = effort
         self.fastMode = fastMode
-        self.runtimeMode = runtimeMode
+        self.runtimeMode = Self.supportedMode(runtimeMode, on: provider)
         interactionMode = .build
         isPinned = false
         isArchived = false
@@ -234,10 +263,11 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
         model = container.value(.model, default: nil)
         effort = container.value(.effort, default: nil)
         fastMode = container.value(.fastMode, default: false)
+        speedTier = container.value(.speedTier, default: nil)
         // `value` swallows a type mismatch as well as a missing key, so a mode that
         // cannot be read falls back to the one that asks before it acts: a thread must
         // never quietly come back from disk with full access to the machine.
-        runtimeMode = container.value(.runtimeMode, default: .supervised)
+        runtimeMode = Self.supportedMode(container.value(.runtimeMode, default: .supervised), on: provider)
         interactionMode = container.value(.interactionMode, default: .build)
         worktreePath = container.value(.worktreePath, default: nil)
         branch = container.value(.branch, default: nil)
@@ -255,15 +285,18 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
         lastStatus = container.value(.lastStatus, default: nil)
         parentThreadID = container.value(.parentThreadID, default: nil)
         isInPanel = container.value(.isInPanel, default: false)
+        isVoiceSession = container.value(.isVoiceSession, default: false)
         expandsHelpers = container.value(.expandsHelpers, default: false)
         // Threads saved while Hydra was app-wide only carry an ignored false and no
         // explicit flag: they come back on. A save that wrote the flag holds a real choice.
         let explicit = container.value(.hydraEnabledIsExplicit, default: false)
         hydraEnabled = explicit ? container.value(.hydraEnabled, default: true) : true
         hydraEnabledIsExplicit = true
+        hydraIgnoresPermissions = container.value(.hydraIgnoresPermissions, default: false)
         hydraPairID = container.value(.hydraPairID, default: nil)
         hydraSpawnCount = container.value(.hydraSpawnCount, default: 0)
         hydra = container.value(.hydra, default: nil)
+        hydraThreadMode = container.value(.hydraThreadMode, default: false)
     }
 }
 

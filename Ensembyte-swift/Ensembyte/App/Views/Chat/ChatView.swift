@@ -70,6 +70,13 @@ struct ChatView: View {
     /// switch: panels and reserves snap to the new thread's layout rather than glide from
     /// the old one's, and the Hydra panel's linger is dropped rather than carried across.
     @State private var sceneThreadID: UUID?
+    /// Where the box rests and what fades with it (see `ComposerDock`): centred under the
+    /// prompt in a thread with no messages yet, docked at the bottom over the conversation
+    /// otherwise. Set from `isNewThread` on its own clocks, so a switch or a first send
+    /// animates these and nothing else in the column.
+    @State private var composerCentred = false
+    @State private var showsTranscript = true
+    @State private var showsPrompt = false
 
     private static let hydraMinimumPresence: TimeInterval = 1.6
 
@@ -93,6 +100,10 @@ struct ChatView: View {
         let hydraPresent = !members.heads.isEmpty && scene.isMeasured
         let holds = panelsHeld
         let switching = sceneThreadID != runtime.threadID
+        // A thread still reading its history, or a forwarded one explaining where it came
+        // from, is not a new one: its box stays docked.
+        let isNewThread = !runtime.hasEntries && !runtime.isRunning && !runtime.isLoadingHistory && runtime.continuation == nil
+        let composerLift = composerCentred ? ComposerDock.lift(paneHeight: paneSize.height) : 0
         VStack(spacing: 0) {
             ThreadTimeline(
                 runtime: runtime,
@@ -106,43 +117,41 @@ struct ChatView: View {
                 // does a pane too narrow for both: the column reads at up to 820 points and the
                 // rail floats over its gutter, so under about 900 the two would overlap.
                 showsMinimap: !scene.dockedSides.contains(.leading)
-                    && (paneSize == .zero || paneSize.width - scene.reserve.leading - scene.reserve.trailing >= 900)
+                    && (paneSize == .zero || paneSize.width - scene.reserve.leading - scene.reserve.trailing >= 900),
+                showsNewThreadPrompt: false
             )
             .equatable()
             // Hover costs a responder walk and a render of this whole tree; a panel being
             // dragged sends one per pointer move and needs none of them (see
             // `isMovingAPanel`).
             .allowsHitTesting(!isMovingAPanel)
+            // The conversation rises into place as the box docks under it, and sinks away as
+            // the box leaves for a new thread's centre (see `ComposerDock`).
+            .opacity(showsTranscript ? 1 : 0)
+            .offset(y: showsTranscript ? 0 : ComposerDock.transcriptDrop)
             // The timeline is the one part swapped per thread: the column around it (chrome
             // row, chat box, panels, git status, measured sizes) stays mounted, so a switch
             // re-lays out nothing else.
             .id(runtime.threadID)
+            // A switch replaces the timeline in place, except into a new thread: there the
+            // conversation left behind fades and sinks while the box rises from under it.
+            .transaction(value: runtime.threadID) { transaction in
+                transaction.animation = isNewThread && !composerCentred ? ComposerDock.phase(0, 0.25, docking: false) : nil
+            }
             // The text size set in Settings, for the conversation alone: the row and the
             // chat box keep their own size. macOS ignores Dynamic Type, so the timeline
             // scales its fonts by this factor itself (see `Font.chat`).
-            .environment(\.chatZoom, ChatZoom.scale(at: model.settings.chatZoom))
             // The room the docked panels take from either side; the conversation and the
             // box centre in the rest, so they stay lined up with each other (see
             // `ReserveSlide` for how they get there without laying out on every frame).
             .modifier(ReserveSlide(reserve: scene.reserve, slides: scene.isMeasured && !liveResize.isActive && !holds && !switching))
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                ComposerArea(runtime: runtime, workingDirectory: workingDirectory)
-                    .overlay(alignment: .top) {
-                        JumpToLatestButton(scrollState: scrollState)
-                    }
-                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { composerAreaHeight = $0 }
-                    .onChange(of: composerAreaHeight) { oldValue, newValue in
-                        // The area growing (the queued follow-ups tab expanding, a
-                        // follow-up being queued, an approval card arriving) shrinks the
-                        // timeline's viewport from its bottom edge. The timeline pulls its
-                        // end to the new edge for a reader who is at it, and leaves a
-                        // reader who scrolled up to read exactly where they are: the
-                        // growth is the composer's, never the reader's cue to jump. Not off
-                        // the first measurement or a thread switch's fresh scroll state.
-                        guard newValue > oldValue + 0.5, !liveResize.isActive, oldValue > 0 else { return }
-                        scrollState.noteComposerAreaGrowth()
-                    }
-                    .modifier(ReserveSlide(reserve: scene.reserve, slides: scene.isMeasured && !liveResize.isActive && !holds && !switching, animatesWidth: true))
+                composerBottomInset(workingDirectory: workingDirectory, scene: scene, composerCentred: composerCentred, composerLift: composerLift, holds: holds, switching: switching)
+            }
+            .overlay(alignment: .top) {
+                if isNewThread || showsPrompt {
+                    newThreadPrompt(projectName: project?.name, lift: composerLift, scene: scene, slides: scene.isMeasured && !liveResize.isActive && !holds && !switching)
+                }
             }
             .overlay(alignment: .top) {
                 PaneTopVeil(model: scrollChrome)
@@ -322,6 +331,51 @@ struct ChatView: View {
             panelResize = PanelResizeState()
         }
         .onAppear { sceneThreadID = runtime.threadID }
+        .onChange(of: isNewThread, initial: true) { old, new in
+            settleComposer(new: new, animated: old != new)
+        }
+    }
+
+    // MARK: - New thread
+
+    /// The prompt over a new thread's centred box, its bottom a fixed gap above the box's
+    /// top (the changes tab included) and its top clear of the title bar.
+    private func newThreadPrompt(projectName: String?, lift: CGFloat, scene: PanelScene, slides: Bool) -> some View {
+        let boxTop = paneSize.height - composerAreaHeight + lift
+        let room = max(0, boxTop - ComposerDock.promptGap - WindowChrome.titlebarHeight)
+        return NewThreadPrompt(threadID: runtime.threadID, projectName: projectName)
+            .frame(maxWidth: .infinity)
+            .frame(height: room, alignment: .bottom)
+            .padding(.top, WindowChrome.titlebarHeight)
+            .animation(liveResize.isReshaping ? nil : .smooth(duration: 0.28), value: composerAreaHeight)
+            .opacity(showsPrompt ? 1 : 0)
+            .modifier(ReserveSlide(reserve: scene.reserve, slides: slides))
+    }
+
+    /// Moves the box between a new thread's centre and its docked spot, and trades the
+    /// prompt for the conversation on the same clock. Reduce Motion lands each at once.
+    private func settleComposer(new: Bool, animated: Bool) {
+        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            var snap = Transaction()
+            snap.disablesAnimations = true
+            withTransaction(snap) {
+                composerCentred = new
+                showsPrompt = new
+                showsTranscript = !new
+            }
+            return
+        }
+        let docking = !new
+        withAnimation(ComposerDock.glide(docking: docking)) { composerCentred = new }
+        // Docking: the prompt goes in the first quarter of the travel, while the spring
+        // covers most of its way, and the conversation comes in behind the arriving box.
+        // Returning: the conversation goes first, and the prompt unfolds near arrival.
+        withAnimation(docking ? ComposerDock.phase(0, 0.25, docking: true) : ComposerDock.phase(0.5, 0.95, docking: false)) {
+            showsPrompt = new
+        }
+        withAnimation(docking ? ComposerDock.phase(0.2, 0.65, docking: true) : ComposerDock.phase(0, 0.25, docking: false)) {
+            showsTranscript = !new
+        }
     }
 
     // MARK: - Floating panels
@@ -357,6 +411,22 @@ struct ChatView: View {
         )
         // Inside the offset, so the panel grows in and fades out in place.
         .transition(Self.panelTransition), resize: resizer(for: runtime.subagentPanelDock, scene: scene), isResizing: panelsHeld)
+    }
+
+
+    @ViewBuilder
+    private func composerBottomInset(workingDirectory: String?, scene: PanelScene, composerCentred: Bool, composerLift: CGFloat, holds: Bool, switching: Bool) -> some View {
+        ComposerArea(runtime: runtime, workingDirectory: workingDirectory, isHero: composerCentred)
+            .overlay(alignment: .top) {
+                JumpToLatestButton(scrollState: scrollState)
+            }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { composerAreaHeight = $0 }
+            .onChange(of: composerAreaHeight) { oldValue, newValue in
+                guard newValue > oldValue + 0.5, !liveResize.isActive, oldValue > 0 else { return }
+                scrollState.noteComposerAreaGrowth()
+            }
+            .modifier(ReserveSlide(reserve: scene.reserve, slides: scene.isMeasured && !liveResize.isActive && !holds && !switching, animatesWidth: true))
+            .offset(y: composerLift)
     }
 
     /// The team's panel: next to the helper panel when that one is in the same corner.
@@ -778,6 +848,43 @@ extension EnvironmentValues {
     /// The glide alone, so a view can follow the snap and the glide with the rows but
     /// ignore the padding.
     @Entry var reserveSlideOffset: CGFloat = 0
+}
+
+/// How the chat box travels between a new thread's centre and its docked spot at the
+/// bottom. A critically damped spring: no overshoot, and a reversal mid-flight keeps its
+/// speed. Twelve time constants fit 0.42s docking and 0.47s returning, so its response is
+/// 2π/12 of each. The fades run on the same clocks as fractions of those durations.
+enum ComposerDock {
+    static let dockingDuration = 0.42
+    static let returningDuration = 0.47
+    /// How far the conversation sinks as it fades.
+    static let transcriptDrop: CGFloat = 8
+    /// Between the new thread's prompt and the top of its box.
+    static let promptGap: CGFloat = 28
+
+    static func glide(docking: Bool) -> Animation {
+        .spring(response: duration(docking: docking) * 2 * .pi / 12, dampingFraction: 1)
+    }
+
+    /// An eased fade over `start...end` of the travel's clock.
+    static func phase(_ start: Double, _ end: Double, docking: Bool) -> Animation {
+        let duration = duration(docking: docking)
+        return .easeInOut(duration: (end - start) * duration).delay(start * duration)
+    }
+
+    /// How far up the box is drawn from its docked slot to sit centred: its top 8 points
+    /// below the middle of the pane's height less its own.
+    static func lift(paneHeight: CGFloat) -> CGFloat {
+        guard paneHeight > 0 else { return 0 }
+        let height = ComposerArea.heroHeight
+        let centred = (paneHeight - height) / 2 + 8
+        let docked = paneHeight - ComposerArea.bottomInset - height
+        return min(0, centred - docked)
+    }
+
+    private static func duration(docking: Bool) -> Double {
+        docking ? dockingDuration : returningDuration
+    }
 }
 
 private struct ReserveSlide: ViewModifier {
@@ -1391,8 +1498,12 @@ private struct PermissionMenu: View {
         ChromeCircleMenu(symbol: thread.runtimeMode.symbol, help: "\(thread.runtimeMode.title) · \(thread.runtimeMode.summary)") {
             PopoverSectionHeader("Permissions")
             ForEach(RuntimeMode.allCases) { mode in
-                PopoverItem(mode.title, symbol: mode.symbol, isChecked: thread.runtimeMode == mode) {
+                PopoverItem(mode.title, symbol: mode.symbol, isChecked: thread.runtimeMode == mode, isEnabled: thread.provider.supports(mode)) {
+                    let wasLeading = model.hydraIsOn(thread)
                     model.updateThread(thread.id) { $0.runtimeMode = mode }
+                    if wasLeading, let updated = model.thread(thread.id), model.hydraIsHeldByMode(updated) {
+                        model.showToast(AppModel.hydraModeNote(updated.provider))
+                    }
                 }
             }
         }

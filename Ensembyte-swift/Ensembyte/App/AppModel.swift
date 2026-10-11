@@ -1,7 +1,6 @@
 import AppKit
-import Security
 import SwiftUI
-@preconcurrency import UserNotifications
+import UserNotifications
 
 struct AppAlert: Identifiable {
     let id = UUID()
@@ -9,9 +8,9 @@ struct AppAlert: Identifiable {
     var message: String
 }
 
-struct ToastNotification: Identifiable, Equatable {
+/// A short notice floated over the window for a few seconds.
+struct AppToast: Identifiable {
     let id = UUID()
-    var title: String
     var message: String
 }
 
@@ -25,10 +24,11 @@ final class AppModel {
     let mcp: MCPStore
     let terminals: TerminalStore
     let sidebar: SidebarLayout
-    private(set) var currentToast: ToastNotification?
     /// Picks chats back up once a spent usage limit resets, with the setting on.
     @ObservationIgnored private(set) var autoContinue: AutoContinue!
-    /// How often each Swarm-run head has been started again after failing at the door
+    /// The voice agent mode's call, one for the app: independent of the selected chat.
+    @ObservationIgnored private(set) var voice: VoiceController!
+    /// How often each Ensembyte-run head has been started again after failing at the door
     /// (see `hydraHeadTurnFinished`); a head gets two more goes.
     @ObservationIgnored var hydraHeadRetries: [UUID: Int] = [:]
 
@@ -38,18 +38,27 @@ final class AppModel {
     private(set) var projects: [Project] = [] {
         didSet { Self.write(Self.sync(&projectCells, with: projects)) }
     }
-    private(set) var threads: [ChatThread] = [] {
-        didSet {
-            // The positions stand while every thread kept its place and its project; a
-            // metadata change to a thread rebuilds nothing.
-            let changedMembership = threads.count != threadIndex.positions.count || threads.enumerated().contains { index, thread in
-                guard threadIndex.positions[thread.id] == index, let previous = threadCells[thread.id]?.value else { return true }
-                return previous.projectID != thread.projectID
-            }
-            Self.write(Self.sync(&threadCells, with: threads))
-            syncChildCells()
-            if changedMembership { threadIndex = ThreadIndex(threads) }
+    @ObservationIgnored private var threadStorage: [ChatThread] = []
+    private(set) var threadsRevision: UInt64 = 0
+    private(set) var threads: [ChatThread] {
+        get {
+            _ = threadsRevision
+            return threadStorage
         }
+        set {
+            threadStorage = newValue
+            synchronizeThreads()
+            announceLoweredPermissions()
+        }
+    }
+
+    private func synchronizeThreads() {
+        // Finish storage/index borrows before any observed write can rebuild Commands.
+        threadIndex = ThreadIndex(threadStorage)
+        let writes = Self.sync(&threadCells, with: threadStorage)
+        Self.write(writes)
+        syncChildCells()
+        threadsRevision &+= 1
     }
     private var threadIndex = ThreadIndex([])
 
@@ -112,9 +121,13 @@ final class AppModel {
 
     var isCommandPalettePresented = false
     var alert: AppAlert?
-    var isNotificationPermissionDenied = false
+    /// The notice floating over the window, if any (see `showToast`).
+    var toast: AppToast?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     @ObservationIgnored private var runtimes: [UUID: ThreadRuntime] = [:]
+    @ObservationIgnored private var runtimeLastAccess: [UUID: ContinuousClock.Instant] = [:]
+    @ObservationIgnored private var runtimeCapacityScheduled = false
     @ObservationIgnored private var idleSessionStops: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var lastLibrarySave: ContinuousClock.Instant?
@@ -124,7 +137,11 @@ final class AppModel {
     /// its files forever, with the merge note still promising they go out. The sweep asks
     /// again every few minutes; it skips anything still running, so a busy chat is left alone.
     @ObservationIgnored private var hydraMergeSweepTask: Task<Void, Never>?
+    private(set) var isLibraryLoaded = false
+    @ObservationIgnored private var libraryLoad: Task<Library, Never>?
+    @ObservationIgnored private var restoreSelectionAfterLoad = false
     @ObservationIgnored private var persistenceEnabled = true
+    @ObservationIgnored private var didRequestNotifications = false
 
     init() {
         settings = AppSettings()
@@ -132,26 +149,8 @@ final class AppModel {
         mcp = MCPStore()
         terminals = TerminalStore()
         sidebar = SidebarLayout()
-        let library = Storage.loadLibrary()
-        projects = library.projects
-        threads = library.threads
-        for index in threads.indices where threads[index].lastStatus == .running {
-            threads[index].lastStatus = .interrupted
-        }
-        // A head at work when the app last quit went with its session.
-        for index in threads.indices where threads[index].hydra?.status == .running {
-            threads[index].hydra?.status = .stopped
-            threads[index].hydra?.finishedAt = .now
-        }
-        // Property observers stay quiet inside an initializer, so the cells are built here once.
-        Self.write(Self.sync(&projectCells, with: projects))
-        Self.write(Self.sync(&threadCells, with: threads))
-        syncChildCells()
-        threadIndex = ThreadIndex(threads)
         autoContinue = AutoContinue(app: self)
-        if let lastID = settings.lastProjectID, project(lastID) == nil {
-            settings.lastProjectID = nil
-        }
+        voice = VoiceController(app: self)
     }
 
     /// Mirrors a list into its cells: values that changed are written to their cell (and only
@@ -246,12 +245,43 @@ final class AppModel {
     }
 
     func bootstrap() async {
+        guard !isLibraryLoaded else { return }
+        if let libraryLoad {
+            _ = await libraryLoad.value
+            return
+        }
+        let load = Task.detached(priority: .userInitiated) { Storage.loadLibrary() }
+        libraryLoad = load
+        var library = await load.value
+        for index in library.threads.indices {
+            if library.threads[index].lastStatus == .running {
+                library.threads[index].lastStatus = .interrupted
+            }
+            if library.threads[index].hydra?.status == .running {
+                library.threads[index].hydra?.status = .stopped
+                library.threads[index].hydra?.finishedAt = .now
+            }
+        }
+        // Anything made in the moments before the library landed (a project opened from
+        // the Finder, a chat from the menu) joins it rather than being written over.
+        let knownProjects = Set(library.projects.map(\.id))
+        let knownThreads = Set(library.threads.map(\.id))
+        projects = library.projects + projects.filter { !knownProjects.contains($0.id) }
+        threads = library.threads + threads.filter { !knownThreads.contains($0.id) }
+        isLibraryLoaded = true
+        libraryLoad = nil
+        if let lastID = settings.lastProjectID, project(lastID) == nil {
+            settings.lastProjectID = nil
+        }
+        if restoreSelectionAfterLoad { openThreadOnLaunch() }
         // The threads most likely to be opened first decode in the background from the start,
         // so the first click into a conversation never parses its history on the main thread.
         let recent = threads.filter { !$0.isArchived && !$0.isInPanel }.sorted { $0.updatedAt > $1.updatedAt }.prefix(12).map(\.id)
         warmDocuments(recent)
         await settings.loadKeychainInBackground()
         await LoginEnvironment.load()
+        // Needs the login PATH for gh and gives every later process the account's token.
+        GitHubConnection.shared.start()
         // After the login environment, so git runs with the user's PATH.
         sweepHydraCopies()
         // A merge the last run did not finish (the app was quit under it) goes out now.
@@ -280,17 +310,23 @@ final class AppModel {
         if providers.status(.zai).isInstalled {
             await providers.loadCatalog(.zai)
         }
+        // Installed against latest for every monitored CLI, for the Providers page; a turn
+        // running on a provider holds its update until it ends.
+        providers.isProviderBusy = { [weak self] provider in
+            self?.runtimes.values.contains { $0.isRunning && $0.thread?.provider == provider } ?? false
+        }
+        providers.startCLIUpdateChecks()
         // The CLIs Ensembyte runs headless never update themselves, and a model newer
         // than the installed CLI fails outright. Their own updaters run here, in the
         // background, at most every twelve hours; a newer version reloads its catalog.
         Task { [providers] in
-            for provider in [ProviderKind.claude, .codex] where providers.status(provider).isInstalled {
+            for provider in ProviderKind.allCases where ProviderRegistry.updatesOwnCLI(provider) && providers.status(provider).isInstalled {
                 await providers.updateCLIIfDue(provider)
             }
         }
         // Last, once nothing the first click needs is waiting on the disk: the attachment
         // files no thread refers to any more go, a day after they were written.
-        guard !WebsiteCaptures.isEnabled else { return }
+        guard !CaptureRun.isEnabled else { return }
         await Storage.sweepOrphanedAttachments()
     }
 
@@ -327,10 +363,11 @@ final class AppModel {
 
     /// The project's top-level threads, in sidebar order: the settled ones last, latest
     /// settled first. A helper whose parent is among them sits under that parent instead
-    /// (see `helpers(of:)`); one whose parent is gone or archived stands on its own.
+    /// (see `helpers(of:)`); an ordinary helper whose parent is gone or archived stands
+    /// on its own. Hydra heads only appear under their lead, even across projects.
     func threads(in project: Project) -> [ChatThread] {
         let shown = (threadIndex.projects[project.id] ?? []).map { threads[$0] }
-            .filter { !$0.isArchived && !$0.isInPanel }
+            .filter(\.isStandaloneListCandidate)
         let shownIDs = Set(shown.map(\.id))
         return shown
             .filter { $0.parentThreadID.map { !shownIDs.contains($0) } ?? true }
@@ -440,10 +477,31 @@ final class AppModel {
     }
 
     func runtime(for id: UUID) -> ThreadRuntime {
+        runtimeLastAccess[id] = ContinuousClock.now
         if let runtime = runtimes[id] { return runtime }
         let runtime = ThreadRuntime(threadID: id, app: self)
         runtimes[id] = runtime
+        if !runtimeCapacityScheduled {
+            runtimeCapacityScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.runtimeCapacityScheduled = false
+                self.releaseExcessIdleRuntimes()
+            }
+        }
         return runtime
+    }
+
+    private func releaseExcessIdleRuntimes() {
+        guard runtimes.count > 12 else { return }
+        let fallback = ContinuousClock.now
+        let candidates = runtimes.keys.sorted {
+            (runtimeLastAccess[$0] ?? fallback) < (runtimeLastAccess[$1] ?? fallback)
+        }
+        for id in candidates {
+            guard runtimes.count > 12 else { break }
+            releaseIdleRuntime(id)
+        }
     }
 
     func existingRuntime(for id: UUID) -> ThreadRuntime? {
@@ -485,6 +543,7 @@ final class AppModel {
     /// the thread resuming the conversation. A thread with a draft, an edit under way, work
     /// still owed to it or a terminal keeps its runtime, session stopped.
     private func scheduleIdleSessionStop(leaving id: UUID?) {
+        guard isLibraryLoaded else { return }
         if let selectedThreadID {
             idleSessionStops.removeValue(forKey: selectedThreadID)?.cancel()
         }
@@ -494,8 +553,9 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(600))
                 guard !Task.isCancelled, let self, self.selectedThreadID != id, let runtime = self.runtimes[id] else { return }
-                // A turn still working keeps its session; check again after the next interval.
-                guard !runtime.isRunning else { continue }
+                // A turn still working keeps its session, and so does a voice call;
+                // check again after the next interval.
+                guard !runtime.isRunning, self.voice.threadID != id else { continue }
                 runtime.stopSession()
                 self.idleSessionStops[id] = nil
                 self.releaseIdleRuntime(id)
@@ -508,17 +568,23 @@ final class AppModel {
     /// whether it did; a runtime holding anything the document does not stays.
     @discardableResult
     func releaseIdleRuntime(_ id: UUID) -> Bool {
-        guard let runtime = runtimes[id], selectedThreadID != id, let thread = thread(id),
+        guard let runtime = runtimes[id], selectedThreadID != id, voice.threadID != id, let thread = thread(id),
               // A thread shown beside the selection, in its panel, is on screen.
               thread.parentThreadID == nil || thread.parentThreadID != selectedThreadID,
+              !thread.isInPanel, thread.hydra?.status != .running,
+              !runtime.isRunning, runtime.draft.isEmpty, runtime.followUps.isEmpty,
               runtime.holdsOnlyPersistedState, !sessionsToRelease.contains(id),
               autoContinue.resumesAt[id] == nil, terminals.sessions(for: id).isEmpty,
-              runningSwarmHeads(of: id) == 0 else { return false }
+              !children(of: id).contains(where: {
+                  $0.hydra?.status == .running || existingRuntime(for: $0.id)?.isRunning == true
+              }) else { return false }
         // The save is queued before the runtime goes; a read that follows waits for it
         // (see `Storage.readDocument`), so the thread can never come back older than it left.
         runtime.saveNow()
         runtime.cancelPersistence()
         runtimes[id] = nil
+        runtimeLastAccess[id] = nil
+        idleSessionStops.removeValue(forKey: id)?.cancel()
         return true
     }
 
@@ -585,37 +651,28 @@ final class AppModel {
 
     // MARK: - Threads
 
-    /// Launch lands in a chat, never on the empty page: the newest thread nothing has been
-    /// sent in yet, in the project you last worked in, or a fresh one there. Reusing an
-    /// unused thread keeps a launch from leaving a "New thread" row behind every time.
+    /// Restores the most relevant existing chat in the last project without making launch
+    /// an implicit "New thread" action. A chat interrupted by the previous process wins;
+    /// otherwise the last active user chat does. With no chat, the existing empty state
+    /// remains on screen until the user explicitly starts one.
     func openThreadOnLaunch() {
-        guard let project = currentProject else { return }
-        let unused = threads
-            .filter {
-                $0.projectID == project.id && !$0.isArchived && !$0.isSettled && !$0.isHelper
-                    && $0.lastStatus == nil && !$0.hasCustomTitle && $0.title == ChatThread.untitled
-            }
-            .max { $0.createdAt < $1.createdAt }
-        if let unused {
-            // The row may be older than the pair or model chosen since: nothing was sent in
-            // it, so it starts over on what a fresh chat would open on today.
-            let fresh = makeThread(in: project, carrying: nil)
-            updateThread(unused.id) { thread in
-                if thread.provider != fresh.provider {
-                    thread.providerSessionID = nil
-                    thread.providerResumeAt = nil
-                }
-                thread.provider = fresh.provider
-                thread.model = fresh.model
-                thread.effort = fresh.effort
-                thread.fastMode = fresh.fastMode
-                thread.hydraPairID = fresh.hydraPairID
-                thread.hydraEnabled = fresh.hydraEnabled
-            }
-            selectedThreadID = unused.id
-        } else {
-            newThread(in: project)
+        guard isLibraryLoaded else {
+            restoreSelectionAfterLoad = true
+            return
         }
+        restoreSelectionAfterLoad = false
+        guard let project = currentProject else { return }
+        let restored = threads
+            .filter {
+                $0.projectID == project.id && !$0.isArchived && !$0.isInPanel && !$0.isHelper && !$0.isHydraHead
+            }
+            .max { lhs, rhs in
+                let lhsInterrupted = lhs.lastStatus == .interrupted
+                let rhsInterrupted = rhs.lastStatus == .interrupted
+                if lhsInterrupted != rhsInterrupted { return !lhsInterrupted }
+                return lhs.updatedAt < rhs.updatedAt
+            }
+        selectedThreadID = restored?.id
     }
 
     @discardableResult
@@ -633,6 +690,29 @@ final class AppModel {
         if (workspace ?? settings.defaultWorkspaceMode) == .worktree {
             Task { await createWorktree(for: thread.id) }
         }
+        return thread
+    }
+
+    /// The chat a voice call runs in: a Codex chat in the current project, titled for the
+    /// call and not selected, so the call opens over whatever the user was reading. Its
+    /// model follows the open chat when that one is on Codex, otherwise Codex's default.
+    func newVoiceThread() -> ChatThread? {
+        guard let project = currentProject else { return nil }
+        let current = selectedThread?.provider == .codex ? selectedThread : nil
+        var thread = ChatThread(
+            projectID: project.id,
+            provider: .codex,
+            model: current?.model ?? providers.defaultModel(for: .codex)?.id,
+            effort: current?.effort ?? settings.lastEffort(for: .codex),
+            runtimeMode: settings.defaultRuntimeMode,
+            fastMode: current?.fastMode ?? false
+        )
+        thread.title = VoiceCatalog.orchestratorTitle
+        thread.isVoiceSession = true
+        thread.hasCustomTitle = true
+        threads.append(thread)
+        updateProject(project.id) { $0.isExpanded = true }
+        scheduleSave()
         return thread
     }
 
@@ -694,6 +774,7 @@ final class AppModel {
             runtimeMode: settings.defaultRuntimeMode,
             fastMode: fastMode
         )
+        if carriesModel { thread.speedTier = current?.speedTier }
         // A chat made from one that leads a pair carries the pair along with the model.
         // With no chat to carry from, the last pair is where the new chat starts, on its
         // lead model and effort, provided its provider is still installed. The project's
@@ -704,6 +785,7 @@ final class AppModel {
             thread.model = lead.model
             thread.effort = lead.effort
             thread.fastMode = lead.fastMode
+            thread.speedTier = lead.speedTier
             thread.hydraPairID = pair.id
             thread.hydraEnabled = true
         } else if carriesModel {
@@ -713,6 +795,7 @@ final class AppModel {
             thread.model = lead.model
             thread.effort = lead.effort
             thread.fastMode = lead.fastMode
+            thread.speedTier = lead.speedTier
             thread.hydraPairID = pair.id
             thread.hydraEnabled = true
         }
@@ -721,11 +804,33 @@ final class AppModel {
 
     func updateThread(_ id: UUID, _ change: (inout ChatThread) -> Void) {
         guard let index = threadIndex.positions[id] else { return }
-        var thread = threads[index]
+        let previous = threadStorage[index]
+        var thread = previous
         change(&thread)
-        guard thread != threads[index] else { return }
-        threads[index] = thread
+        announceLoweredPermissions()
+        guard thread != previous else { return }
+        threadStorage[index] = thread
+        if Self.structureChanged(previous, thread) {
+            synchronizeThreads()
+        } else {
+            let cell = threadCells[id]
+            cell?.value = thread
+            threadsRevision &+= 1
+        }
         scheduleSave()
+    }
+
+    private static func structureChanged(_ previous: ChatThread, _ thread: ChatThread) -> Bool {
+        previous.id != thread.id || previous.projectID != thread.projectID
+            || previous.parentThreadID != thread.parentThreadID
+            || previous.isArchived != thread.isArchived || previous.isSettled != thread.isSettled
+            || previous.isInPanel != thread.isInPanel || previous.isHydraHead != thread.isHydraHead
+            || previous.hydra?.index != thread.hydra?.index
+            || previous.isPinned != thread.isPinned || previous.sortOrder != thread.sortOrder
+            || previous.createdAt != thread.createdAt || previous.updatedAt != thread.updatedAt
+            || previous.settledAt != thread.settledAt || previous.activityOrder != thread.activityOrder
+            || previous.activityOrderDay != thread.activityOrderDay
+            || previous.foldsHelpers != thread.foldsHelpers
     }
 
     /// Moves a thread to another project's folder: what the old folder's session and
@@ -757,13 +862,34 @@ final class AppModel {
             change(position, &updated[index])
             changed = changed || previous != updated[index]
         }
+        announceLoweredPermissions()
         guard changed else { return }
         threads = updated
         scheduleSave()
     }
 
+    /// Floats a short notice over the window for a few seconds; a newer one replaces it.
+    func showToast(_ message: String) {
+        toastTask?.cancel()
+        toast = AppToast(message: message)
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            self?.toast = nil
+        }
+    }
+
+    /// Tells the user, once, that a thread's permission mode was taken down because its
+    /// provider cannot honour it (see `PermissionLowering`). Every way a thread comes to
+    /// exist or change ends in a call here: a new thread, an edit, a move to another
+    /// provider, and a library read from disk.
+    private func announceLoweredPermissions() {
+        guard let lowered = PermissionLowering.drain().last else { return }
+        showToast("Switched to \(lowered.to.title): \(lowered.provider.displayName) does not have \(lowered.from.title) permission support.")
+    }
+
     func rename(_ id: UUID, to title: String) {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = title.trimmed
         guard !trimmed.isEmpty else { return }
         updateThread(id) {
             $0.title = trimmed
@@ -976,13 +1102,54 @@ final class AppModel {
     /// Deletes every archived thread at once: histories, terminals and checkpoints go with them.
     /// Worktrees stay on disk, exactly as they do after a single delete.
     func deleteArchivedThreads() {
-        let archived = threads.filter(\.isArchived)
-        guard !archived.isEmpty else { return }
-        // Helpers still in an archived thread's panel go with it.
-        let archivedIDs = Set(archived.map(\.id))
-        let removed = archived + threads.filter { helper in
+        deleteThreads(threads.filter(\.isArchived))
+    }
+
+    /// The threads the sidebar's "Delete settled and archived" clears: every archived one and
+    /// every settled one not still at work. A settled thread's helpers go with it, so only
+    /// the threads themselves count.
+    var finishedThreads: [ChatThread] {
+        threads.filter { thread in
+            if thread.isArchived { return true }
+            guard thread.isSettled, !thread.isHelper else { return false }
+            let runtime = existingRuntime(for: thread.id)
+            return runtime?.isRunning != true && runtime?.isHydraMerging != true
+        }
+    }
+
+    /// Deletes every settled and archived thread at once, the way Delete all clears the archive.
+    func deleteFinishedThreads() {
+        deleteThreads(finishedThreads)
+    }
+
+    /// The Thread menu's way in: there is no row to hang a popover from, so the question
+    /// is an alert, asked only when Settings wants deletes confirmed.
+    func askToDeleteFinishedThreads() {
+        let count = finishedThreads.count
+        guard count > 0 else { return }
+        if settings.confirmBeforeDeleting {
+            let alert = NSAlert()
+            alert.messageText = count == 1 ? "Delete the finished thread?" : "Delete all \(count) settled and archived threads?"
+            alert.informativeText = "Their histories will be removed. Files in your projects stay as they are."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: count == 1 ? "Delete Thread" : "Delete \(count) Threads").hasDestructiveAction = true
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        withAnimation(Chrome.panelSlide) { deleteFinishedThreads() }
+    }
+
+    private func deleteThreads(_ doomed: [ChatThread]) {
+        guard !doomed.isEmpty else { return }
+        // Helpers still in a deleted thread's panel go with it.
+        let doomedIDs = Set(doomed.map(\.id))
+        let removed = doomed + threads.filter { helper in
             guard let parent = helper.parentThreadID else { return false }
-            return archivedIDs.contains(parent) && !archivedIDs.contains(helper.id)
+            return doomedIDs.contains(parent) && !doomedIDs.contains(helper.id)
+        }
+        // A head deleted mid-job reports to its lead as stopped, as a single delete does.
+        for head in removed where head.hydra?.isFinished == false {
+            finishHydraHead(head.id, status: .interrupted, summary: nil)
         }
         if let selectedThreadID, removed.contains(where: { $0.id == selectedThreadID }) {
             self.selectedThreadID = nil
@@ -1055,6 +1222,7 @@ final class AppModel {
             runtimeMode: parent.runtimeMode,
             fastMode: parent.fastMode
         )
+        thread.speedTier = parent.speedTier
         thread.parentThreadID = parentID
         thread.isInPanel = true
         thread.title = title
@@ -1140,7 +1308,7 @@ final class AppModel {
         let suffix = String(threadID.uuidString.lowercased().prefix(8))
         let folder = project.name.replacingOccurrences(of: " ", with: "-").lowercased()
         let path = Storage.worktreesDirectory.appendingPathComponent("\(folder)-\(suffix)").path
-        let branch = "swarm-code/\(suffix)"
+        let branch = "ensembyte-code/\(suffix)"
         let base = await git.status()?.branch
         do {
             try await git.addWorktree(at: path, branch: branch, base: base)
@@ -1173,7 +1341,7 @@ final class AppModel {
     }
 
     func threadNeedsAttention(_ id: UUID) {
-        guard !WebsiteCaptures.isEnabled, let thread = thread(id) else { return }
+        guard !CaptureRun.isEnabled, let thread = thread(id) else { return }
         // Already in view with the app frontmost: the approval or question is on
         // screen, so no banner and no dock bounce. Seen too, so no unread mark is
         // left behind to stick on the dock.
@@ -1182,7 +1350,7 @@ final class AppModel {
             return
         }
         notify(threadID: id, title: thread.title, body: "Waiting for your decision.")
-        NSApp.requestUserAttention(.criticalRequest)
+        NSApp.requestUserAttention(.informationalRequest)
     }
 
     /// A turn ended. `continues` means a queued message picks up right away, so the agent is
@@ -1221,17 +1389,15 @@ final class AppModel {
         // whether or not the thread is in view.
         let chimed = settings.chimeWhenFinished && status != .interrupted
         if chimed { FinishChime.play() }
-        if !isVisible {
-            NSApp.requestUserAttention(.criticalRequest)
-        }
-        guard settings.notifyWhenFinished, let thread = thread(id) else { return }
+        guard !isVisible, settings.notifyWhenFinished, let thread = thread(id) else { return }
         let body = switch status {
         case .completed: "Finished."
         case .interrupted: "Stopped."
         case .failed: "Stopped with an error."
         case .running: ""
         }
-        notify(threadID: id, title: thread.title, body: body, sound: .default)
+        // The chime has already sounded, so the banner stays quiet rather than doubling it.
+        notify(threadID: id, title: thread.title, body: body, sound: chimed ? nil : .default)
     }
 
     func markRead(_ id: UUID) {
@@ -1256,128 +1422,28 @@ final class AppModel {
         updateDockBadge()
     }
 
-    // MARK: - In-app Toasts & Notifications
-
-    func showToast(title: String, message: String) {
-        let toast = ToastNotification(title: title, message: message)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            currentToast = toast
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(4.5))
-            if currentToast?.id == toast.id {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    currentToast = nil
-                }
-            }
-        }
-    }
-
-    func dismissToast() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            currentToast = nil
-        }
-    }
-
-    func openNotificationSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        } else if let fallback = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
-            NSWorkspace.shared.open(fallback)
-        }
-    }
-
-    private func createLogoAttachment() -> UNNotificationAttachment? {
-        let tempDir = FileManager.default.temporaryDirectory
-        let iconURL = tempDir.appendingPathComponent("ensembyte-logo-\(UUID().uuidString).png")
-        let icon = NSApp.applicationIconImage ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
-        guard let tiffData = icon.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiffData),
-              let pngData = rep.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-        do {
-            try pngData.write(to: iconURL)
-            return try UNNotificationAttachment(identifier: "ensembyte-logo", url: iconURL, options: nil)
-        } catch {
-            return nil
-        }
-    }
-
     func requestNotificationPermission() {
-        guard !WebsiteCaptures.isEnabled else { return }
+        guard !didRequestNotifications, !CaptureRun.isEnabled else { return }
+        didRequestNotifications = true
         Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            if settings.authorizationStatus == .notDetermined {
-                _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge, .providesAppNotificationSettings, .timeSensitive])
-            }
-            let refreshed = await center.notificationSettings()
-            await MainActor.run {
-                self.isNotificationPermissionDenied = (refreshed.authorizationStatus == .denied || refreshed.alertSetting == .disabled)
-            }
-        }
-    }
-
-    func sendTestNotification() {
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            if settings.authorizationStatus == .denied || settings.alertSetting == .disabled {
-                await MainActor.run {
-                    self.isNotificationPermissionDenied = true
-                    showToast(
-                        title: "Notifications Disabled in macOS",
-                        message: "Turn on notifications for Ensembyte in System Settings."
-                    )
-                    openNotificationSettings()
-                }
-            } else {
-                await MainActor.run {
-                    self.isNotificationPermissionDenied = false
-                    notify(threadID: UUID(), title: "Ensembyte", body: "Task notifications are working properly!", sound: .default)
-                }
-            }
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
         }
     }
 
     func notify(threadID: UUID, title: String, body: String, sound: UNNotificationSound? = .default) {
-        guard !WebsiteCaptures.isEnabled else { return }
-
-        // 1. In-app toast banner (for when window is on screen)
-        showToast(title: title, message: body)
-
-        // 2. Request dock attention (bounce dock icon continuously if minimized or inactive)
-        if !NSApp.isActive {
-            NSApp.requestUserAttention(.criticalRequest)
-        }
-
-        // 3. Modern macOS notification with Time-Sensitive interruption level and Ensembyte Logo
+        guard !CaptureRun.isEnabled else { return }
+        if NSApp.isActive, let thread = thread(threadID), isOnScreen(thread) { return }
+        requestNotificationPermission()
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = sound
-        content.interruptionLevel = .timeSensitive
-        content.relevanceScore = 1.0
         content.userInfo = ["threadID": threadID.uuidString]
-
-        if let attachment = createLogoAttachment() {
-            content.attachments = [attachment]
-        }
-
-        let identifier = "turn-\(threadID.uuidString)-\(Date.now.timeIntervalSince1970)"
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            if settings.authorizationStatus == .notDetermined {
-                _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge, .providesAppNotificationSettings, .timeSensitive])
-            }
-            try? await center.add(request)
-        }
+        let request = UNNotificationRequest(identifier: threadID.uuidString, content: content, trigger: nil)
+        Task { try? await UNUserNotificationCenter.current().add(request) }
     }
 
-        func updateDockBadge() {
+    func updateDockBadge() {
         let unread = threads.count { $0.hasUnread && !$0.isArchived && !$0.isInPanel }
         NSApp.dockTile.badgeLabel = unread > 0 ? String(unread) : nil
     }
@@ -1405,8 +1471,14 @@ final class AppModel {
 
     // MARK: - Persistence
 
+    /// The library holds every thread and every head's report, runs to megabytes, and
+    /// nearly every thread update lands here. A save waits 400 ms, never goes out within
+    /// four seconds of the last one, and takes along every change made while it waits: a
+    /// busy team rewrote the file on every status change, over two gigabytes in an hour
+    /// and a quarter (September 22). Restarting the wait on each change also meant a steady
+    /// stream of changes never saved at all.
     func scheduleSave() {
-        guard persistenceEnabled, saveTask == nil else { return }
+        guard persistenceEnabled, isLibraryLoaded, saveTask == nil else { return }
         let sinceLast = lastLibrarySave.map { ContinuousClock.now - $0 } ?? .seconds(60)
         let wait = max(.milliseconds(400), .seconds(4) - sinceLast)
         saveTask = Task { [weak self] in
@@ -1418,7 +1490,7 @@ final class AppModel {
     }
 
     private func saveLibrary() {
-        guard persistenceEnabled else { return }
+        guard isLibraryLoaded, persistenceEnabled else { return }
         lastLibrarySave = .now
         var library = Library()
         library.projects = projects
@@ -1427,9 +1499,22 @@ final class AppModel {
         DiskWriter.shared.encodeAndWrite(library, to: url)
     }
 
+    /// Flush recovery metadata before an opt-in provider archive. A capture or a disk
+    /// write failure cannot authorize a provider-side change.
+    func saveProviderHistoryIntent() async throws {
+        guard isLibraryLoaded, persistenceEnabled, !CaptureRun.isEnabled else {
+            throw ProviderError.failed("Provider history changes require a persistent library.")
+        }
+        var library = Library()
+        library.projects = projects
+        library.threads = threads
+        try await DiskWriter.shared.writeOrThrow(library, to: Storage.libraryURL)
+        lastLibrarySave = .now
+    }
+
     /// Writes everything synchronously, for use while the app terminates.
     func saveBeforeQuit() {
-        guard persistenceEnabled else { return }
+        guard isLibraryLoaded, persistenceEnabled else { return }
         persistenceEnabled = false
         saveTask?.cancel()
         saveTask = nil
@@ -1442,17 +1527,17 @@ final class AppModel {
             runtime.stopSession()
             // A thread only read since its last save is already on disk as it is.
             guard let snapshot = runtime.unsavedSnapshot() else { continue }
-            DiskWriter.shared.writeSynchronously(snapshot, to: Storage.threadURL(runtime.threadID))
+            DiskWriter.shared.writeThreadSynchronously(snapshot)
         }
         DiskWriter.shared.waitForQueuedWrites()
         terminals.terminateAll()
     }
 }
 
-/// Reads project scripts from `swarm-code.json` at the project root.
+/// Reads project scripts from `ensembyte-code.json` at the project root.
 enum ProjectFile {
     static func scripts(at url: URL) -> [ProjectScript] {
-        guard let data = try? Data(contentsOf: url.appendingPathComponent("swarm-code.json")),
+        guard let data = try? Data(contentsOf: url.appendingPathComponent("ensembyte-code.json")),
               let json = JSONValue.parse(data) else { return [] }
         return (json["scripts"]?.array ?? []).compactMap { script in
             guard let name = script["name"]?.string, let command = script["command"]?.string else { return nil }

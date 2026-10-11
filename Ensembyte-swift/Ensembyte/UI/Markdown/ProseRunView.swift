@@ -4,7 +4,6 @@ import SwiftUI
 struct ProseRunView: View {
     let blocks: [MarkdownBlock]
     @Environment(\.markdownPointSize) private var pointSize
-    @Environment(\.chatZoom) private var zoom
     @Environment(\.markdownDimmed) private var dimmed
     @Environment(\.hydraMentionPersonas) private var hydraMentionPersonas
     @Environment(\.hydraMentionTargets) private var hydraMentionTargets
@@ -15,49 +14,14 @@ struct ProseRunView: View {
     @State private var faviconRevision = 0
 
     var body: some View {
-        let scaled = (pointSize * zoom * 2).rounded() / 2
+        let scaled = (pointSize * 2).rounded() / 2
         let sources = ProseRunRepresentable.joinedSources(blocks)
         let linkKey = RichLink.linkAssetKey(for: sources)
         let linkBox = linkView
-        let hand = $showsHand
-        let hoveredHead = $hoveredHeadID
-        let personasByName = Dictionary(hydraMentionPersonas.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         let targets = hydraMentionTargets
         ProseRunRepresentable(blocks: blocks, pointSize: scaled, dimmed: dimmed, revision: faviconRevision, mentions: hydraMentionPersonas, targets: hydraMentionTargets, onOpenHead: { url in openURL(url) }, onHost: { [weak linkBox] view in linkBox?.value = view })
             .frame(maxWidth: .infinity, alignment: .leading)
-            .onContinuousHover(coordinateSpace: .local) { [weak linkBox, hand, hoveredHead, personasByName, targets] phase in
-                guard let view = linkBox?.value as? LinkTextView else { return }
-                switch phase {
-                case .active(let point):
-                    let overLink = view.hasLink(at: point)
-                    if overLink != hand.wrappedValue {
-                        hand.wrappedValue = overLink
-                        if overLink { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                    }
-                    if let (name, url, rect) = view.headMentionRect(at: point),
-                       let target = targets[name], target.url == url,
-                       let persona = personasByName[name] {
-                        if hoveredHead.wrappedValue != target.threadID {
-                            hoveredHead.wrappedValue = target.threadID
-                            HydraHeadHoverPopover.shared.show(persona: persona, target: target, relativeTo: rect, of: view)
-                        }
-                    } else {
-                        if hoveredHead.wrappedValue != nil {
-                            hoveredHead.wrappedValue = nil
-                            HydraHeadHoverPopover.shared.hide()
-                        }
-                    }
-                case .ended:
-                    if hand.wrappedValue { NSCursor.pop(); hand.wrappedValue = false }
-                    hoveredHead.wrappedValue = nil
-                    HydraHeadHoverPopover.shared.hide()
-                }
-            }
-            .onDisappear { [hand, hoveredHead] in
-                if hand.wrappedValue { NSCursor.pop(); hand.wrappedValue = false }
-                hoveredHead.wrappedValue = nil
-                HydraHeadHoverPopover.shared.hide()
-            }
+            .modifier(LinkHoverModifier(linkView: linkBox, showsHand: $showsHand, hoveredHeadID: $hoveredHeadID, personas: hydraMentionPersonas, targets: targets))
             .task(id: linkKey) { [sources, linkKey, revision = $faviconRevision] in
                 if !linkKey.isEmpty {
                     await InlineText.fetchLinkAssets(source: sources, streaming: false, revision: revision)
@@ -159,7 +123,7 @@ struct ProseRunRepresentable: NSViewRepresentable {
     @MainActor
     private static func append(_ block: MarkdownBlock, depth: Int, indent: CGFloat, dimmed: Bool, spacing: CGFloat, pointSize: CGFloat, mentions: [HydraPersona], targets: [String: HydraMentionTarget], to out: NSMutableAttributedString) {
         let base = NSFont.systemFont(ofSize: pointSize)
-        let color = dimmed ? NSColor.secondaryLabelColor : NSColor.labelColor
+        let color = dimmed ? NSColor.labelColor.withAlphaComponent(0.7) : NSColor.labelColor
         switch block {
         case .paragraph(let text):
             separate(to: out, font: base, color: color)

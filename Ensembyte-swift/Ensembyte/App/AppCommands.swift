@@ -10,12 +10,12 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
-            Button("Settings…") { WindowManager.shared.showSettings() }
+            Button("Settings…") { WindowManager.shared.toggleSettings() }
                 .keyboardShortcut(shortcuts.keyboardShortcut(for: .openSettings))
         }
 
         // File's stock Close sits before the Thread menu and would take ⌘W from Archive thread…,
-        // closing the main window instead. Secondary windows close on ⌘W themselves (SecondaryWindow).
+        // closing the main window instead.
         CommandGroup(replacing: .saveItem) {}
 
         CommandGroup(before: .windowArrangement) {
@@ -102,6 +102,9 @@ struct AppCommands: Commands {
             Button(model.selectedThread?.isSettled == true ? "Reopen thread" : "Settle thread") { model.settleSelectedThread() }
                 .keyboardShortcut(shortcuts.keyboardShortcut(for: .settleThread))
                 .disabled(model.selectedThread.map { $0.isHelper } ?? true)
+            Divider()
+            Button("Delete Settled and Archived Threads…") { model.askToDeleteFinishedThreads() }
+                .disabled(model.finishedThreads.isEmpty)
         }
 
         CommandGroup(replacing: .help) {

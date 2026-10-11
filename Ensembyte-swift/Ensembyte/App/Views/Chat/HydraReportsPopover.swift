@@ -256,7 +256,6 @@ struct HydraReportsPopover: View {
         }
         .frame(width: Self.width)
         // The popover reads at its own size, not the conversation's zoom.
-        .environment(\.chatZoom, 1)
         .task(id: text) {
             // The reports not on screen yet parse off the main thread, so opening a card
             // finds its blocks ready.

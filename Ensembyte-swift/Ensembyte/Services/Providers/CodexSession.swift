@@ -3,14 +3,12 @@ import OSLog
 
 /// Drives `codex app-server` over JSON-RPC.
 ///
-/// With Hydra on, the thread starts with config overrides that put the heads on the pair's
-/// model and effort and cap how many run at once, and with developer instructions that
-/// steer the lead towards `spawn_agent`. A head is a child thread of the app-server:
-/// `thread/started` announces it with the lead as its parent, its own notifications carry
-/// its thread id and go out wrapped in `agentEvent`, and its `turn/completed` ends it.
+/// With Hydra on, the thread starts with `multi_agent` and `multi_agent_v2` switched off and
+/// with developer instructions that carry the lead's delegation-block policy: every head is
+/// a thread Ensembyte runs, never a child thread of this app-server.
 @MainActor
 final class CodexSession: ProviderSession {
-    private static let log = Logger(subsystem: "org.ensembyte.desktop", category: "codex")
+    private static let log = Logger(subsystem: "iordv.ensembytecode", category: "codex")
     var onEvent: ((ProviderEvent) -> Void)?
 
     /// Whose transcript a notification belongs to.
@@ -36,9 +34,19 @@ final class CodexSession: ProviderSession {
     private var connection: JSONRPCConnection?
     private var threadID: String?
     private var turnID: String?
+    private var completionFallback: Task<Void, Never>?
+    private var finalErrors: [String: String] = [:]
+    private var lastAgentMessage: (id: String, text: String)?
     private var activeModel: String?
     private var pendingRequests: [String: PendingRequest] = [:]
     private var isStopping = false
+    private var historyArchived = false
+    private var historyDirectory: String
+    private var archiveConfirmed = false
+    private static let historySources: JSONValue = .array([
+        "cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview",
+        "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown",
+    ].map(JSONValue.string))
     /// Resolves the cumulative thread total into per-event spend for the ledger.
     private var spendTracker = TokenSpendTracker()
     /// The heads' threads, spawned under this one, with each one's running turn (for
@@ -46,11 +54,16 @@ final class CodexSession: ProviderSession {
     private var headThreads: Set<String> = []
     private var headTurns: [String: String] = [:]
     private var headSpend: [String: TokenSpendTracker] = [:]
+    /// The model each head runs on, as its thread reported it, so its spend can
+    /// name it. A head that never reported one leaves its spend with no model.
+    private var headModels: [String: String] = [:]
     /// The lead's event sink, made once rather than once per notification.
     private lazy var leadSink: (ProviderEvent) -> Void = { [weak self] event in self?.onEvent?(event) }
 
     init(configuration: SessionConfiguration) {
         self.configuration = configuration
+        historyArchived = configuration.codexHistoryArchived
+        historyDirectory = configuration.codexHistoryDirectory ?? configuration.workingDirectory.path
     }
 
     var isRunning: Bool {
@@ -59,6 +72,24 @@ final class CodexSession: ProviderSession {
     }
 
     private var workingDirectory: String { configuration.workingDirectory.path }
+
+    // MARK: - Voice
+
+    /// The realtime voice notifications on this app-server (`thread/realtime/*` and
+    /// `account/updated`), for a voice call that runs in this session's thread.
+    var onVoiceNotification: ((String, JSONValue) -> Void)?
+
+    /// The `codex` this session runs, where the voice helper of its installation is found.
+    var executableURL: URL? { configuration.executable }
+
+    /// The thread a voice call attaches to: this session's own.
+    var voiceThreadID: String? { threadID }
+
+    /// A request on this session's app-server for its voice call.
+    func voiceRequest(_ method: String, _ params: JSONValue = .null, seconds: Int = 30) async throws -> JSONValue {
+        guard let connection, !connection.isClosed else { throw ProviderError.notRunning }
+        return try await Self.deadlineRequest(connection, method, params, seconds: seconds)
+    }
 
     func start() async throws -> String {
         guard let executable = configuration.executable else { throw ProviderError.notInstalled(configuration.provider) }
@@ -82,6 +113,10 @@ final class CodexSession: ProviderSession {
         let params = threadParameters
 
         if let resumeID = configuration.resumeID {
+            if configuration.managesCodexHeadHistory, historyArchived {
+                try await unarchiveIfNeeded(resumeID, connection: connection)
+                historyArchived = false
+            }
             var resume = params
             resume["threadId"] = .string(resumeID)
             resume["excludeTurns"] = true
@@ -90,6 +125,7 @@ final class CodexSession: ProviderSession {
                 throw ProviderError.failed("Codex could not resume the original conversation.")
             }
             threadID = id
+            historyDirectory = workingDirectory
             activeModel = result["model"]?.string
             started = true
             return id
@@ -106,24 +142,8 @@ final class CodexSession: ProviderSession {
 
     private func requestThread(_ connection: JSONRPCConnection, _ method: String, _ params: [String: JSONValue]) async throws -> JSONValue {
         do {
-            return try await connection.request(method, .object(params))
+            return try await Self.deadlineRequest(connection, method, .object(params), seconds: 90, mutating: true)
         } catch let error as RPCError where (error.message.contains("failed to load configuration") || error.message.contains("invalid transport")) && params["config"]?["mcp_servers"] != nil {
-            if case .object(let config) = params["config"],
-               case .object(let servers) = config["mcp_servers"] {
-                let localOnly = servers.filter { _, entry in
-                    entry["command"]?.string?.isEmpty == false
-                }
-                if !localOnly.isEmpty && localOnly.count < servers.count {
-                    var retried = params
-                    var newConfig = config
-                    newConfig["mcp_servers"] = .object(localOnly)
-                    retried["config"] = .object(newConfig)
-                    if let result = try? await connection.request(method, .object(retried)) {
-                        onEvent?(.notice(Notice(level: .warning, message: "Codex could not connect to some remote MCP servers; local servers remain active.")))
-                        return result
-                    }
-                }
-            }
             var retried = params
             if case .object(var config) = retried["config"] {
                 config["mcp_servers"] = nil
@@ -133,7 +153,7 @@ final class CodexSession: ProviderSession {
                     retried["config"] = .object(config)
                 }
             }
-            let result = try await connection.request(method, .object(retried))
+            let result = try await Self.deadlineRequest(connection, method, .object(retried), seconds: 90, mutating: true)
             onEvent?(.notice(Notice(level: .warning, message: "Codex refused the MCP server configuration, so this session runs without MCP servers. Check MCP in Settings.")))
             return result
         }
@@ -141,6 +161,7 @@ final class CodexSession: ProviderSession {
 
     func send(_ input: TurnInput) async throws {
         guard let connection, !connection.isClosed, let threadID else { throw ProviderError.notRunning }
+        try await restoreHeadHistory()
         var content: [JSONValue] = input.command?.codexInput(for: input.text) ?? [["type": "text", "text": .string(input.text)]]
         for image in input.images where image.isImage {
             content.append(["type": "localImage", "path": .string(image.path)])
@@ -170,21 +191,23 @@ final class CodexSession: ProviderSession {
                 ],
             ]
         }
-        let result = try await connection.request("turn/start", .object(params))
+        let result = try await Self.deadlineRequest(connection, "turn/start", .object(params), seconds: 90, mutating: true)
         if let id = result["turn"]?["id"]?.string { turnID = id }
     }
 
     func interrupt() async {
+        completionFallback?.cancel()
+        completionFallback = nil
         guard let connection, let threadID, let turnID else { return }
-        _ = try? await connection.request("turn/interrupt", [
+        _ = try? await Self.deadlineRequest(connection, "turn/interrupt", [
             "threadId": .string(threadID),
             "turnId": .string(turnID),
-        ])
+        ], seconds: 10, mutating: true)
     }
 
     func compact() async throws {
         guard let connection, let threadID else { throw ProviderError.notRunning }
-        _ = try await connection.request("thread/compact/start", ["threadId": .string(threadID)])
+        _ = try await Self.deadlineRequest(connection, "thread/compact/start", ["threadId": .string(threadID)], seconds: 120)
     }
 
     func rollback(from targetID: String) async throws -> String? {
@@ -199,7 +222,7 @@ final class CodexSession: ProviderSession {
         var found = false
         var previousID: String?
         repeat {
-            let page = try await connection.request("thread/turns/list", [
+            let page = try await Self.deadlineRequest(connection, "thread/turns/list", [
                 "threadId": .string(threadID), "cursor": .optional(cursor),
                 "limit": 100, "sortDirection": "desc", "itemsView": "notLoaded",
             ])
@@ -219,10 +242,10 @@ final class CodexSession: ProviderSession {
         guard found else { throw ProviderError.failed("Codex could not find the selected turn. The conversation was kept.") }
         let result: JSONValue
         do {
-            result = try await connection.request("thread/rollback", [
+            result = try await Self.deadlineRequest(connection, "thread/rollback", [
                 "threadId": .string(threadID),
                 "numTurns": .int(count),
-            ])
+            ], seconds: 60)
         } catch let error as RPCError where error.message.contains("paginated threads do not support thread/rollback") {
             return try await forkHistory(before: targetID, keeping: previousID, connection: connection, originalID: threadID)
         }
@@ -247,20 +270,26 @@ final class CodexSession: ProviderSession {
         if let model = configuration.model { params["model"] = .string(model) }
         var config: [String: JSONValue] = [:]
         if let hydra = configuration.hydra {
-            if hydra.runsNatively {
-                config.merge(HydraPrompts.codexConfig(hydra)) { _, hydra in hydra }
-                params["developerInstructions"] = .string(HydraPrompts.policy(for: .codex, hydra))
-            } else {
-                // Heads on another provider are Swarm-run: the lead asks for them with the
-                // delegation block, and Codex's own agents are switched off for the thread,
-                // whatever the user's config enables. Told only in words, a lead still
-                // reached for spawn_agent, ran its heads on itself and the pair's model never
-                // saw them.
-                config["features"] = ["multi_agent": .bool(false)]
-                params["developerInstructions"] = .string(HydraPrompts.fallbackPolicy(hydra))
-            }
+            // The heads are Ensembyte-run: the lead asks for them with the delegation block,
+            // and Codex's own agents are switched off for the thread, whatever the user's
+            // config enables. Told only in words, a lead still reached for spawn_agent and
+            // ran its heads inside its own session, out of the app's sight.
+            config["features"] = ["multi_agent": .bool(false), "multi_agent_v2": .bool(false)]
+            params["developerInstructions"] = .string(HydraPrompts.fallbackPolicy(hydra))
         }
         if !config.isEmpty { params["config"] = .object(config) }
+        // A voice call's chat never runs Codex's own sub-agents: they are switched off for
+        // the thread whatever the user's config enables, and its heads, with Hydra on, go
+        // out through Ensembyte's delegation block like any other lead's.
+        if configuration.isVoiceOrchestrator {
+            var voiceConfig = params["config"]?.object ?? [:]
+            voiceConfig["features"] = ["multi_agent": .bool(false), "multi_agent_v2": .bool(false)]
+            params["config"] = .object(voiceConfig)
+            let hydraPolicy = configuration.hydra.map { HydraPrompts.fallbackPolicy($0) }
+            params["developerInstructions"] = .string(
+                [VoiceCatalog.orchestratorInstructions(hydra: hydraPolicy != nil), hydraPolicy].compactMap { $0 }.joined(separator: "\n\n")
+            )
+        }
         // Anti-slop guidance rides along for every thread, Hydra or not, and combines with
         // whatever developer instructions are already set (nil for an ordinary chat). The
         // off notice still goes out, so a resumed thread cannot keep earlier guidance alive.
@@ -282,7 +311,7 @@ final class CodexSession: ProviderSession {
 
     private func forkHistory(before targetID: String, keeping previousID: String?, connection: JSONRPCConnection, originalID: String) async throws -> String? {
         guard let previousID else {
-            _ = try await connection.request("thread/archive", ["threadId": .string(originalID)])
+            _ = try await Self.deadlineRequest(connection, "thread/archive", ["threadId": .string(originalID)])
             threadID = nil
             turnID = nil
             return nil
@@ -291,12 +320,12 @@ final class CodexSession: ProviderSession {
         params["threadId"] = .string(originalID)
         params["lastTurnId"] = .string(previousID)
         params["excludeTurns"] = true
-        let result = try await connection.request("thread/fork", .object(params))
+        let result = try await Self.deadlineRequest(connection, "thread/fork", .object(params))
         guard let id = result["thread"]?["id"]?.string, id != originalID else {
             throw ProviderError.failed("Codex did not create a conversation at the revert point.")
         }
         do {
-            let page = try await connection.request("thread/turns/list", [
+            let page = try await Self.deadlineRequest(connection, "thread/turns/list", [
                 "threadId": .string(id), "limit": 1, "sortDirection": "desc", "itemsView": "notLoaded",
             ])
             guard let turns = page["data"]?.array,
@@ -304,9 +333,9 @@ final class CodexSession: ProviderSession {
                   turns.first?["id"]?.string != targetID else {
                 throw ProviderError.failed("Codex did not confirm the reverted conversation history.")
             }
-            _ = try await connection.request("thread/archive", ["threadId": .string(originalID)])
+            _ = try await Self.deadlineRequest(connection, "thread/archive", ["threadId": .string(originalID)])
         } catch {
-            _ = try? await connection.request("thread/archive", ["threadId": .string(id)])
+            _ = try? await Self.deadlineRequest(connection, "thread/archive", ["threadId": .string(id)])
             throw error
         }
         threadID = id
@@ -315,34 +344,88 @@ final class CodexSession: ProviderSession {
         return id
     }
 
-    func resolveApproval(_ requestID: String, optionID: String) {
-        guard let pending = pendingRequests.removeValue(forKey: requestID) else { return }
-        switch pending {
-        case .decision(let id, let payloads):
-            connection?.respond(to: id, result: ["decision": payloads[optionID] ?? "cancel"])
-        case .permissions(let id, let requested):
-            if optionID == "turn" || optionID == "session" {
-                connection?.respond(to: id, result: ["permissions": requested, "scope": .string(optionID)])
-            } else {
-                connection?.respond(to: id, result: ["permissions": [:], "scope": "turn"])
-            }
-        case .question(let id):
-            connection?.respond(to: id, result: ["answers": [:]])
+    func readTurn(_ turnID: String) async throws -> (status: TurnStatus, lastAgentMessage: String?)? {
+        guard let connection, let threadID else { throw ProviderError.notRunning }
+        let result = try await Self.deadlineRequest(connection, "thread/read", [
+            "threadId": .string(threadID), "includeTurns": true,
+        ])
+        guard let turn = result["thread"]?["turns"]?.array?.first(where: { $0["id"]?.string == turnID }) else { return nil }
+        // Read back after a crash, an unknown or in-progress status is not an ending: only
+        // a turn Codex says completed may be closed as completed.
+        let status: TurnStatus = switch turn["status"]?.string {
+        case "completed": .completed
+        case "interrupted": .interrupted
+        case "failed": .failed
+        default: .running
         }
-        onEvent?(.requestResolved(id: requestID))
+        let message = turn["items"]?.array?.last(where: { $0["type"]?.string == "agentMessage" })?["text"]?.string
+        return (status, message)
+    }
+
+    func resolveApproval(_ requestID: String, optionID: String) {
+        resolveApproval(requestID, optionID: optionID, delivered: { _ in })
+    }
+
+    func resolveApproval(_ requestID: String, optionID: String, delivered: @escaping @MainActor (Bool) -> Void) {
+        guard !isStopping, let connection, !connection.isClosed, let pending = pendingRequests[requestID] else {
+            delivered(false)
+            return
+        }
+        let id: RPCID
+        let result: JSONValue
+        switch pending {
+        case .decision(let request, let payloads):
+            id = request
+            result = ["decision": payloads[optionID] ?? "cancel"]
+        case .permissions(let request, let requested):
+            id = request
+            if optionID == "turn" || optionID == "session" {
+                result = ["permissions": requested, "scope": .string(optionID)]
+            } else {
+                result = ["permissions": [:], "scope": "turn"]
+            }
+        case .question(let request):
+            id = request
+            result = ["answers": [:]]
+        }
+        connection.respond(to: id, result: result) { [weak self] succeeded in
+            if succeeded, let self, self.pendingRequests.removeValue(forKey: requestID) != nil {
+                self.onEvent?(.requestResolved(id: requestID))
+            }
+            delivered(succeeded)
+        }
     }
 
     func answerQuestion(_ requestID: String, answers: [String: [String]]) {
-        guard case .question(let id)? = pendingRequests.removeValue(forKey: requestID) else { return }
+        answerQuestion(requestID, answers: answers, delivered: { _ in })
+    }
+
+    func answerQuestion(_ requestID: String, answers: [String: [String]], delivered: @escaping @MainActor (Bool) -> Void) {
+        guard !isStopping, let connection, !connection.isClosed, case .question(let id)? = pendingRequests[requestID] else {
+            delivered(false)
+            return
+        }
         var payload: [String: JSONValue] = [:]
         for (questionID, values) in answers {
             payload[questionID] = ["answers": .array(values.map(JSONValue.string))]
         }
-        connection?.respond(to: id, result: ["answers": .object(payload)])
-        onEvent?(.requestResolved(id: requestID))
+        connection.respond(to: id, result: ["answers": .object(payload)]) { [weak self] succeeded in
+            if succeeded, let self, self.pendingRequests.removeValue(forKey: requestID) != nil {
+                self.onEvent?(.requestResolved(id: requestID))
+            }
+            delivered(succeeded)
+        }
+    }
+
+    func stopAndWait(timeout: TimeInterval) async {
+        let connection = connection
+        stop()
+        await connection?.closeAndWait(timeout: timeout)
     }
 
     func stop() {
+        completionFallback?.cancel()
+        completionFallback = nil
         isStopping = true
         connection?.close()
     }
@@ -350,10 +433,119 @@ final class CodexSession: ProviderSession {
     func stopAgent(_ id: String) async -> Bool {
         guard let connection, let threadID, id != threadID,
               headThreads.contains(id), let turnID = headTurns[id] else { return false }
-        return (try? await connection.request("turn/interrupt", [
+        return (try? await Self.deadlineRequest(connection, "turn/interrupt", [
             "threadId": .string(id),
             "turnId": .string(turnID),
-        ])) != nil
+        ], seconds: 10, mutating: true)) != nil
+    }
+
+    /// Archive only the exact owned, idle leaf session. Archive cascades in Codex, so
+    /// even a completed descendant prevents it. Never infer ownership from a title.
+    /// Official contract: https://developers.openai.com/codex/app-server
+    func archiveHeadHistory(expectedID: String, stillEligible: () -> Bool, willArchive: () async throws -> Void) async throws {
+        guard configuration.managesCodexHeadHistory, configuration.isHydraHead,
+              let connection, !connection.isClosed, threadID == expectedID,
+              turnID == nil, headThreads.isEmpty, !isStopping, !historyArchived,
+              stillEligible() else { throw ProviderError.failed("The head is no longer eligible for archiving.") }
+        // Keep the local connection as the authority. No second process, auth lookup,
+        // provider filesystem edits or account-wide history scan is needed.
+        let watchdog = Task {
+            try? await Task.sleep(for: .seconds(20))
+            if !Task.isCancelled { connection.close() }
+        }
+        defer { watchdog.cancel() }
+        for archived in [false, true] {
+            let descendants = try await Self.deadlineRequest(connection, "thread/list", [
+                "ancestorThreadId": .string(expectedID), "archived": .bool(archived),
+                "sourceKinds": Self.historySources, "limit": 1,
+            ])
+            guard let rows = descendants["data"]?.array, rows.isEmpty,
+                  descendants["nextCursor"]?.string == nil else {
+                throw ProviderError.failed("Codex history stays visible because this head has descendants or their state could not be confirmed.")
+            }
+        }
+        let read = try await Self.deadlineRequest(connection, "thread/read", ["threadId": .string(expectedID), "includeTurns": false])
+        guard read["thread"]?["id"]?.string == expectedID,
+              read["thread"]?["ephemeral"]?.bool == false,
+              read["thread"]?["parentThreadId"]?.isNull == true,
+              read["thread"]?["forkedFromId"]?.isNull == true,
+              read["thread"]?["originator"]?.string == "ensembyte-code",
+              read["thread"]?["status"]?["type"]?.string == "idle",
+              threadID == expectedID, turnID == nil, headThreads.isEmpty,
+              !isStopping, stillEligible() else {
+            throw ProviderError.failed("Codex history stays visible because the head is active or its idle state could not be confirmed.")
+        }
+        // Save the need to reconcile BEFORE dispatch: a lost response or process exit
+        // must not strand an archived session or silently start a replacement.
+        archiveConfirmed = false
+        try await willArchive()
+        // The save suspended: the head may have resumed, stopped or lost eligibility since.
+        guard !Task.isCancelled, !connection.isClosed, threadID == expectedID,
+              turnID == nil, headThreads.isEmpty, !isStopping, stillEligible() else {
+            throw ProviderError.failed("The head is no longer eligible for archiving.")
+        }
+        historyArchived = true
+        _ = try await Self.deadlineRequest(connection, "thread/archive", ["threadId": .string(expectedID)])
+        // Read-only round trip also drains the target's archive notification. Never
+        // claim success just from a cascading request's empty result.
+        _ = try await Self.deadlineRequest(connection, "thread/read", ["threadId": .string(expectedID), "includeTurns": false])
+        guard archiveConfirmed else {
+            throw ProviderError.failed("Codex did not confirm that this exact head was archived. Its state will be reconciled before a follow-up.")
+        }
+    }
+
+    /// A later message restores the same session, preserving its identifier and history.
+    func restoreHeadHistory() async throws {
+        guard historyArchived else { return }
+        guard configuration.managesCodexHeadHistory, let connection, !connection.isClosed,
+              let threadID, !isStopping else { throw ProviderError.notRunning }
+        let watchdog = Task {
+            try? await Task.sleep(for: .seconds(20))
+            if !Task.isCancelled { connection.close() }
+        }
+        defer { watchdog.cancel() }
+        try await unarchiveIfNeeded(threadID, connection: connection)
+        var params = threadParameters
+        params["threadId"] = .string(threadID)
+        params["excludeTurns"] = true
+        let result = try await requestThread(connection, "thread/resume", params)
+        guard result["thread"]?["id"]?.string == threadID else {
+            throw ProviderError.failed("Codex could not restore the original head's history.")
+        }
+        historyArchived = false
+    }
+
+    /// Reconcile acknowledged and uncertain archives, including a manual unarchive
+    /// outside Ensembyte. Read only this working directory, with bounded pagination.
+    private func unarchiveIfNeeded(_ id: String, connection: JSONRPCConnection) async throws {
+        let watchdog = Task {
+            try? await Task.sleep(for: .seconds(20))
+            if !Task.isCancelled { connection.close() }
+        }
+        defer { watchdog.cancel() }
+        var cursor: String?
+        var seen: Set<String> = []
+        for _ in 0..<64 {
+            let page = try await Self.deadlineRequest(connection, "thread/list", [
+                "archived": true, "cwd": .string(historyDirectory),
+                "sourceKinds": Self.historySources, "limit": 100, "cursor": .optional(cursor),
+            ])
+            guard let rows = page["data"]?.array,
+                  rows.allSatisfy({ $0["id"]?.string != nil }) else {
+                throw ProviderError.failed("Codex did not report its archived sessions. The head's history was kept.")
+            }
+            if rows.contains(where: { $0["id"]?.string == id }) {
+                let restored = try await Self.deadlineRequest(connection, "thread/unarchive", ["threadId": .string(id)])
+                guard restored["thread"]?["id"]?.string == id else {
+                    throw ProviderError.failed("Codex did not confirm restoration of the original head.")
+                }
+                return
+            }
+            guard let next = page["nextCursor"]?.string else { return }
+            guard seen.insert(next).inserted else { break }
+            cursor = next
+        }
+        throw ProviderError.failed("Codex history could not be reconciled within the page limit. No replacement session was created.")
     }
 
     // MARK: - Catalog
@@ -365,7 +557,7 @@ final class CodexSession: ProviderSession {
             if !Task.isCancelled { connection.close() }
         }
         defer { watchdog.cancel(); connection.close() }
-        return SlashCommand.codexSkills(try await connection.request("skills/list", ["cwds": [.string(directory.path)], "forceReload": true]))
+        return SlashCommand.codexSkills(try await Self.deadlineRequest(connection, "skills/list", ["cwds": [.string(directory.path)], "forceReload": true]))
     }
 
     static func listModels(executable: URL, environment: [String: String]) async throws -> [ModelOption] {
@@ -381,7 +573,7 @@ final class CodexSession: ProviderSession {
         for _ in 0..<10 {
             var params: [String: JSONValue] = [:]
             if !cursor.isNull { params["cursor"] = cursor }
-            let result = try await connection.request("model/list", .object(params))
+            let result = try await Self.deadlineRequest(connection, "model/list", .object(params))
             for model in result["data"]?.array ?? [] where model["hidden"]?.bool != true {
                 guard let id = model["id"]?.string else { continue }
                 models.append(ModelOption(
@@ -391,7 +583,8 @@ final class CodexSession: ProviderSession {
                     efforts: (model["supportedReasoningEfforts"]?.array ?? []).compactMap { $0["reasoningEffort"]?.string },
                     defaultEffort: model["defaultReasoningEffort"]?.string,
                     isDefault: model["isDefault"]?.bool ?? false,
-                    fastTier: fastTier(in: model["serviceTiers"]?.array ?? [])
+                    fastTier: fastTier(in: model["serviceTiers"]?.array ?? []),
+                    speedTiers: speedTiers(in: model["serviceTiers"]?.array ?? [])
                 ))
             }
             cursor = result["nextCursor"] ?? .null
@@ -411,7 +604,7 @@ final class CodexSession: ProviderSession {
         defer { connection.close() }
         let result: JSONValue
         do {
-            result = try await connection.request("account/rateLimits/read")
+            result = try await Self.deadlineRequest(connection, "account/rateLimits/read")
         } catch {
             return PlanLimits(
                 planName: nil,
@@ -485,9 +678,7 @@ final class CodexSession: ProviderSession {
             return Date(timeIntervalSince1970: number > 10_000_000_000 ? number / 1_000 : number)
         }
         guard let text = value.string else { return nil }
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+        return ISO8601.date(from: text)
     }
 
     /// Spends one of the account's banked resets. Without a credit id the app-server picks one.
@@ -501,7 +692,7 @@ final class CodexSession: ProviderSession {
         defer { connection.close() }
         var params: [String: JSONValue] = ["idempotencyKey": .string(UUID().uuidString.lowercased())]
         if let creditID { params["creditId"] = .string(creditID) }
-        let result = try await connection.request("account/rateLimitResetCredit/consume", .object(params))
+        let result = try await Self.deadlineRequest(connection, "account/rateLimitResetCredit/consume", .object(params))
         guard let outcome = result["outcome"]?.string.flatMap(PlanLimits.ResetOutcome.init(rawValue:)) else {
             throw ResetCreditError.unknownOutcome
         }
@@ -515,6 +706,15 @@ final class CodexSession: ProviderSession {
             let label = "\(id) \(tier["name"]?.string ?? "")".lowercased()
             return label.contains("fast") || label.contains("priority") ? id : nil
         }.first
+    }
+
+    /// Every tier Codex lists for a model, by its own name ("Fast", "Ultrafast"), so a
+    /// pair can pick one past the tier fast mode turns on.
+    private static func speedTiers(in tiers: [JSONValue]) -> [ModelSpeedTier] {
+        tiers.compactMap { tier in
+            guard let id = tier["id"]?.string, id != ModelSpeedTier.standardID else { return nil }
+            return ModelSpeedTier(id: id, name: tier["name"]?.string ?? id, detail: tier["description"]?.string)
+        }
     }
 
     private static func connect(
@@ -534,7 +734,7 @@ final class CodexSession: ProviderSession {
         defer { watchdog.cancel() }
         do {
             _ = try await connection.request("initialize", [
-                "clientInfo": ["name": "ensembyte", "title": "Ensembyte", "version": .string(AppInfo.version)],
+                "clientInfo": ["name": "ensembyte-code", "title": "Ensembyte", "version": .string(AppInfo.version)],
                 "capabilities": ["experimentalApi": true],
             ])
         } catch {
@@ -548,6 +748,13 @@ final class CodexSession: ProviderSession {
     // MARK: - Notifications
 
     private func handleNotification(_ method: String, _ params: JSONValue) {
+        if method.hasPrefix("thread/realtime/") || method == "account/updated" {
+            onVoiceNotification?(method, params)
+            return
+        }
+        if method == "thread/archived", params["threadId"]?.string == threadID {
+            archiveConfirmed = true
+        }
         if method == "thread/started" {
             headStarted(params["thread"] ?? .null)
             return
@@ -567,6 +774,9 @@ final class CodexSession: ProviderSession {
             let id = params["turn"]?["id"]?.string
             switch target {
             case .lead:
+                completionFallback?.cancel()
+                completionFallback = nil
+                lastAgentMessage = nil
                 turnID = id
             case .head(let head):
                 headTurns[head] = id
@@ -578,6 +788,10 @@ final class CodexSession: ProviderSession {
             if let item = params["item"] { itemCompleted(item, target: target, sink: sink) }
         case "item/agentMessage/delta":
             if let id = params["itemId"]?.string, let delta = params["delta"]?.string {
+                if case .lead = target {
+                    let text = lastAgentMessage?.id == id ? lastAgentMessage!.text : ""
+                    lastAgentMessage = (id, text + delta)
+                }
                 sink(.messageDelta(id: id, text: delta))
             }
         case "item/reasoning/summaryTextDelta", "item/reasoning/textDelta":
@@ -624,27 +838,51 @@ final class CodexSession: ProviderSession {
                 // than from zero.
                 if let total = usage["total"]?["totalTokens"]?.int, total > 0 {
                     let spend = spendTracker.spend(total: total, before: max(0, total - used))
-                    if spend > 0 { TokenLedger.shared.record(spend: spend) }
+                    recordCodexSpend(spend, rolloutID: threadID, model: activeModel)
                 } else {
-                    TokenLedger.shared.record(spend: used)
+                    recordCodexSpend(used, rolloutID: threadID, model: activeModel)
                 }
             case .head(let head):
                 // A head's spend is the account's spend too; its total lives on its own thread.
                 let total = usage["total"]?["totalTokens"]?.int ?? 0
+                let headModel = headModels[head]
                 if total > 0 {
                     var tracker = headSpend[head] ?? TokenSpendTracker()
                     let spend = tracker.spend(total: total, before: max(0, total - used))
                     headSpend[head] = tracker
-                    if spend > 0 { TokenLedger.shared.record(spend: spend) }
+                    recordCodexSpend(spend, rolloutID: head, model: headModel, agentID: head)
                 } else {
-                    TokenLedger.shared.record(spend: used)
+                    recordCodexSpend(used, rolloutID: head, model: headModel, agentID: head)
                 }
                 onEvent?(.agentProgress(agentID: head, summary: nil, lastTool: nil, tokens: total > 0 ? total : used, toolCalls: nil))
             }
         case "error":
+            let message = Self.errorMessage(params["error"])
+            // A final error is kept for the turn it ends, which reports it once: as the turn's
+            // failure, or as a notice when the turn still completes.
+            if params["willRetry"]?.bool == false, let id = params["turnId"]?.string {
+                finalErrors[id] = message
+            }
             if case .lead = target, params["willRetry"]?.bool == true {
-                let message = Self.errorMessage(params["error"])
-                onEvent?(.notice(Notice(level: .warning, message: "\(message) Retrying.")))
+                sink(.notice(Notice(level: .warning, message: "\(message) Retrying.")))
+            }
+        case "codex/event/task_complete":
+            let event = params["msg"] ?? params
+            guard case .lead = target,
+                  params["conversationId"]?.string == threadID || params["threadId"]?.string == threadID || event["thread_id"]?.string == threadID,
+                  let id = event["turn_id"]?.string ?? params["turnId"]?.string ?? params["id"]?.string,
+                  id == turnID else { return }
+            if let text = event["last_agent_message"]?.string, lastAgentMessage == nil {
+                lastAgentMessage = ("codex-final-\(id)", text)
+            }
+            guard completionFallback == nil else { return }
+            completionFallback = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                guard let self, self.turnID == id else { return }
+                if let message = self.lastAgentMessage {
+                    self.onEvent?(.messageCompleted(id: message.id, text: message.text))
+                }
+                self.finishTurn(id: id, status: .completed, error: self.finalErrors[id], target: .lead)
             }
         case "turn/completed":
             let turn = params["turn"]
@@ -653,18 +891,12 @@ final class CodexSession: ProviderSession {
             case "failed": .failed
             default: .completed
             }
+            guard let id = turn?["id"]?.string else { return }
             let error = turn?["error"].flatMap { $0.isNull ? nil : Self.errorMessage($0) }
-            switch target {
-            case .lead:
-                turnID = nil
-                if status == .failed, let error, UsageLimitSignal.matches(error) {
-                    onEvent?(.usageLimit(resetsAt: UsageLimitSignal.resetTime(in: error)))
-                }
-                onEvent?(.turnCompleted(status: status, error: error))
-            case .head(let head):
-                headTurns[head] = nil
-                onEvent?(.agentFinished(agentID: head, status: status, summary: error))
+            if status != .failed, let final = finalErrors[id] {
+                sink(.notice(Notice(level: .warning, message: final)))
             }
+            finishTurn(id: id, status: status, error: error ?? (status == .failed ? finalErrors[id] : nil), target: target)
         case "serverRequest/resolved":
             if let raw = params["requestId"], let id = RPCID(raw), pendingRequests.removeValue(forKey: id.key) != nil {
                 onEvent?(.requestResolved(id: id.key))
@@ -674,6 +906,53 @@ final class CodexSession: ProviderSession {
         default:
             break
         }
+    }
+
+    private func finishTurn(id: String, status: TurnStatus, error: String?, target: Target) {
+        switch target {
+        case .lead:
+            guard turnID == id else { return }
+            completionFallback?.cancel()
+            completionFallback = nil
+            turnID = nil
+            lastAgentMessage = nil
+            if status == .failed, let error, UsageLimitSignal.matches(error) {
+                onEvent?(.usageLimit(resetsAt: UsageLimitSignal.resetTime(in: error)))
+            }
+            onEvent?(.turnCompleted(status: status, error: error))
+        case .head(let head):
+            guard headTurns[head] == id else { return }
+            headTurns[head] = nil
+            onEvent?(.agentFinished(agentID: head, status: status, summary: error))
+        }
+        finalErrors[id] = nil
+    }
+
+    private static func deadlineRequest(_ connection: JSONRPCConnection, _ method: String, _ params: JSONValue = .null, seconds: Int = 30, mutating: Bool = false) async throws -> JSONValue {
+        do {
+            return try await withDeadline(seconds: seconds, provider: "Codex", operation: method) {
+                try await connection.request(method, params)
+            }
+        } catch let error as SessionDeadlineError {
+            if mutating || ["thread/compact/start", "thread/rollback", "thread/archive", "thread/fork", "thread/unarchive", "account/rateLimitResetCredit/consume"].contains(method) {
+                connection.close()
+            }
+            throw error
+        }
+    }
+
+    /// Records spend observed on one Codex thread and emits it with the
+    /// identity behind it. Codex is read back from disk as well as watched
+    /// live, so the ledger is told which rollout it came from: the thread (or
+    /// head) id, which is the session id its rollout file is named for, and the
+    /// history scan leaves that much of the file's growth out. Without an id
+    /// only the runtime event is emitted; history owns the daily total.
+    private func recordCodexSpend(_ spend: Int, rolloutID: String?, model: String?, agentID: String? = nil) {
+        guard spend > 0 else { return }
+        if let rolloutID, !rolloutID.isEmpty {
+            TokenLedger.shared.record(codexSpend: spend, rolloutID: rolloutID)
+        }
+        onEvent?(.tokenSpend(TokenSpend(provider: .codex, totalTokens: spend, model: model, agentID: agentID)))
     }
 
     /// A thread the server started: a head, when the lead's thread is its parent.
@@ -689,15 +968,17 @@ final class CodexSession: ProviderSession {
             guard nickname != nil || role != nil else { return }
             Self.log.notice("thread/started \(id, privacy: .public) names parent \(thread["parentThreadId"]?.string ?? "none", privacy: .public), not this lead \(threadID, privacy: .public); taken as a head by its agent nickname")
             headThreads.insert(id)
-            let preview = thread["preview"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            headModels[id] = thread["model"]?.string
+            let preview = thread["preview"]?.string?.trimmed ?? ""
             let description = !preview.isEmpty ? TextCleanup.singleLine(preview, limit: 80) : ([nickname, role].compactMap { $0 }.joined(separator: " · ").nilIfEmpty ?? "Subagent")
             onEvent?(.agentStarted(AgentSpawn(id: id, taskID: nil, toolUseID: nil, description: description, prompt: preview.nilIfEmpty, model: thread["model"]?.string)))
             return
         }
         headThreads.insert(id)
+        headModels[id] = thread["model"]?.string
         let nickname = thread["agentNickname"]?.string
         let role = thread["agentRole"]?.string
-        let preview = thread["preview"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let preview = thread["preview"]?.string?.trimmed ?? ""
         let description = !preview.isEmpty ? TextCleanup.singleLine(preview, limit: 80) : ([nickname, role].compactMap { $0 }.joined(separator: " · ").nilIfEmpty ?? "Subagent")
         onEvent?(.agentStarted(AgentSpawn(id: id, taskID: nil, toolUseID: nil, description: description, prompt: preview.nilIfEmpty, model: thread["model"]?.string)))
     }
@@ -730,7 +1011,9 @@ final class CodexSession: ProviderSession {
         guard let id = item["id"]?.string else { return }
         switch item["type"]?.string {
         case "agentMessage":
-            sink(.messageCompleted(id: id, text: item["text"]?.string ?? ""))
+            let text = item["text"]?.string ?? ""
+            if case .lead = target { lastAgentMessage = (id, text) }
+            sink(.messageCompleted(id: id, text: text))
         case "reasoning":
             let summary = (item["summary"]?.array ?? []).compactMap(\.string).joined(separator: "\n\n")
             let content = (item["content"]?.array ?? []).compactMap(\.string).joined(separator: "\n\n")
@@ -761,20 +1044,11 @@ final class CodexSession: ProviderSession {
             // A spawn names the heads it reached; the brief is the best task line when it
             // carries one, and a spawn without one still registers its heads.
             guard item["tool"]?.string == "spawnAgent" else { return }
-            // A spawn made with a profile's own model and effort routes the head to that
-            // profile (the knobs `codexConfig` exposes); exactly one match is
-            // authoritative, none or several leave the head unrouted.
-            let itemModel = item["model"]?.string
-            let itemEffort = item["reasoningEffort"]?.string
-            let routed = configuration.hydra.flatMap { hydra -> String? in
-                let matches = HydraPrompts.nativeRoutableProfiles(of: hydra).filter { $0.model == itemModel && $0.effort == itemEffort }
-                return matches.count == 1 ? matches[0].name : nil
-            }
-            let prompt = item["prompt"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let prompt = item["prompt"]?.string?.trimmed ?? ""
             for receiver in (item["receiverThreadIds"]?.array ?? []).compactMap(\.string) {
                 guard receiver != threadID else { continue }
                 if !headThreads.contains(receiver) { headThreads.insert(receiver) }
-                onEvent?(.agentStarted(AgentSpawn(id: receiver, taskID: nil, toolUseID: item["id"]?.string, description: prompt.isEmpty ? "Head" : TextCleanup.singleLine(prompt, limit: 80), prompt: prompt.nilIfEmpty, model: item["model"]?.string, profile: routed)))
+                onEvent?(.agentStarted(AgentSpawn(id: receiver, taskID: nil, toolUseID: item["id"]?.string, description: prompt.isEmpty ? "Head" : TextCleanup.singleLine(prompt, limit: 80), prompt: prompt.nilIfEmpty, model: item["model"]?.string)))
             }
         case "subAgentActivity":
             guard let agentThread = item["agentThreadId"]?.string,
@@ -810,7 +1084,7 @@ final class CodexSession: ProviderSession {
         let parts = (item["content"]?.array ?? []).compactMap { part -> String? in
             part["text"]?.string ?? (part["type"]?.string == "text" ? part["value"]?.string : nil)
         }
-        let text = parts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = parts.joined(separator: "\n").trimmed
         return text.isEmpty ? nil : text
     }
 
@@ -1035,9 +1309,11 @@ final class CodexSession: ProviderSession {
     }
 
     private func handleClose(_ tail: String) {
-        let resolved = Array(pendingRequests.keys)
-        pendingRequests.removeAll()
-        for key in resolved { onEvent?(.requestResolved(id: key)) }
+        completionFallback?.cancel()
+        completionFallback = nil
+        finalErrors.removeAll()
+        lastAgentMessage = nil
+        turnID = nil
         guard !isStopping else { return }
         onEvent?(.exited(error: TextCleanup.lastLines(tail)))
     }

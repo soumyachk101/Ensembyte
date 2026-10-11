@@ -5,6 +5,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case claude
     case cursor
     case opencode
+    case opencodeGo
     case grok
     case deepseek
     case meta
@@ -14,6 +15,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case copilot
     case commandcode
     case pi
+    case omp
 
     var id: String { rawValue }
 
@@ -22,7 +24,8 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .codex: "Codex"
         case .claude: "Claude"
         case .cursor: "Cursor"
-        case .opencode: "OpenCode"
+        case .opencode: "OpenCode Zen"
+        case .opencodeGo: "OpenCode Go"
         case .grok: "Grok"
         case .deepseek: "DeepSeek"
         case .meta: "Meta"
@@ -32,6 +35,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .copilot: "Copilot"
         case .commandcode: "Command Code"
         case .pi: "Pi"
+        case .omp: "omp"
         }
     }
 
@@ -41,6 +45,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .claude: "claude"
         case .cursor: "cursor-agent"
         case .opencode: "opencode"
+        case .opencodeGo: "opencode"
         case .grok: "grok"
         case .deepseek: ""
         case .meta: ""
@@ -50,10 +55,12 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .copilot: "copilot"
         case .commandcode: "cmd"
         case .pi: "pi"
+        case .omp: "omp"
         }
     }
 
-    var iconName: String { "provider-\(rawValue)" }
+    /// Both OpenCode plans are the one `opencode` CLI; the mark is the same.
+    var iconName: String { self == .opencodeGo ? "provider-opencode" : "provider-\(rawValue)" }
 
     var loginCommand: String {
         switch self {
@@ -61,6 +68,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .claude: "claude auth login"
         case .cursor: "cursor-agent login"
         case .opencode: "opencode auth login"
+        case .opencodeGo: "opencode auth login"
         case .grok: "grok login"
         case .deepseek: "DEEPSEEK_API_KEY=sk-..."
         case .meta: "MODEL_API_KEY=..."
@@ -70,6 +78,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .copilot: "copilot login"
         case .commandcode: "cmd login"
         case .pi: "pi"
+        case .omp: "omp login"
         }
     }
 
@@ -79,6 +88,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .claude: URL(string: "https://claude.com/product/claude-code")!
         case .cursor: URL(string: "https://cursor.com/cli")!
         case .opencode: URL(string: "https://opencode.ai")!
+        case .opencodeGo: URL(string: "https://opencode.ai")!
         case .grok: URL(string: "https://x.ai/cli")!
         case .deepseek: URL(string: "https://platform.deepseek.com/api_keys")!
         case .meta: URL(string: "https://dev.meta.ai/")!
@@ -88,6 +98,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .copilot: URL(string: "https://github.com/github/copilot-cli")!
         case .commandcode: URL(string: "https://commandcode.ai/docs/quickstart")!
         case .pi: URL(string: "https://pi.dev/docs/latest")!
+        case .omp: URL(string: "https://omp.sh")!
         }
     }
 
@@ -95,7 +106,7 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     var isAPIKeyBased: Bool { self == .deepseek || self == .meta || self == .zai }
 
     /// Driven over the Agent Client Protocol by `ACPSession`.
-    var usesACP: Bool { self == .cursor || self == .opencode || self == .grok || self == .devin }
+    var usesACP: Bool { self == .cursor || self == .opencode || self == .opencodeGo || self == .grok || self == .devin }
 
     /// Providers with an API key field in Settings: the API-key providers, which need one,
     /// and Command Code, whose CLI takes a Studio key through `COMMAND_CODE_API_KEY` as an
@@ -135,11 +146,36 @@ enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 
     /// Whether the provider can drop later turns from its own conversation.
-    var supportsRewind: Bool { self == .codex || self == .claude || self == .copilot }
+    var supportsRewind: Bool { self == .codex || self == .claude || self == .copilot || self == .omp }
+
+    /// Whether the app runs the provider's `/compact` itself. The sessions that speak the
+    /// provider's own command are handled locally; for every other provider the command
+    /// goes to the tool, which knows what to do with it.
+    var supportsCompact: Bool {
+        switch self {
+        case .codex, .claude, .copilot, .deepseek, .meta, .zai, .pi, .omp: true
+        default: false
+        }
+    }
 
     /// Headless stream-json only carries text: the TUI pastes images, but a
     /// streaming session rejects non-text blocks, so image attachments stay off.
     var supportsImages: Bool { self != .grok && self != .antigravity }
+
+    /// Whether the provider can honour a permission mode. Auto is the provider's own reviewer
+    /// approving routine actions; omp has none, so it is not offered there.
+    func supports(_ mode: RuntimeMode) -> Bool { !(self == .omp && mode == .auto) }
+
+    /// The mode a thread keeps when it moves to this provider (or starts on it): the one it
+    /// has, or the next one down when this provider cannot honour it.
+    func supported(_ mode: RuntimeMode) -> RuntimeMode { supports(mode) ? mode : .autoAcceptEdits }
+
+    /// Whether Hydra is on by default for a chat on this provider in `mode`. omp's heads run
+    /// as its own subagents, which take no approvals (they always run as in Full access), so
+    /// they would do what the lead's mode says needs asking about without asking: with omp,
+    /// Hydra is on by default only in Full access, where nothing is asked anyway. The user
+    /// may still turn it on in another mode (`ChatThread.hydraIgnoresPermissions`).
+    func suitsHydra(in mode: RuntimeMode) -> Bool { self != .omp || mode == .fullAccess }
 }
 
 enum RuntimeMode: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -197,6 +233,17 @@ enum WorkspaceMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// One faster service tier a model offers: its wire id ("priority", "ultrafast") and the
+/// name the provider gives it ("Fast", "Ultrafast").
+struct ModelSpeedTier: Codable, Hashable, Identifiable, Sendable {
+    var id: String
+    var name: String
+    var detail: String?
+
+    /// The id a pair stores for the provider's standard speed, fast mode off.
+    static let standardID = "default"
+}
+
 struct ModelOption: Codable, Hashable, Identifiable, Sendable {
     var id: String
     var name: String
@@ -206,6 +253,9 @@ struct ModelOption: Codable, Hashable, Identifiable, Sendable {
     var isDefault: Bool
     /// The service tier that makes this model fast, when its provider offers one.
     var fastTier: String?
+    /// Every faster tier the model offers, in the provider's order, when it has more than
+    /// the one fast mode turns on (Codex's Fast and Ultrafast); empty, `fastTier` alone.
+    var speedTiers: [ModelSpeedTier]
 
     init(
         id: String,
@@ -214,7 +264,8 @@ struct ModelOption: Codable, Hashable, Identifiable, Sendable {
         efforts: [String] = [],
         defaultEffort: String? = nil,
         isDefault: Bool = false,
-        fastTier: String? = nil
+        fastTier: String? = nil,
+        speedTiers: [ModelSpeedTier] = []
     ) {
         self.id = id
         self.name = name
@@ -223,6 +274,7 @@ struct ModelOption: Codable, Hashable, Identifiable, Sendable {
         self.defaultEffort = defaultEffort
         self.isDefault = isDefault
         self.fastTier = fastTier
+        self.speedTiers = speedTiers
     }
 
     init(from decoder: Decoder) throws {
@@ -234,9 +286,17 @@ struct ModelOption: Codable, Hashable, Identifiable, Sendable {
         defaultEffort = try container.decodeIfPresent(String.self, forKey: .defaultEffort)
         isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
         fastTier = try container.decodeIfPresent(String.self, forKey: .fastTier)
+        speedTiers = (try? container.decodeIfPresent([ModelSpeedTier].self, forKey: .speedTiers)) ?? []
     }
 
     var supportsFast: Bool { fastTier != nil }
+
+    /// The speeds a pair may pick for this model past the standard one: the tiers the
+    /// provider lists, or fast mode's own tier as "Fast" when it lists no more.
+    var speeds: [ModelSpeedTier] {
+        if !speedTiers.isEmpty { return speedTiers }
+        return fastTier.map { [ModelSpeedTier(id: $0, name: "Fast")] } ?? []
+    }
 
     /// The name as the picker shows it, such as "5.6 Terra" for "GPT-5.6-Terra".
     var shortName: String {

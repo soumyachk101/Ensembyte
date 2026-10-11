@@ -33,8 +33,9 @@ struct SessionConfiguration: Sendable {
     var interactionMode: InteractionMode
     /// Native API providers (DeepSeek, Meta, Z.ai) authenticate with this instead of a CLI.
     var apiKey: String?
-    /// Set while Hydra is on for the thread: providers that run heads of their own define
-    /// them at launch, on the pair's model and effort, and steer the lead towards them.
+    /// Set while Hydra is on for the thread: the session puts the lead's Hydra policy in
+    /// its system prompt and switches its own sub-agent tool off, so every head goes out
+    /// through the delegation block as a thread of Ensembyte's.
     var hydra: HydraLaunch?
     /// The conversation so far, for a provider that keeps nothing between launches (the
     /// API providers hold their history in memory only): the exchanges go back in as
@@ -43,7 +44,14 @@ struct SessionConfiguration: Sendable {
     /// The thread is a Hydra head that Ensembyte runs: the session paces it, so a head
     /// that keeps reading without ever changing anything is told to act.
     var isHydraHead = false
+    /// Only a new Ensembyte-owned head, or the exact persisted session it created.
+    var managesCodexHeadHistory = false
+    var codexHistoryArchived = false
+    var codexHistoryDirectory: String? = nil
     var antiSlopEnabled = true
+    /// The thread is a voice call's chat: Codex's own sub-agents stay off for it and, with
+    /// Hydra on, it delegates through Ensembyte's delegation block like any other lead.
+    var isVoiceOrchestrator = false
 }
 
 /// One exchange of a conversation, for replaying it into a session that starts over.
@@ -58,7 +66,7 @@ struct TranscriptMessage: Sendable {
 }
 
 /// A head a provider started inside the lead's session.
-struct AgentSpawn: Sendable {
+struct AgentSpawn: Equatable, Sendable {
     /// The provider's id for the head, which its later events carry.
     var id: String
     /// Claude's task id, which is what stops the head; nil where the id above does.
@@ -98,6 +106,11 @@ enum ProviderEvent: Sendable {
     case question(QuestionRequest)
     case requestResolved(id: String)
     case usage(ContextUsage)
+    /// Tokens newly consumed by one request or turn, with the identity behind
+    /// them. Distinct from `usage`, which is context occupancy: an event here
+    /// is spend, and a head's spend carries its `agentID`; the turn keeps each
+    /// report for run metrics.
+
     case tokenSpend(TokenSpend)
     case diff(String)
     case notice(Notice)
@@ -141,13 +154,28 @@ protocol ProviderSession: AnyObject {
     func interrupt() async
     func resolveApproval(_ requestID: String, optionID: String)
     func answerQuestion(_ requestID: String, answers: [String: [String]])
+    func resolveApproval(_ requestID: String, optionID: String, delivered: @escaping @MainActor (Bool) -> Void)
+    func answerQuestion(_ requestID: String, answers: [String: [String]], delivered: @escaping @MainActor (Bool) -> Void)
     func compact() async throws
+    func stopAndWait(timeout: TimeInterval) async
     func stop()
     /// Stops a head running inside the session. Returns whether the provider could.
     func stopAgent(_ id: String) async -> Bool
 }
 
 extension ProviderSession {
+    func resolveApproval(_ requestID: String, optionID: String, delivered: @escaping @MainActor (Bool) -> Void) {
+        resolveApproval(requestID, optionID: optionID)
+        delivered(true)
+    }
+
+    func answerQuestion(_ requestID: String, answers: [String: [String]], delivered: @escaping @MainActor (Bool) -> Void) {
+        answerQuestion(requestID, answers: answers)
+        delivered(true)
+    }
+
+    func stopAndWait(timeout: TimeInterval) async { stop() }
+
     func stopAgent(_ id: String) async -> Bool { false }
 }
 
@@ -202,5 +230,26 @@ enum ToolTitles {
             if line.hasPrefix("+") { additions += 1 } else if line.hasPrefix("-") { deletions += 1 }
         }
         return (additions, deletions)
+    }
+}
+
+enum ToolText {
+    /// The text of a content-block array, as tool results and messages carry it.
+    static func blocks(_ value: JSONValue?) -> String {
+        guard let value, !value.isNull else { return "" }
+        if let text = value.string { return text }
+        guard let blocks = value.array else { return "" }
+        return blocks.compactMap { $0["text"]?.string }.joined(separator: "\n")
+    }
+}
+
+extension ApprovalRequest.Kind {
+    /// The key an "approve for session" grant is remembered under.
+    var grantKey: String {
+        switch self {
+        case .command: "command"
+        case .fileChange: "fileChange"
+        case .tool, .permissions, .plan: "tool"
+        }
     }
 }

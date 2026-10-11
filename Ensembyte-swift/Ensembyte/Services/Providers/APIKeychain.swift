@@ -4,25 +4,39 @@ import Security
 /// One Keychain implementation for every native provider's API key. The accounts
 /// live in one Keychain service (`AppInfo.name`), one item per provider.
 enum APIKeychain {
-    /// The stored key for an account, or `fallback` when nothing is stored.
+    /// The stored key for a provider, or `fallback` when nothing is stored.
     /// A capture run reads nothing, so recorded sessions keep working without
     /// touching the user's real credentials.
-    static func key(for account: String, fallback: String) -> String {
+    static func key(for provider: ProviderKind, fallback: String) -> String {
+        guard let account = account(for: provider) else { return fallback }
         guard !CaptureRun.isEnabled else { return "" }
         if let keychain = read(account), !keychain.isEmpty { return keychain }
         return fallback
     }
 
-    /// Stores the key, or removes it for an empty one.
+    /// Stores the key, or removes it for an empty one. Returns whether the Keychain
+    /// took it, so the caller knows whether a fallback copy is still needed.
     @discardableResult
-    static func setKey(_ key: String, account: String) -> Bool {
-        set(key, account: account)
+    static func setKey(_ key: String, for provider: ProviderKind) -> Bool {
+        guard let account = account(for: provider) else { return false }
+        return set(key, account: account)
+    }
+
+    /// The accounts older builds stored keys under; changing one loses that key.
+    private static func account(for provider: ProviderKind) -> String? {
+        switch provider {
+        case .deepseek: "DeepSeek API Key"
+        case .meta: "Meta API Key"
+        case .zai: "Z.ai API Key"
+        case .commandcode: "Command Code API Key"
+        default: nil
+        }
     }
 
     /// Stores the value, or removes it for an empty one.
     @discardableResult
     static func set(_ key: String, account: String, service: String = AppInfo.name) -> Bool {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = key.trimmed
         if trimmed.isEmpty {
             delete(account, service: service)
             return true
@@ -55,8 +69,8 @@ enum APIKeychain {
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data,
               let key = String(data: data, encoding: .utf8),
-              !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return key.trimmingCharacters(in: .whitespacesAndNewlines)
+              !key.trimmed.isEmpty else { return nil }
+        return key.trimmed
     }
 
     static func delete(_ account: String, service: String = AppInfo.name) {

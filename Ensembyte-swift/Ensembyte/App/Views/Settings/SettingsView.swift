@@ -5,9 +5,11 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     case general
     // Second in the sidebar: Hydra is what the app is about, so it sits right under General.
     case hydra
+    case appearance
     case providers
     case mcp
     case models
+    case voice
     case sourceControl
     case shortcuts
     case archive
@@ -18,9 +20,11 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .appearance: "Appearance"
         case .providers: "Providers"
         case .mcp: "MCP"
         case .models: "Models"
+        case .voice: "Voice"
         case .hydra: "Hydra"
         case .sourceControl: "Source control"
         case .shortcuts: "Shortcuts"
@@ -32,9 +36,11 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: "gear"
+        case .appearance: "paintpalette"
         case .providers: "cpu"
         case .mcp: "puzzlepiece.extension"
         case .models: "slider.horizontal.3"
+        case .voice: "waveform"
         // Never drawn: the sidebar gives the Hydra row the dragon mark instead. Kept so
         // the switch stays exhaustive and anything else that asks gets a sane symbol.
         case .hydra: "point.3.connected.trianglepath.dotted"
@@ -48,9 +54,11 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .general: Chrome.gray
+        case .appearance: Color(red: 0.85, green: 0.44, blue: 0.36)
         case .providers: Chrome.blue
         case .mcp: Color(red: 0.95, green: 0.55, blue: 0.20)
         case .models: Color(red: 0.686, green: 0.322, blue: 0.871)
+        case .voice: Color(red: 0.93, green: 0.30, blue: 0.40)
         case .hydra: Color(red: 0.188, green: 0.690, blue: 0.780)
         case .sourceControl: Color(red: 0.345, green: 0.337, blue: 0.839)
         case .shortcuts: Color(red: 0.32, green: 0.48, blue: 0.93)
@@ -61,12 +69,14 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var keywords: [String] {
         switch self {
-        case .general: ["permissions", "worktree", "reasoning", "thinking", "notifications", "theme", "appearance", "transparency", "transparent", "opacity", "glass", "dark", "light", "accent", "tint", "catppuccin", "dracula", "tokyo", "nord", "gruvbox", "solarized", "github", "claude", "codex", "cursor", "matrix", "token", "tokens", "activity", "usage", "panel", "limits", "credits", "text", "size", "font", "zoom", "heatmap", "daily", "weekly", "cumulative", "settle", "settled", "finish", "finished", "done", "sound", "chime", "icon", "icons", "emoji", "symbol", "symbols", "project mark", "compact", "concise", "anti-slop", "slop", "verbose", "comments", "replies"]
+        case .general: ["permissions", "worktree", "reasoning", "thinking", "notifications", "token", "tokens", "activity", "usage", "panel", "limits", "credits", "heatmap", "daily", "weekly", "cumulative", "settle", "settled", "finish", "finished", "done", "sound", "chime", "icon", "icons", "emoji", "symbol", "symbols", "project mark", "compact", "concise", "anti-slop", "slop", "verbose", "comments", "replies"]
+        case .appearance: ["appearance", "theme", "transparency", "transparent", "opacity", "glass", "dark", "light", "accent", "tint", "catppuccin", "dracula", "tokyo", "nord", "gruvbox", "solarized", "github", "claude", "codex", "cursor", "matrix", "text", "size", "font", "zoom", "wallpaper", "sidebar", "performance", "gpu"]
         case .models: ["model", "effort", "reasoning", "fast", "slider", "picker"]
+        case .voice: ["voice", "speech", "talk", "call", "microphone", "mic", "realtime", "orb", "codex", "style"]
         case .hydra: ["hydra", "heads", "subagents", "sub-agents", "agents", "team", "orchestrator", "worker", "pair", "pairs", "parallel", "delegate", "queue"]
-        case .providers: ["codex", "claude", "cursor", "opencode", "grok", "deepseek", "meta", "muse", "spark", "zai", "z.ai", "glm", "coding plan", "devin", "cognition", "antigravity", "agy", "google", "gemini", "copilot", "github", "command code", "commandcode", "cmd", "binary", "path", "sign in", "login", "api key", "usage", "limits", "limit", "plan", "quota", "credits", "balance"]
+        case .providers: ["codex", "claude", "cursor", "opencode", "opencode zen", "opencode go", "zen", "grok", "deepseek", "meta", "muse", "spark", "zai", "z.ai", "glm", "coding plan", "devin", "cognition", "antigravity", "agy", "google", "gemini", "copilot", "github", "command code", "commandcode", "cmd", "pi", "omp", "oh-my-pi", "binary", "path", "sign in", "login", "api key", "usage", "limits", "limit", "plan", "quota", "credits", "balance"]
         case .mcp: ["mcp", "model context protocol", "servers", "tools", "connect", "integrations", "github", "playwright", "notion", "linear", "slack", "figma", "supabase", "stripe", "resend", "email", "context7", "sentry", "postgres", "browser", "netlify", "deploy", "hosting"]
-        case .sourceControl: ["git", "commit", "pull request", "titles", "text generation"]
+        case .sourceControl: ["git", "commit", "pull request", "titles", "text generation", "github", "clone", "repository", "repositories", "repo", "sign in", "token", "connect", "account"]
         case .shortcuts: ["keyboard", "keys"]
         case .archive: ["archived", "restore"]
         case .about: ["version", "license"]
@@ -74,26 +84,48 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     }
 }
 
-/// A page asked for from outside the window: the update notification and the relaunch after
-/// an install both open About. Read once by the view, then cleared.
+extension SettingsPage {
+    /// Where a run of rows starts after a gap: the nav is grouped by spacing alone, the app's
+    /// own preferences first, then the agents and what they connect to, then the rest.
+    var startsNavGroup: Bool {
+        self == .providers || self == .shortcuts
+    }
+}
+
+/// Whether Settings has taken over the main window, and the page it shows. Settings is no
+/// window of its own: the page list stands where the chat sidebar was and the page fills
+/// the rest, while the chats stay built behind it, so going back finds them as they were.
+/// The page outlives a close, so the next open lands where the last one left off; a deep
+/// link (the update notification, the Hydra intro, a provider without a key) names one.
 @MainActor
 @Observable
 final class SettingsNavigation {
     static let shared = SettingsNavigation()
-    var requestedPage: SettingsPage?
+    private(set) var isPresented = false
+    var page: SettingsPage = .general
+
+    func present(page: SettingsPage? = nil) {
+        withAnimation(Chrome.panelSlide) {
+            if let page { self.page = page }
+            isPresented = true
+        }
+    }
+
+    func dismiss() {
+        guard isPresented else { return }
+        withAnimation(Chrome.panelSlide) { isPresented = false }
+    }
 }
 
-struct SettingsView: View {
-    @Environment(AppModel.self) private var model
-    @State private var page: SettingsPage = .general
+/// The page list that stands in for the chat sidebar while Settings is open: Back on top,
+/// the search under it, then every page in its group.
+struct SettingsSidebar: View {
+    @Bindable private var navigation = SettingsNavigation.shared
     @State private var search = ""
-    @State private var modelSearch = ""
-    @State private var mcpSearch = ""
-    @State private var scrollChrome = ChromeScrollModel()
     @State private var scrollTracker = SettingsScrollTracker()
 
     private var visiblePages: [SettingsPage] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = search.trimmed
         guard !query.isEmpty else { return SettingsPage.allCases }
         return SettingsPage.allCases.filter { page in
             page.title.localizedCaseInsensitiveContains(query)
@@ -102,69 +134,39 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: 212)
-            detail
-                .padding(.trailing, Chrome.sheetInset)
-                .padding(.vertical, Chrome.sheetInset)
-        }
-        .onDisappear { scrollTracker.end() }
-        .background { WindowBackdrop(opacity: model.settings.backdropOpacity) }
-        .background { WindowChromeConfigurator() }
-        .clipShape(RoundedRectangle(cornerRadius: Chrome.windowCornerRadius, style: .continuous))
-        .ignoresSafeArea()
-        .frame(width: 780, height: 580)
-        .onChange(of: SettingsNavigation.shared.requestedPage, initial: true) { _, requested in
-            guard let requested else { return }
-            page = requested
-            SettingsNavigation.shared.requestedPage = nil
-        }
-        // A search that filters the selected page out of the list left the detail pane on a
-        // page no row was selected for; the first match takes over instead.
-        .onChange(of: visiblePages) { _, pages in
-            guard !pages.isEmpty, !pages.contains(page), let first = pages.first else { return }
-            page = first
-        }
-    }
-
-    private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear
                 .frame(height: Chrome.trafficLightDiameter)
                 .padding(.top, Chrome.trafficLightTop)
+            SettingsNavRow(title: "Back", isSelected: false, action: { WindowManager.shared.hideSettings() }) {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .help("Back to your threads")
+            .padding(.horizontal, Chrome.listInset)
+            .padding(.top, 10)
             SidebarSearchField(text: $search) {
-                if let first = visiblePages.first { page = first }
+                if let first = visiblePages.first { navigation.page = first }
             }
             .padding(.horizontal, Chrome.listInset)
-            .padding(.top, 14)
+            .padding(.top, 8)
             ScrollView {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(visiblePages) { item in
-                        SidebarRow(title: item.title, isSelected: page == item, action: { page = item }) {
-                            SidebarIconBadge {
-                                if item == .hydra {
-                                    // The Hydra page wears the dragon mark, the same one as the composer button.
-                                    HydraMarkImage()
-                                        .frame(width: Chrome.symbolSize * 1.15, height: Chrome.symbolSize * 1.15)
-                                } else {
-                                    SidebarSymbol(item.symbol, scale: item == .general ? 1.15 : 1)
-                                }
-                            }
-                            .overlay(alignment: .topTrailing) {
-                                if item == .about, UpdateChecker.shared.updateAvailable {
-                                    UpdateAvailableDot()
-                                }
-                            }
+                        SettingsNavRow(title: item.title, isSelected: navigation.page == item, action: { navigation.page = item }) {
+                            Self.icon(for: item)
                         }
+                        // Groups part by spacing alone, and only over the whole list: a search's
+                        // matches sit together.
+                        .padding(.top, item.startsNavGroup && search.trimmed.isEmpty ? 14 : 0)
                     }
                     if visiblePages.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("No results")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.body, weight: .semibold))
                                 .foregroundStyle(Chrome.primaryText.opacity(0.92))
                             Text("Try a setting or a provider name.")
-                                .font(.system(size: 11))
+                                .font(.system(.subheadline))
                                 .foregroundStyle(Chrome.secondaryText)
                         }
                         .padding(.horizontal, 8)
@@ -173,7 +175,7 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, Chrome.listInset)
                 .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.bottom, 12)
                 .allowsHitTesting(!scrollTracker.isFrozen)
             }
             .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y }) { _, _ in
@@ -186,9 +188,106 @@ struct SettingsView: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background { WindowDragArea() }
+        .onDisappear {
+            scrollTracker.end()
+            search = ""
+        }
+        // A search that filters the selected page out of the list left the detail pane on a
+        // page no row was selected for; the first match takes over instead.
+        .onChange(of: visiblePages) { _, pages in
+            guard !pages.isEmpty, !pages.contains(navigation.page), let first = pages.first else { return }
+            navigation.page = first
+        }
     }
 
-    private var detail: some View {
+    @ViewBuilder
+    private static func icon(for page: SettingsPage) -> some View {
+        let size = SettingsNavRow<EmptyView>.iconSize
+        if page == .hydra {
+            // The Hydra page wears the dragon mark, the same one as the composer button.
+            HydraMarkImage()
+                .frame(width: size * 1.1, height: size * 1.1)
+        } else {
+            Image(systemName: page.symbol)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+                .frame(width: Chrome.iconSize, height: Chrome.iconSize)
+                .overlay(alignment: .topTrailing) {
+                    if page == .about, UpdateChecker.shared.updateAvailable {
+                        UpdateAvailableDot()
+                    }
+                }
+        }
+    }
+}
+
+/// One row of the Settings page list: a little taller than a chat row, with a muted label
+/// that comes up to full strength on the selected page.
+struct SettingsNavRow<Icon: View>: View {
+    static var iconSize: CGFloat { 15 }
+
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    @ViewBuilder let icon: Icon
+
+    @State private var isHovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let text = isSelected || isHovering ? Chrome.primaryText : Chrome.secondaryText
+        Button(action: action) {
+            HStack(spacing: 8) {
+                icon
+                    .frame(width: Chrome.iconSize, height: Chrome.iconSize)
+                Text(verbatim: title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+            }
+            .foregroundStyle(text)
+            .padding(.horizontal, 8)
+            .frame(minHeight: 32)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background { shape.fill(fill) }
+            .contentShape(shape)
+            .animation(Chrome.hover, value: isSelected)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(Chrome.hover) { isHovering = hovering }
+        }
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+    }
+
+    private var fill: Color {
+        if isSelected { return Chrome.overlay(0.12) }
+        if isHovering { return Chrome.overlay(0.06) }
+        return .clear
+    }
+}
+
+/// The selected Settings page, filling the main window's detail pane: a centered column
+/// under the page's own title, scrolling to the window's top edge beneath the chrome row.
+struct SettingsDetail: View {
+    @Environment(AppModel.self) private var model
+    private let navigation = SettingsNavigation.shared
+    @State private var modelSearch = ""
+    @State private var mcpSearch = ""
+    @State private var scrollChrome = ChromeScrollModel()
+    @State private var scrollTracker = SettingsScrollTracker()
+
+    /// The column's measure: wide enough for a card row and its control, narrow enough
+    /// that a line of detail still reads at a glance on a wide window.
+    private static let pageMaxWidth: CGFloat = 680
+    private static let pagePadding: CGFloat = 40
+
+    private var page: SettingsPage { navigation.page }
+
+    var body: some View {
         Group {
             if page == .archive, model.archivedThreads.isEmpty {
                 // An empty archive is one symbol in the middle of the pane: no sentence, no chrome,
@@ -203,6 +302,7 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .detailSheet()
+        .onDisappear { scrollTracker.end() }
         .onChange(of: page, initial: true) {
             scrollChrome.update(travel: 0)
             modelSearch = ""
@@ -213,12 +313,19 @@ struct SettingsView: View {
     private var pageScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Chrome.sectionSpacing) {
+                Text(verbatim: page.title)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(Chrome.primaryText)
+                    .accessibilityAddTraits(.isHeader)
                 pageContent
             }
-            .padding(.horizontal, Chrome.contentHorizontalPadding + 8)
-            // Pages without chrome controls start just below the sheet edge; the others clear their capsules.
-            .padding(.top, pageHasChromeControls ? Chrome.chromeTopPadding + Chrome.capsuleHeight + 16 : 22)
-            .padding(.bottom, 24)
+            .frame(maxWidth: Self.pageMaxWidth, alignment: .leading)
+            .padding(.horizontal, Self.pagePadding)
+            .frame(maxWidth: .infinity)
+            // Every page clears the chrome row, which carries the compact title once the
+            // page's own has scrolled away, and the page's controls where it has any.
+            .padding(.top, Chrome.chromeTopPadding + Chrome.capsuleHeight + 10)
+            .padding(.bottom, 48)
             .allowsHitTesting(!scrollTracker.isFrozen)
         }
         .scrollIndicators(.never)
@@ -262,19 +369,17 @@ struct SettingsView: View {
         }
     }
 
-    private var pageHasChromeControls: Bool {
-        page == .providers || page == .models || page == .mcp || page == .archive || page == .about
-    }
-
     @ViewBuilder
     private var pageContent: some View {
         switch page {
         case .general: GeneralSettingsPage()
+        case .appearance: AppearanceSettingsPage()
         case .providers: ProvidersSettingsPage()
         case .mcp: MCPSettingsPage(query: mcpSearch)
         case .models:
             ModelsSettingsPage(query: modelSearch)
         case .hydra: HydraSettingsPage()
+        case .voice: VoiceSettingsPage()
         case .sourceControl: SourceControlSettingsPage()
         case .shortcuts: ShortcutsSettingsPage()
         case .archive: ArchiveSettingsPage()
@@ -327,7 +432,7 @@ private struct GeneralSettingsPage: View {
         }
             ChromeSection(title: "Conversation") {
                 ChromeCard {
-                    ChromeRow(title: "Show thinking", detail: "The working line opens to the agent's thinking") {
+                    ChromeRow(title: "Show thinking", detail: "The agent's thinking shows as a step of its work") {
                         SettingsSwitch(isOn: $settings.showReasoning)
                     }
                     ChromeRowDivider()
@@ -335,61 +440,17 @@ private struct GeneralSettingsPage: View {
                         SettingsSwitch(isOn: $settings.antiSlopEnabled)
                     }
                     ChromeRowDivider()
-                    ChromeRow(title: "Working line", detail: "A card with the turn's progress bar, or a plain line") {
-                        ChromeVisualPicker(options: [(true, "Card"), (false, "Line")], selection: $settings.showsWorkingCard) { isCard in
-                            Image(systemName: isCard ? "rectangle.fill" : "minus")
-                        }
+                    ChromeRow(title: "Timeline haptics", detail: "Play haptic feedback when hovering over timeline ticks and progress bars") {
+                        GlassPickerButton(options: TimelineHapticStyle.allCases.map { ($0, $0.title) }, selection: $settings.timelineHapticStyle)
                     }
                     ChromeRowDivider()
                     ChromeRow(title: "Recent downloads", detail: "The attach button offers recent downloads first") {
                         SettingsSwitch(isOn: $settings.recentDownloadsPicker)
                     }
                     ChromeRowDivider()
-                    ChromeRow(
-                        title: "Notify when a turn finishes",
-                        detail: "Desktop alerts and in-app banner when the agent finishes a task"
-                    ) {
-                        HStack(spacing: 8) {
-                            Button("Test") {
-                                model.sendTestNotification()
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.secondary)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-
-                            SettingsSwitch(isOn: $settings.notifyWhenFinished)
-                        }
-                    }
-                    .onChange(of: settings.notifyWhenFinished) { _, isOn in
-                        if isOn {
-                            model.requestNotificationPermission()
-                            model.sendTestNotification()
-                        }
-                    }
-                    if settings.notifyWhenFinished && model.isNotificationPermissionDenied {
-                        ChromeRowDivider()
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                                .font(.system(size: 12))
-                            Text("Notifications are turned off for Ensembyte in macOS System Settings.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button("Open Settings") {
-                                model.openNotificationSettings()
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                    }
+                    ChromeRow(title: "Notify when a turn finishes") {
+                    SettingsSwitch(isOn: $settings.notifyWhenFinished)
+                }
                 ChromeRowDivider()
                 ChromeRow(title: "Chime when a turn finishes", detail: "A soft chime, whether or not the thread is in view") {
                     SettingsSwitch(isOn: $settings.chimeWhenFinished)
@@ -445,6 +506,16 @@ private struct GeneralSettingsPage: View {
                 .opacity(settings.threadFinishAction == .settle ? 1 : 0.5)
             }
         }
+    }
+}
+
+/// The window's look: theme, transparency, sidebar and activity styling, the wallpaper
+/// behind the glass, and the conversation's text size.
+private struct AppearanceSettingsPage: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var settings = model.settings
         ChromeSection(title: "Appearance") {
             ChromeCard {
                 ChromeRow(title: "Theme", detail: settings.theme.detail) {
@@ -454,33 +525,15 @@ private struct GeneralSettingsPage: View {
                 ChromeRow(title: "Transparency", detail: "How much shows through the window") {
                     BackdropOpacitySlider(value: $settings.backdropOpacity)
                 }
+                .disabled(settings.performanceMode)
+                .opacity(settings.performanceMode ? 0.5 : 1)
+                ChromeRowDivider()
+                ChromeRow(title: "Performance Mode", detail: "Disable window transparency, blurs, glows and background effects for lowest GPU usage") {
+                    SettingsSwitch(isOn: $settings.performanceMode)
+                }
                 ChromeRowDivider()
                 ChromeRow(title: "Sidebar", detail: settings.sidebarMode.detail) {
-                    ChromeVisualPicker(
-                        options: SidebarMode.allCases.map { ($0, $0.title) },
-                        selection: Binding(
-                            get: { settings.sidebarMode },
-                            set: { newMode in
-                                settings.sidebarMode = newMode
-                                switch newMode {
-                                case .floating:
-                                    if model.sidebar.isVisible {
-                                        withAnimation(Chrome.panelSlide) {
-                                            model.sidebar.toggle()
-                                        }
-                                    }
-                                case .column:
-                                    if !model.sidebar.isVisible {
-                                        withAnimation(Chrome.panelSlide) {
-                                            model.sidebar.toggle()
-                                        }
-                                    }
-                                case .panelOnly:
-                                    break
-                                }
-                            }
-                        )
-                    ) { mode in
+                    ChromeVisualPicker(options: SidebarMode.allCases.map { ($0, $0.title) }, selection: $settings.sidebarMode) { mode in
                         Image(systemName: mode == .column ? "sidebar.left" : (mode == .floating ? "macwindow.on.rectangle" : "macwindow"))
                     }
                 }
@@ -492,7 +545,7 @@ private struct GeneralSettingsPage: View {
                 }
                 ChromeRowDivider()
                 // Meaningless without a column: dimmed while only the panel is shown.
-                ChromeRow(title: "Open the sidebar at launch", detail: "Collapsed otherwise; the sidebar button in the toolbar shows and hides it any time") {
+                ChromeRow(title: "Open the sidebar at launch", detail: "Collapsed otherwise; the list button in the toolbar shows and hides it any time") {
                     SettingsSwitch(isOn: Binding(
                         get: { model.sidebar.startsOpen },
                         set: { model.sidebar.startsOpen = $0 }
@@ -502,112 +555,67 @@ private struct GeneralSettingsPage: View {
                 .opacity(settings.sidebarMode == .panelOnly ? 0.5 : 1)
             }
             WallpaperCard()
-            ChatTextSizeCard(index: $settings.chatZoom)
-        }
-        ChromeSection(title: "Accessibility") {
-            ChromeCard {
-                ChromeRow(
-                    title: "Reduce motion",
-                    detail: "Disable spring animations for panels and transitions"
-                ) {
-                    SettingsSwitch(isOn: $settings.reducedMotion)
-                }
-            }
-        }
-        .onAppear {
-            model.requestNotificationPermission()
+            AppZoomCard(percent: $settings.appZoom)
         }
     }
 }
 
-/// The conversation's text size: a sample of a chat drawn at the chosen size, so the
-/// change is seen here before any thread is opened, over the row that sets it.
-private struct ChatTextSizeCard: View {
-    @Binding var index: Int
+/// The app-wide zoom: Zoom out and Zoom in step through the levels, the stock size is a
+/// click away, and the percentage says where it sits.
+private struct AppZoomCard: View {
+    @Binding var percent: Int
+
+    private var current: Int { AppZoom.normalized(percent) }
 
     var body: some View {
-        let zoom = ChatZoom.scale(at: index)
-        let percentage = ChatZoom.percentage(at: index)
         ChromeCard {
-            // The sample: a message in its bubble and the start of a reply, in the
-            // conversation's own type at the chosen size.
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Spacer(minLength: 48)
-                    Text("Where does the composer decide how far the draft photo sits from the edges?")
-                        .font(.chat(.body, zoom: zoom))
+            ChromeRow(title: "Zoom", detail: current == 100 ? "The stock size" : "\(current)% of the stock size") {
+                HStack(spacing: 8) {
+                    Button {
+                        percent = AppZoom.next(percent, increasing: false)
+                    } label: {
+                        Image(systemName: "textformat.size.smaller")
+                            .font(.system(.subheadline))
+                            .foregroundStyle(Chrome.secondaryText)
+                            .frame(width: 22, height: 22)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(current == AppZoom.levels.first)
+                    .help("Zoom out")
+                    Text("\(current)%")
+                        .font(.system(.subheadline, weight: .medium).monospacedDigit())
                         .foregroundStyle(Chrome.primaryText)
-                        .padding(.leading, 14)
-                        .padding(.trailing, 14 + UserBubble.tail)
-                        .padding(.vertical, 9)
-                        .background(.tint.opacity(0.14), in: UserBubble())
+                        .frame(minWidth: 46)
+                    Button {
+                        percent = AppZoom.next(percent, increasing: true)
+                    } label: {
+                        Image(systemName: "textformat.size.larger")
+                            .font(.system(.subheadline))
+                            .foregroundStyle(Chrome.secondaryText)
+                            .frame(width: 22, height: 22)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(current == AppZoom.levels.last)
+                    .help("Zoom in")
+                    Button {
+                        percent = 100
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(.subheadline, weight: .medium))
+                            .foregroundStyle(Chrome.secondaryText)
+                            .frame(width: 22, height: 22)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(current == 100)
+                    .opacity(current == 100 ? 0 : 1)
+                    .help("Back to the stock size")
                 }
-                Text("In `DraftAttachments`, inside **ComposerView.swift**. The strip pads its leading edge with `attachmentInset` but leaves the top on the stack's default spacing, which is why the photo hugs the top of the pill.")
-                    .font(.chat(.body, zoom: zoom))
-                    .foregroundStyle(Chrome.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.snappy(duration: 0.2), value: index)
-            .accessibilityHidden(true)
-            ChromeRowDivider()
-            ChromeRow(title: "Text size", detail: percentage == 100 ? "The stock size" : "\(percentage)% of the stock size") {
-                ChatTextSizeSlider(index: $index)
+                .animation(.snappy(duration: 0.2), value: current)
             }
         }
-    }
-}
-
-/// Smaller type on the left, larger on the right, the stock size in the middle, with a
-/// reset that shows only once the slider has left it (see `BackdropOpacitySlider`).
-private struct ChatTextSizeSlider: View {
-    @Binding var index: Int
-
-    private var isOffStock: Bool { index != ChatZoom.defaultIndex }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "textformat.size.smaller")
-                .font(.system(size: 11))
-                .foregroundStyle(Chrome.secondaryText)
-                .help("Smaller")
-            Slider(
-                value: Binding(
-                    get: { Double(index) },
-                    set: { index = ChatZoom.clamped(Int($0.rounded())) }
-                ),
-                in: 0...Double(ChatZoom.stepCount - 1),
-                step: 1
-            )
-            .controlSize(.small)
-            .frame(width: 140)
-            Image(systemName: "textformat.size.larger")
-                .font(.system(size: 11))
-                .foregroundStyle(Chrome.secondaryText)
-                .help("Larger")
-        }
-        .overlay(alignment: .leading) {
-            if isOffStock {
-                Button {
-                    withAnimation(.snappy(duration: 0.2)) { index = ChatZoom.defaultIndex }
-                } label: {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Chrome.secondaryText)
-                        .frame(width: 22, height: 22)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .help("Back to the stock size")
-                .offset(x: -28)
-                .transition(.opacity.combined(with: .offset(x: 6)))
-            }
-        }
-        .animation(.snappy(duration: 0.2), value: isOffStock)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text("Text size"))
-        .accessibilityValue(Text("\(ChatZoom.percentage(at: index)) percent"))
     }
 }
 
@@ -621,14 +629,14 @@ private struct BackdropOpacitySlider: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "circle.dotted")
-                .font(.system(size: 11))
+                .font(.system(.subheadline))
                 .foregroundStyle(Chrome.secondaryText)
                 .help("Clear")
             Slider(value: $value, in: 0...1)
                 .controlSize(.small)
                 .frame(width: 140)
             Image(systemName: "circle.fill")
-                .font(.system(size: 11))
+                .font(.system(.subheadline))
                 .foregroundStyle(Chrome.secondaryText)
                 .help("Solid")
         }
@@ -641,7 +649,7 @@ private struct BackdropOpacitySlider: View {
                     withAnimation(.snappy(duration: 0.2)) { value = AppSettings.defaultBackdropOpacity }
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(Chrome.secondaryText)
                         .frame(width: 22, height: 22)
                         .contentShape(.rect)
@@ -675,23 +683,60 @@ private struct ProvidersRefreshButton: View {
 }
 
 /// Shows what launch (or the refresh button) last found: opening or scrolling the page checks no provider.
-/// The one read it starts on its own is each signed-in account's usage limits, which the registry
-/// throttles to once a minute, so the numbers are on screen without a trip through a chat.
+/// The reads it starts on its own are the CLI release feeds (cached for fifteen minutes) and each
+/// signed-in account's usage limits, which the registry throttles to once a minute, so the numbers are on screen without a trip through a chat.
 private struct ProvidersSettingsPage: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
-        // Eager on purpose: a handful of sections, and lazy ones were rebuilt while scrolling,
-        // which reset their fields and re-ran every check they started on appear.
-        VStack(alignment: .leading, spacing: Chrome.sectionSpacing) {
-            ForEach(ProviderKind.allCases) { provider in
-                ProviderSettingsSection(provider: provider)
+        /// "Configured" means authenticated: a signed-in provider.
+        let configured: (ProviderKind) -> Bool = { provider in
+            if case .signedIn = model.providers.status(provider).auth { return true }
+            return false
+        }
+        // Configured providers lead, the rest follow; each group keeps allCases' own
+        // order (a stable split, not a sort). An auth refresh reorders instantly.
+        let providers = ProviderKind.allCases.filter(configured) + ProviderKind.allCases.filter { !configured($0) }
+        // One card, one compact row per provider, every row collapsed until opened. Eager on
+        // purpose: lazy rows were rebuilt while scrolling, which reset their fields and
+        // re-ran every check they started on appear.
+        ChromeCard {
+            ForEach(Array(providers.enumerated()), id: \.element) { index, provider in
+                if index > 0 { ChromeRowDivider() }
+                ProviderSettingsSection(
+                    provider: provider,
+                    isExpanded: Binding(
+                        get: { ProviderRowExpansion.shared.expanded.contains(provider) },
+                        set: { expanded in
+                            if expanded {
+                                ProviderRowExpansion.shared.expanded.insert(provider)
+                            } else {
+                                ProviderRowExpansion.shared.expanded.remove(provider)
+                            }
+                        }
+                    )
+                )
             }
         }
+        // Opening the page asks the release feeds again when the last answer is a while old.
+        .task { await model.providers.checkCLIUpdates(freshness: ProviderRegistry.cliCheckFreshnessOnOpen) }
     }
+}
+
+/// Which provider rows are open, for this run of the app only: Settings reopens on the rows
+/// left open, a relaunch starts with every row collapsed.
+@MainActor
+@Observable
+final class ProviderRowExpansion {
+    static let shared = ProviderRowExpansion()
+    var expanded: Set<ProviderKind> = []
 }
 
 private struct ProviderSettingsSection: View {
     @Environment(AppModel.self) private var model
     let provider: ProviderKind
+    /// Whether the row is open (`ProviderRowExpansion`): every row starts collapsed.
+    @Binding var isExpanded: Bool
 
     @State private var binaryPath = ""
     @State private var apiKey = ""
@@ -713,120 +758,194 @@ private struct ProviderSettingsSection: View {
         return !status.isChecking
     }
 
+    /// The row's second line: the provider's state. A CLI's version and its update follow
+    /// on a line of their own (`ProviderUpdateSubtitle`).
+    private var rowSubtitle: String {
+        let status = model.providers.status(provider)
+        if status.isChecking { return "Checking…" }
+        if provider.isAPIKeyBased, status.apiKeyConfigured, let host = provider.apiHost {
+            return "Native API · \(host)"
+        }
+        return status.summary
+    }
+
+    /// Whether the row has anything to open. Every provider has a binary path or a key
+    /// today; the chevron goes for any that ends up with nothing to show.
+    private var hasDetails: Bool {
+        !provider.isAPIKeyBased || provider.acceptsAPIKey || showsUsage || showsAccounts
+    }
+
+    /// Providers that take several logins list them; the others show their one account's usage.
+    private var showsAccounts: Bool {
+        provider.supportsAccounts && model.providers.status(provider).isInstalled
+    }
+
     var body: some View {
         let status = model.providers.status(provider)
-        ChromeSection(title: provider.displayName) {
-            ChromeCard {
-                HStack(spacing: 12) {
-                    ProviderIcon(provider: provider, size: 18)
-                        .foregroundStyle(Chrome.primaryText)
-                        .frame(width: 22)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: status.isChecking ? "Checking…" : status.summary)
-                            .font(.system(size: 13))
-                        if let version = status.version, !provider.isAPIKeyBased {
-                            Text(verbatim: "Version \(version)")
-                                .font(.system(size: 11))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Button {
+                    guard hasDetails else { return }
+                    withAnimation(Chrome.panelSlide) { isExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 12) {
+                        ProviderIcon(provider: provider, size: 16)
+                            .foregroundStyle(Chrome.primaryText)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(Chrome.overlay(0.06))
+                            )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: provider.displayName)
+                                .font(.system(.body, weight: .medium))
+                                .foregroundStyle(Chrome.primaryText)
+                            Text(verbatim: rowSubtitle)
+                                .font(.system(.subheadline))
                                 .foregroundStyle(Chrome.secondaryText)
-                        } else if provider.isAPIKeyBased, status.apiKeyConfigured, let host = provider.apiHost {
-                            Text(verbatim: "Native API · \(host)")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Chrome.secondaryText)
-                        }
-                    }
-                    Spacer()
-                    SettingsSwitch(isOn: Binding(
-                        get: { model.settings.isEnabled(provider) },
-                        set: { model.settings.setEnabled($0, for: provider) }
-                    ))
-                }
-                .padding(.leading, 16)
-                .padding(.trailing, Chrome.rowControlTrailingPadding)
-                .padding(.vertical, 11)
-                if showsUsage {
-                    ChromeRowDivider()
-                    VStack(alignment: .leading, spacing: 14) {
-                        if PlanLimitsReader.exposesLimits(provider) {
-                            PlanLimitsView(provider: provider)
-                        }
-                        if CreditsReader.exposesCredits(provider) {
-                            CreditsView(provider: provider)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                if provider.acceptsAPIKey {
-                    ChromeRowDivider()
-                    ChromeRow(
-                        title: provider.isAPIKeyBased ? "API key" : "API key (optional)",
-                        detail: provider.isAPIKeyBased
-                            ? "Stored in your Keychain. Get one at \(provider.apiKeySource ?? "the provider dashboard")."
-                            : "Instead of `\(provider.loginCommand)`: a Studio key from \(provider.apiKeySource ?? "the provider dashboard"), stored in your Keychain and handed to the CLI."
-                    ) {
-                        HStack(spacing: 8) {
-                            Group {
-                                if showsAPIKey {
-                                    TextField("", text: $apiKey, prompt: Text("sk-…"))
-                                } else {
-                                    SecureField("", text: $apiKey, prompt: Text("sk-…"))
-                                }
+                                .lineLimit(1)
+                            // A CLI's version, a newer one when it is out, and the update's progress.
+                            if !provider.isAPIKeyBased {
+                                ProviderUpdateSubtitle(provider: provider)
                             }
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
-                            .frame(width: 200)
-                            Button {
-                                showsAPIKey.toggle()
-                            } label: {
-                                Image(systemName: showsAPIKey ? "eye.slash" : "eye")
-                                    .font(.system(size: 12))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Chrome.secondaryText)
-                            .help(showsAPIKey ? "Hide the API key" : "Show the API key")
                         }
+                        Spacer(minLength: 8)
                     }
-                    if provider.isAPIKeyBased, !status.isInstalled {
-                        ChromeRowDivider()
-                        ChromeRow(title: "Get a key", detail: "\(provider.displayName) needs an API key. Nothing to install.") {
-                            Link(destination: provider.installURL) {
-                                Text(verbatim: "Get a \(provider.displayName) key")
-                                    .frame(height: Chrome.rowButtonLabelHeight)
-                            }
-                            .buttonStyle(.glass)
-                        }
-                    }
+                    .contentShape(.rect)
                 }
+                .buttonStyle(ChromeQuietButtonStyle())
+                .accessibilityLabel(Text(provider.displayName))
+                .accessibilityValue(Text(isExpanded ? "Expanded" : "Collapsed"))
+                // Update when a newer CLI is out, Install while it is missing.
                 if !provider.isAPIKeyBased {
-                    ChromeRowDivider()
-                    ChromeRow(title: "Binary path", detail: status.executable?.path) {
-                        TextField("", text: $binaryPath, prompt: Text(provider.executableName))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
-                            .frame(width: 200)
+                    ProviderUpdateAction(provider: provider)
+                }
+                if hasDetails {
+                    Button {
+                        withAnimation(Chrome.panelSlide) { isExpanded.toggle() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Chrome.secondaryText)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 22, height: 22)
+                            .contentShape(.rect)
                     }
-                    if !status.isInstalled {
+                    .buttonStyle(.plain)
+                    .help(isExpanded ? "Hide the \(provider.displayName) settings" : "Show the \(provider.displayName) settings")
+                    .accessibilityHidden(true)
+                }
+                SettingsSwitch(isOn: Binding(
+                    get: { model.settings.isEnabled(provider) },
+                    set: { model.settings.setEnabled($0, for: provider) }
+                ))
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, Chrome.rowControlTrailingPadding)
+            .padding(.vertical, 9)
+            ChromeRevealLayout(fraction: isExpanded ? 1 : 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsAccounts {
                         ChromeRowDivider()
-                        ChromeRow(title: "Install", detail: "\(provider.displayName) was not found on your PATH.") {
-                            Link(destination: provider.installURL) {
-                                Text(verbatim: "Get \(provider.displayName)")
-                                    .frame(height: Chrome.rowButtonLabelHeight)
+                        ProviderAccountsSection(provider: provider, isExpanded: isExpanded)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    } else if showsUsage {
+                        ChromeRowDivider()
+                        VStack(alignment: .leading, spacing: 14) {
+                            if PlanLimitsReader.exposesLimits(provider) {
+                                PlanLimitsView(provider: provider)
                             }
-                            .buttonStyle(.glass)
+                            if CreditsReader.exposesCredits(provider) {
+                                CreditsView(provider: provider)
+                            }
                         }
-                    } else if showsSignIn {
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    if provider.acceptsAPIKey {
                         ChromeRowDivider()
-                        ChromeRow(title: "Sign in", detail: "Click here to login again.") {
-                            Button {
-                                Workspace.openTerminal(running: provider.loginCommand)
-                            } label: {
-                                Text(verbatim: "Login").frame(height: Chrome.rowButtonLabelHeight)
+                        ChromeRow(
+                            title: provider.isAPIKeyBased ? "API key" : "API key (optional)",
+                            detail: provider.isAPIKeyBased
+                                ? "Stored in your Keychain. Get one at \(provider.apiKeySource ?? "the provider dashboard")."
+                                : "Instead of `\(provider.loginCommand)`: a Studio key from \(provider.apiKeySource ?? "the provider dashboard"), stored in your Keychain and handed to the CLI."
+                        ) {
+                            HStack(spacing: 8) {
+                                Group {
+                                    if showsAPIKey {
+                                        TextField("", text: $apiKey, prompt: Text("sk-…"))
+                                    } else {
+                                        SecureField("", text: $apiKey, prompt: Text("sk-…"))
+                                    }
+                                }
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(width: 200)
+                                Button {
+                                    showsAPIKey.toggle()
+                                } label: {
+                                    Image(systemName: showsAPIKey ? "eye.slash" : "eye")
+                                        .font(.system(size: 12))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Chrome.secondaryText)
+                                .help(showsAPIKey ? "Hide the API key" : "Show the API key")
                             }
-                            .buttonStyle(.glass)
+                        }
+                        if provider.isAPIKeyBased, !status.isInstalled {
+                            ChromeRowDivider()
+                            ChromeRow(title: "Get a key", detail: "\(provider.displayName) needs an API key. Nothing to install.") {
+                                Link(destination: provider.installURL) {
+                                    Text(verbatim: "Get a \(provider.displayName) key")
+                                        .frame(height: Chrome.rowButtonLabelHeight)
+                                }
+                                .buttonStyle(.glass)
+                            }
+                        }
+                    }
+                    if !provider.isAPIKeyBased {
+                        ChromeRowDivider()
+                        ChromeRow(title: "Binary path", detail: status.executable?.path) {
+                            TextField("", text: $binaryPath, prompt: Text(provider.executableName))
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(width: 200)
+                        }
+                        if status.isInstalled {
+                            ChromeRowDivider()
+                            ProviderUpdateMonitoringRow(provider: provider)
+                        }
+                        if !status.isInstalled {
+                            ChromeRowDivider()
+                            ChromeRow(title: "Install", detail: "\(provider.displayName) was not found on your PATH.") {
+                                Link(destination: provider.installURL) {
+                                    Text(verbatim: "Get \(provider.displayName)")
+                                        .frame(height: Chrome.rowButtonLabelHeight)
+                                }
+                                .buttonStyle(.glass)
+                            }
+                        } else if showsSignIn, !showsAccounts {
+                            // Providers with accounts sign each one in from its own row.
+                            ChromeRowDivider()
+                            ChromeRow(title: "Sign in", detail: "Click here to login again.") {
+                                Button {
+                                    Workspace.openTerminal(running: provider.loginCommand)
+                                } label: {
+                                    Text(verbatim: "Login").frame(height: Chrome.rowButtonLabelHeight)
+                                }
+                                .buttonStyle(.glass)
+                            }
                         }
                     }
                 }
             }
+            // Collapsed content is neither focusable, tappable nor in the accessibility
+            // tree; the clip reveals it top-anchored as the fraction slides.
+            .clipped()
+            .disabled(!isExpanded)
+            .allowsHitTesting(isExpanded)
+            .accessibilityHidden(!isExpanded)
         }
         .onAppear {
             binaryPath = model.settings.binaryPath(for: provider)
@@ -868,6 +987,7 @@ private struct SourceControlSettingsPage: View {
 
     var body: some View {
         @Bindable var settings = model.settings
+        GitHubSettingsSection()
         ChromeSection(title: "Text generation") {
             ChromeCard {
                 ChromeRow(
@@ -882,12 +1002,12 @@ private struct SourceControlSettingsPage: View {
             ChromeCard {
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $settings.commitInstructions)
-                        .font(.system(size: 13))
+                        .font(.system(.body))
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 90)
                     if settings.commitInstructions.isEmpty {
                         Text("For example: use conventional commit prefixes")
-                            .font(.system(size: 13))
+                            .font(.system(.body))
                             .foregroundStyle(Chrome.secondaryText)
                             .padding(.horizontal, 5)
                             .allowsHitTesting(false)
@@ -1051,9 +1171,9 @@ private struct AboutSettingsPage: View {
                     .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Ensembyte")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.title3, weight: .semibold))
                     Text(verbatim: "Version \(AppInfo.version) (\(AppInfo.build))")
-                        .font(.system(size: 12))
+                        .font(.system(.callout))
                         .foregroundStyle(Chrome.secondaryText)
                 }
                 Spacer()
@@ -1067,13 +1187,13 @@ private struct AboutSettingsPage: View {
             AboutUpdateCheckRow()
             ChromeRowDivider()
             Text("The coding app by Soumya Chakraborty: a native home for your coding agents, built in Swift with Liquid Glass.")
-                .font(.system(size: 13))
+                .font(.system(.body))
                 .padding(.leading, 16)
                 .padding(.trailing, Chrome.rowControlTrailingPadding)
                 .padding(.vertical, 11)
             ChromeRowDivider()
             Text("Ensembyte and SwiftTerm are MIT licensed.")
-                .font(.system(size: 12))
+                .font(.system(.callout))
                 .foregroundStyle(Chrome.secondaryText)
                 .padding(.leading, 16)
                 .padding(.trailing, Chrome.rowControlTrailingPadding)
@@ -1104,7 +1224,7 @@ private struct LicensesRow: View {
                             ForEach(Self.files, id: \.resource) { file in
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(verbatim: file.title)
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.body, weight: .semibold))
                                     MarkdownView(text: Self.text(of: file.resource)).equatable()
                                         .environment(\.markdownPointSize, 12)
                                         .foregroundStyle(Chrome.secondaryText)
@@ -1134,8 +1254,9 @@ private struct LicensesRow: View {
     }
 }
 
-/// Ensembyte's logo and name, showing attribution that the app is made by Soumya Chakraborty.
 private struct MadeByRow: View {
+    @State private var isHovering = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image("ensembyte-logo")
@@ -1145,10 +1266,10 @@ private struct MadeByRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Made by Soumya Chakraborty")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(Chrome.primaryText)
                 Text("Ensembyte is a coding app by Soumya Chakraborty for Mac.")
-                    .font(.system(size: 11))
+                    .font(.system(.subheadline))
                     .foregroundStyle(Chrome.secondaryText)
             }
             Spacer(minLength: 12)
@@ -1173,15 +1294,16 @@ private struct CreditLink: View {
             HStack(spacing: 4) {
                 Text(verbatim: title)
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(.callout, weight: .medium))
             .foregroundStyle(Chrome.accent)
         }
         .buttonStyle(.plain)
         .help(url.absoluteString)
     }
 }
+
 
 /// The per-project marks behind one button: the Projects card stays two rows long, and the
 /// list of projects with their marks opens in a popover off this row.

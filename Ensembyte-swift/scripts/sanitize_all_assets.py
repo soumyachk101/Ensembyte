@@ -6,8 +6,8 @@ Senior Developer Asset Sanitization Pipeline for Swarm Code:
    Does NOT paste the Swarm bee logo over Hydra!
 2. Accurately replaces the macOS squircle application icon in empty thread views
    (recipes, slider, pairs) using the official Swarm Code macOS AppIcon.
-3. Surgically replaces all Droppy text ("Droppy Code" -> "Swarm Code",
-   "getdroppy.app" -> "swarmcode.dev", "DroppyCode build" -> "SwarmCode build")
+3. Surgically replaces all Legacy text ("Ensembyte" -> "Swarm Code",
+   "getlegacy.app" -> "swarmcode.dev", "Ensembyte build" -> "SwarmCode build")
    using per-column linear vertical interpolation for 100% invisible blends.
 4. Outputs pristine WebP files to website/assets/app/ and website/assets/app/tour/.
 5. Outputs pixel-perfect 1320x824 @2x PNGs to:
@@ -85,7 +85,7 @@ def process_tour_welcome():
     im = Image.open(SRC_DIR / "window.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
 
-    # Modal title: "Welcome to Droppy Code" -> "Welcome to Swarm Code"
+    # Modal title: "Welcome to Ensembyte" -> "Welcome to Swarm Code"
     inpaint(arr, 1025, 1345, 905, 960)
     im = Image.fromarray(arr.astype(np.uint8))
     draw = ImageDraw.Draw(im)
@@ -93,7 +93,7 @@ def process_tour_welcome():
     font.set_variation_by_name('Bold')
     draw.text((1025, 907), 'Swarm Code', fill=(245, 248, 252, 255), font=font)
 
-    # Terminal prompt: "DroppyCode build" -> "SwarmCode build"
+    # Terminal prompt: "Ensembyte build" -> "SwarmCode build"
     arr = np.array(im)
     bg_strip = arr[695:698, 835:940]
     bg_fill = np.tile(bg_strip.mean(axis=0, keepdims=True), (16, 1, 1)).astype(np.uint8)
@@ -185,7 +185,7 @@ def process_tour_slider():
     icon_resized = app_icon.resize((102, 102), Image.Resampling.LANCZOS)
     im.alpha_composite(icon_resized, (992, 496))
 
-    # Replace "Droppy Code?" with "Swarm Code?"
+    # Replace "Ensembyte?" with "Swarm Code?"
     arr = np.array(im, dtype=np.float32)
     inpaint(arr, 1135, 1455, 650, 715)
     im = Image.fromarray(arr.astype(np.uint8))
@@ -270,8 +270,8 @@ def process_threads():
     im = Image.open(SRC_DIR / "threads.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
 
-    droppy_ys = [394, 517, 683, 765, 847, 930]
-    for y in droppy_ys:
+    legacy_ys = [394, 517, 683, 765, 847, 930]
+    for y in legacy_ys:
         inpaint(arr, 275, 430, y - 2, y + 22)
     inpaint(arr, 275, 430, 600 - 2, 600 + 22)
     inpaint(arr, 715, 835, 840 - 2, 840 + 20)
@@ -283,7 +283,7 @@ def process_threads():
     font_mono = ImageFont.truetype(MONO_FONT_PATH, 14)
     c_row = (145, 160, 180, 255)
 
-    for y in droppy_ys:
+    for y in legacy_ys:
         draw.text((278, y), 'Swarm Code', fill=c_row, font=font_row)
     draw.text((278, 600), 'swarmcode.dev', fill=c_row, font=font_row)
     draw.text((715, 840), 'SwarmCode', fill=(180, 195, 210, 255), font=font_mono)
@@ -299,8 +299,8 @@ def process_sidebar():
     im = Image.open(SRC_DIR / "sidebar.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
 
-    droppy_ys = [300, 448, 645, 743, 841, 939]
-    for y in droppy_ys:
+    legacy_ys = [300, 448, 645, 743, 841, 939]
+    for y in legacy_ys:
         inpaint(arr, 95, 260, y - 2, y + 26)
     inpaint(arr, 95, 280, 546 - 2, 546 + 26)
 
@@ -309,7 +309,7 @@ def process_sidebar():
     font = ImageFont.truetype(FONT_PATH, 18)
     c_row = (145, 160, 180, 255)
 
-    for y in droppy_ys:
+    for y in legacy_ys:
         draw.text((98, y), 'Swarm Code', fill=c_row, font=font)
     draw.text((98, 546), 'swarmcode.dev', fill=c_row, font=font)
 
@@ -323,8 +323,8 @@ def process_palette():
     im = Image.open(SRC_DIR / "palette.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
 
-    droppy_ys = [371, 445, 594, 669, 743]
-    for y in droppy_ys:
+    legacy_ys = [371, 445, 594, 669, 743]
+    for y in legacy_ys:
         inpaint(arr, 648, 780, y - 2, y + 18)
     inpaint(arr, 648, 790, 520 - 2, 520 + 18)
 
@@ -333,7 +333,7 @@ def process_palette():
     font = ImageFont.truetype(FONT_PATH, 13)
     c_row = (145, 160, 180, 255)
 
-    for y in droppy_ys:
+    for y in legacy_ys:
         draw.text((651, y), 'Swarm Code', fill=c_row, font=font)
     draw.text((651, 520), 'swarmcode.dev', fill=c_row, font=font)
 
@@ -347,8 +347,8 @@ def process_notify():
     im = Image.open(SRC_DIR / "notify.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
 
-    droppy_ys = [288, 403, 470, 572, 707, 774, 888]
-    for y in droppy_ys:
+    legacy_ys = [288, 403, 470, 572, 707, 774, 888]
+    for y in legacy_ys:
         inpaint(arr, 205, 330, y - 2, y + 20)
     for y in [639, 956, 1023]:
         inpaint(arr, 205, 350, y - 2, y + 20)
@@ -358,7 +358,7 @@ def process_notify():
     font = ImageFont.truetype(FONT_PATH, 14)
     c_row = (145, 160, 180, 255)
 
-    for y in droppy_ys:
+    for y in legacy_ys:
         draw.text((208, y), 'Swarm Code', fill=c_row, font=font)
     for y in [639, 956, 1023]:
         draw.text((208, y), 'swarmcode.dev', fill=c_row, font=font)
@@ -373,7 +373,7 @@ def process_diff():
     im = Image.open(SRC_DIR / "diff.webp").convert('RGBA')
     arr = np.array(im, dtype=np.float32)
 
-    # Header path: DroppyCode/Views/Composer/ComposerView.swift -> SwarmCode/App/Views/Composer/ComposerView.swift
+    # Header path: Ensembyte/Views/Composer/ComposerView.swift -> SwarmCode/App/Views/Composer/ComposerView.swift
     inpaint(arr, 640, 1100, 284, 308)
     im = Image.fromarray(arr.astype(np.uint8))
     draw = ImageDraw.Draw(im)

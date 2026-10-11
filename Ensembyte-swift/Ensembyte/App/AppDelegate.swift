@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         await MainActor.run {
             if !isUpdate { WindowManager.shared.showMain() }
             if let identifier, let threadID = UUID(uuidString: identifier) {
+                WindowManager.shared.hideSettings()
                 self.model?.selectedThreadID = threadID
             }
             NSApp.activate()

@@ -55,6 +55,7 @@ struct UsagePanel: View {
                         Divider().padding(.vertical, 14)
                     }
                     PlanLimitsView(provider: provider)
+                    UsageAccountSwitcher(provider: provider)
                 }
 
                 if showsCredits {
@@ -97,6 +98,7 @@ struct UsagePanel: View {
             .padding(.bottom, 8)
             if showsLimits {
                 PlanLimitsView(provider: p)
+                UsageAccountSwitcher(provider: p)
             }
             if showsLimits && showsCredits {
                 Divider().padding(.vertical, 14)

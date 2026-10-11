@@ -164,6 +164,7 @@ struct SidebarView: View {
                 SidebarRow(title: "Add project", action: { addProject() }) {
                     SidebarIconBadge { SidebarSymbol("plus") }
                 }
+                if !inPopover { VoiceSidebarTrigger() }
                 SidebarRow(title: "Settings", action: { WindowManager.shared.showSettings() }) {
                     SidebarIconBadge { SidebarSymbol("gear", scale: 1.15) }
                         .overlay(alignment: .topTrailing) {
@@ -2593,6 +2594,7 @@ private struct SettledHeader: View {
     @Environment(AppModel.self) private var model
     let count: Int
     let isFirst: Bool
+    @State private var isConfirmingDelete = false
 
     var body: some View {
         let collapsed = model.settings.settledCollapsed
@@ -2631,6 +2633,28 @@ private struct SettledHeader: View {
         .accessibilityLabel(Text("Settled, \(count) threads"))
         .accessibilityValue(Text(collapsed ? "Collapsed" : "Expanded"))
         .accessibilityAddTraits(.isButton)
+        .contextMenu {
+            Button("Delete Settled and Archived Threads…", role: .destructive) {
+                if model.settings.confirmBeforeDeleting {
+                    isConfirmingDelete = true
+                } else {
+                    withAnimation(Chrome.panelSlide) { model.deleteFinishedThreads() }
+                }
+            }
+        }
+        .popover(isPresented: $isConfirmingDelete, arrowEdge: .bottom) {
+            let total = model.finishedThreads.count
+            PopoverMenu {
+                PopoverSectionHeader(total == 1 ? "Delete the finished thread?" : "Delete all settled and archived threads?")
+                PopoverNote(total == 1
+                    ? "Its history will be removed. Files in your project stay as they are."
+                    : "The histories of all \(total) threads, across every project, will be removed. Files in your projects stay as they are.")
+                PopoverDivider()
+                PopoverItem(total == 1 ? "Delete thread" : "Delete \(total) threads", symbol: "trash", isDestructive: true) {
+                    withAnimation(Chrome.panelSlide) { model.deleteFinishedThreads() }
+                }
+            }
+        }
     }
 }
 

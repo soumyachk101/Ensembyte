@@ -34,7 +34,15 @@ struct HydraButton: View {
         // lead's own timeline, so the badge pulses as soon as delegation starts.
         let isDelegating = isOn && running == 0 && runtime.isRunning && Self.isLeadDelegating(runtime.entries)
         Button {
-            if !model.settings.hasSeenHydraIntro { isIntroShown = true } else if heads.isEmpty { isExplaining = true } else { togglePanel() }
+            if !model.settings.hasSeenHydraIntro {
+                isIntroShown = true
+            } else if heads.isEmpty {
+                // With Hydra on there is nothing out yet to show, so the mark explains itself; with it
+                // off, "Hydra is on" would be untrue, and what the user needs is the switch.
+                if isOn { isExplaining = true } else { isHydraSwitchShown = true }
+            } else {
+                togglePanel()
+            }
         } label: {
             ZStack {
                 if isOn {
@@ -93,20 +101,17 @@ struct HydraButton: View {
         .onAppear { if !model.settings.hasSeenHydraIntro, isOn { isIntroShown = true } }
         // The capture run hangs the intro's still from the mark, where the app shows it.
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-            if WebsiteCaptures.isEnabled { WebsiteCaptures.hydraMarkFrame = frame }
+            if CaptureRun.isEnabled { WebsiteCaptures.hydraMarkFrame = frame }
         }
         .help(help(isOn: isOn, running: running, hasHeads: !heads.isEmpty))
-        .accessibilityLabel(Text(panelHelp(running: running, hasHeads: !heads.isEmpty)))
+        .accessibilityLabel(Text(panelHelp(isOn: isOn, running: running, hasHeads: !heads.isEmpty)))
         .accessibilityValue(Text(isOn ? "On" : "Off"))
     }
 
     /// Shows the floating panel; shown, hides it. The panel fades and scales in and out
     /// in place while the chat slides to make room or take it back. Heads keep working
     /// either way. With nothing out yet the popover explains instead (see the body).
-    /// In thread mode the panel does not exist — heads live in the sidebar.
     private func togglePanel() {
-        let threadID = thread.id
-        guard !model.isThreadMode(for: threadID) else { return }
         withAnimation(Chrome.panelSlide) { runtime.isHydraPanelHidden.toggle() }
     }
 
@@ -176,14 +181,19 @@ struct HydraButton: View {
         return found
     }
 
-    private func panelHelp(running: Int, hasHeads: Bool) -> String {
+    private func panelHelp(isOn: Bool, running: Int, hasHeads: Bool) -> String {
+        guard isOn else { return hasHeads ? "Hydra is off, show the panel" : "Hydra is off, open its switch" }
         guard hasHeads else { return "Hydra is on, no heads out yet" }
         if running == 0 { return "Hydra is on, show the panel" }
         return running == 1 ? "Hydra is on, 1 head working, show or hide the panel" : "Hydra is on, \(running) heads working, show or hide the panel"
     }
 
     private func help(isOn: Bool, running: Int, hasHeads: Bool) -> String {
-        guard isOn else { return "Hydra is on in Settings" }
+        guard isOn else {
+            return model.hydraIsHeldByMode(thread)
+                ? "Hydra is off in this mode: \(thread.provider.displayName)'s heads run without asking permission · Right-click to turn it on anyway"
+                : "Hydra is on in Settings"
+        }
         var parts = ["Hydra is on"]
         if let pair = model.hydraPair(for: thread) {
             parts.append(HydraPairSummary.workers(pair, registry: model.providers))
@@ -218,7 +228,10 @@ private struct HydraSwitchPopover: View {
                     isHydraSwitchShown = false
                 }
             } else {
-                PopoverSectionHeader(isOn ? "Hydra is on for this chat" : "Hydra is off for this chat")
+                PopoverSectionHeader(isOn ? "Hydra is on for this chat" : model.hydraIsHeldByMode(thread) ? "Hydra is off in this permission mode" : "Hydra is off for this chat")
+                if model.hydraIsHeldByMode(thread) {
+                    PopoverNote("\(AppModel.hydraModeReason(thread.provider)) Turn Hydra on if that suits you.")
+                }
                 PopoverItem("Turn Hydra on for this chat", isChecked: isOn) {
                     model.setHydra(true, for: thread.id)
                     isHydraSwitchShown = false
@@ -254,7 +267,7 @@ private struct HydraRightTap: NSViewRepresentable {
 
 private final class HydraRightTapHost: NSView {
     var action: () -> Void
-    nonisolated(unsafe) private var monitor: Any?
+    private var monitor: Any?
 
     init(action: @escaping () -> Void) {
         self.action = action
@@ -264,11 +277,7 @@ private final class HydraRightTapHost: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    deinit {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-    }
+    deinit { MainActor.assumeIsolated { removeMonitor() } }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -634,7 +643,7 @@ private struct HydraSendWorkingBadge: View {
                 MiniSpinner(cellSize: 2.4)
             } else {
                 Text(verbatim: "\(running)")
-                    .font(.system(size: 9, weight: .bold).monospacedDigit())
+                    .font(.system(.caption2, weight: .bold).monospacedDigit())
                     .foregroundStyle(.white)
                     .contentTransition(.opacity)
             }
@@ -676,6 +685,9 @@ enum HydraPairSummary {
             parts.append("Heads on the chat's model")
         }
         if let effort = pair.workerEffort { parts.append(ModelOption.effortTitle(effort) + " effort") }
+        if let speed = pair.workerSpeed, speed != ModelSpeedTier.standardID {
+            parts.append(speedName(speed, provider: pair.headsProvider, registry: registry))
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -697,6 +709,36 @@ enum HydraPairSummary {
         case let (nil, heads?): return "Heads \(heads) effort"
         case (nil, nil): return nil
         }
+    }
+
+    /// The speeds in one phrase, the way `efforts` reads: "Fast" when lead and heads share
+    /// one, "Lead fast, heads ultrafast" when they differ, one side alone when only it is
+    /// set, and nothing when neither is or both stay standard.
+    @MainActor
+    static func speeds(_ pair: HydraPair, registry: ProviderRegistry) -> String? {
+        func name(_ speed: String?, _ provider: ProviderKind) -> String? {
+            speed.map { speedName($0, provider: provider, registry: registry).lowercased() }
+        }
+        let lead = name(pair.orchestratorSpeed, pair.provider)
+        let heads = name(pair.workerSpeed, pair.headsProvider)
+        switch (lead, heads) {
+        case let (lead?, heads?) where lead == heads: return lead == "standard" ? nil : lead.capitalized
+        case let (lead?, heads?): return "Lead \(lead), heads \(heads)"
+        case let (lead?, nil): return lead == "standard" ? nil : "Lead \(lead)"
+        case let (nil, heads?): return heads == "standard" ? nil : "Heads \(heads)"
+        case (nil, nil): return nil
+        }
+    }
+
+    /// A speed by the provider's own name for it ("Fast", "Ultrafast"), from whichever of
+    /// its models lists the tier; "Standard" for fast mode off.
+    @MainActor
+    static func speedName(_ speed: String, provider: ProviderKind, registry: ProviderRegistry) -> String {
+        guard speed != ModelSpeedTier.standardID else { return "Standard" }
+        for option in registry.models(for: provider) {
+            if let tier = option.speeds.first(where: { $0.id == speed }) { return tier.name }
+        }
+        return "Fast"
     }
 
     /// "Fable + Opus", "Any model + Sonnet", "Opus + itself", and across
