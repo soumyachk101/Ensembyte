@@ -243,8 +243,172 @@ pub fn offered_options(
 // Pure: folder-browser navigation (used by the shell's add-space flow)
 // ---------------------------------------------------------------------------
 
+/// Windows browser paths are parsed by shape even on a POSIX client: the
+/// device being browsed can be remote. A UNC root includes BOTH server and
+/// share; extended paths keep their prefix and use only backslash separators.
+struct WindowsBrowserPath<'a> {
+    root: &'a str,
+    rest: &'a str,
+    extended: bool,
+}
+
+impl WindowsBrowserPath<'_> {
+    fn is_separator(&self, ch: char) -> bool {
+        ch == '\\' || (!self.extended && ch == '/')
+    }
+
+    fn root_path(&self) -> String {
+        let root = if self.extended {
+            self.root.to_owned()
+        } else {
+            self.root.replace('/', "\\")
+        };
+        format!("{root}\\")
+    }
+
+    fn normalized_rest(&self) -> String {
+        let rest = self.rest.trim_matches(|ch| self.is_separator(ch));
+        if self.extended {
+            rest.to_owned()
+        } else {
+            rest.replace('/', "\\")
+        }
+    }
+}
+
+fn windows_browser_path(path: &str) -> Option<WindowsBrowserPath<'_>> {
+    let extended = path.starts_with(r"\\?\");
+    let start = if extended { 4 } else { 0 };
+    let tail = &path[start..];
+    let bytes = tail.as_bytes();
+    if bytes.len() >= 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && bytes
+            .get(2)
+            .is_none_or(|b| *b == b'\\' || (!extended && *b == b'/'))
+    {
+        return Some(WindowsBrowserPath {
+            root: &path[..start + 2],
+            rest: &path[start + 2..],
+            extended,
+        });
+    }
+    let unc_start = if extended {
+        tail.get(..4)
+            .filter(|prefix| prefix.eq_ignore_ascii_case("UNC\\"))?;
+        8
+    } else if path.starts_with(r"\\") && !path.starts_with(r"\\.\") {
+        2
+    } else {
+        return None;
+    };
+    let is_separator = |ch| ch == '\\' || (!extended && ch == '/');
+    let server_end = unc_start + path[unc_start..].find(is_separator)?;
+    if server_end == unc_start {
+        return None;
+    }
+    let share_start = server_end + 1;
+    let share_end = path[share_start..]
+        .find(is_separator)
+        .map_or(path.len(), |at| share_start + at);
+    if share_end == share_start {
+        return None;
+    }
+    Some(WindowsBrowserPath {
+        root: &path[..share_end],
+        rest: &path[share_end..],
+        extended,
+    })
+}
+
+pub fn is_windows_path(path: &str) -> bool {
+    windows_browser_path(path).is_some()
+}
+
+/// Lexical identity for browser rows, crumbs and existing spaces. Preserve
+/// POSIX spelling and directory casing (Windows directories can be case
+/// sensitive). Prefix aliases are equivalent only for ordinary Windows names.
+pub fn folder_path_key(path: &str) -> String {
+    let Some(windows) = windows_browser_path(path) else {
+        return path.to_owned();
+    };
+    let rest = windows.normalized_rest();
+    let ordinary_name = |name: &str| {
+        let stem = name.split('.').next().unwrap_or_default();
+        let reserved = matches!(
+            stem.to_ascii_uppercase().as_str(),
+            "CON" | "PRN" | "AUX" | "NUL"
+        ) || stem.get(..3).is_some_and(|prefix| {
+            (prefix.eq_ignore_ascii_case("COM") || prefix.eq_ignore_ascii_case("LPT"))
+                && matches!(
+                    &stem[3..],
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
+        });
+        !name.ends_with(['.', ' '])
+            && !name.contains(['/', ':', '*', '?', '"', '<', '>', '|'])
+            && !name.chars().any(char::is_control)
+            && !reserved
+    };
+    let unc_root = windows.extended
+        && windows
+            .root
+            .get(4..8)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("UNC\\"));
+    let ordinary_names = rest.split('\\').all(ordinary_name)
+        && (!unc_root || windows.root[8..].split('\\').all(ordinary_name));
+    let root = if windows.extended && ordinary_names {
+        let tail = &windows.root[4..];
+        if tail
+            .get(..4)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("UNC\\"))
+        {
+            format!(r"\\{}", &tail[4..])
+        } else {
+            tail.to_owned()
+        }
+    } else if windows.extended {
+        windows.root.to_owned()
+    } else {
+        windows.root.replace('/', "\\")
+    };
+    // Drive letters never distinguish case (`c:` is `C:`). Folder names keep
+    // theirs: a directory can be made case-sensitive (`fsutil
+    // setCaseSensitiveInfo`), so `Repo` and `repo` may be different folders.
+    let root = uppercase_drive_letter(root);
+    if rest.is_empty() {
+        format!("{root}\\")
+    } else {
+        format!("{root}\\{rest}")
+    }
+}
+
+/// `c:` → `C:`, also behind an extended `\\?\` prefix; other roots unchanged.
+fn uppercase_drive_letter(mut root: String) -> String {
+    let drive = root.strip_prefix(r"\\?\").unwrap_or(&root);
+    let bytes = drive.as_bytes();
+    if bytes.len() == 2 && bytes[1] == b':' && bytes[0].is_ascii_lowercase() {
+        let at = root.len() - 2;
+        root[at..at + 1].make_ascii_uppercase();
+    }
+    root
+}
+
+pub fn same_folder_path(left: &str, right: &str) -> bool {
+    folder_path_key(left) == folder_path_key(right)
+}
+
 /// Parent of an absolute path; `None` at the filesystem root.
 pub fn parent_path(path: &str) -> Option<String> {
+    if let Some(windows) = windows_browser_path(path) {
+        let rest = windows.normalized_rest();
+        if rest.is_empty() {
+            return None;
+        }
+        let parent = rest.rfind('\\').map_or("", |at| &rest[..at]);
+        return Some(format!("{}{parent}", windows.root_path()));
+    }
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() {
         return None; // was "/" (or empty)
@@ -258,8 +422,10 @@ pub fn parent_path(path: &str) -> Option<String> {
 
 /// Join a listing path and an entry name.
 pub fn child_path(base: &str, name: &str) -> String {
-    if base.ends_with('/') {
+    if base.ends_with(['/', '\\']) {
         format!("{base}{name}")
+    } else if windows_browser_path(base).is_some() {
+        format!("{base}\\{name}")
     } else {
         format!("{base}/{name}")
     }
@@ -304,14 +470,42 @@ pub fn segment_target(names: &[&str], query: &str) -> Option<usize> {
     hits.next().is_none().then_some(ix)
 }
 
-/// Interpret a palette query as a typed path jump: absolute (`/disk2/projects`)
-/// or home-relative (`~`, `~/github`). Returns the absolute path to browse,
-/// trailing slash trimmed. `home` is the device's resolved home — `None`
-/// until the first listing lands, when `~` can't expand yet. A query like
-/// `~foo` is a folder name, not a path.
+/// Whether a palette query is path-shaped (absolute, home-relative or
+/// drive-rooted) rather than a folder name to filter by.
+pub fn is_typed_path(query: &str) -> bool {
+    query.starts_with(['/', '~']) || is_windows_path(query)
+}
+
+/// Interpret a palette query as a typed path jump: absolute (`/disk2/projects`),
+/// drive-rooted (`D:\projects`) or home-relative (`~`, `~/github`). Returns the
+/// absolute path to browse, trailing separator trimmed. `home` is the device's
+/// resolved home — `None` until the first listing lands, when `~` can't expand
+/// yet. A query like `~foo` is a folder name, not a path.
 pub fn typed_path_target(query: &str, home: Option<&str>) -> Option<String> {
     let query = query.trim();
+    if let Some(windows) = windows_browser_path(query) {
+        let rest = windows.normalized_rest();
+        return Some(if rest.is_empty() {
+            windows.root_path()
+        } else {
+            format!("{}{rest}", windows.root_path())
+        });
+    }
     if let Some(rest) = query.strip_prefix('~') {
+        if is_windows_path(home?) {
+            let home = typed_path_target(home?, None)?;
+            if rest.is_empty() {
+                return Some(home);
+            }
+            let rest = rest
+                .strip_prefix(['/', '\\'])?
+                .trim_end_matches(['/', '\\']);
+            return Some(if rest.is_empty() {
+                home
+            } else {
+                child_path(&home, &rest.replace('/', "\\"))
+            });
+        }
         let home = home?.trim_end_matches('/');
         if rest.is_empty() {
             return Some(home.to_string());
@@ -336,7 +530,22 @@ pub fn typed_path_target(query: &str, home: Option<&str>) -> Option<String> {
 
 /// Breadcrumb segments for a path: `(label, full path)`, root first.
 pub fn breadcrumbs(path: &str) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = vec![("/".to_string(), "/".to_string())];
+    if let Some(windows) = windows_browser_path(path) {
+        let root = windows.root_path();
+        let mut out = vec![(root.clone(), root.clone())];
+        let mut acc = root;
+        for segment in windows
+            .rest
+            .split(|ch| windows.is_separator(ch))
+            .filter(|s| !s.is_empty())
+        {
+            acc = child_path(&acc, segment);
+            out.push((segment.to_owned(), acc.clone()));
+        }
+        return out;
+    }
+    let root = "/".to_string();
+    let mut out = vec![(root.clone(), root)];
     let mut acc = String::new();
     for segment in path.split('/').filter(|s| !s.is_empty()) {
         acc.push('/');
@@ -8703,7 +8912,7 @@ mod tests {
         // Case-insensitive; the length indexes into the NAME's bytes.
         assert_eq!(completion_prefix_len("Documents", "doc"), Some(3));
         assert_eq!(&"Documents"[3..], "uments");
-        assert_eq!(completion_prefix_len("ensembyte", "ensembyte"), Some(5));
+        assert_eq!(completion_prefix_len("ensembyte", "ensembyte"), Some(9));
         assert_eq!(completion_prefix_len("ensembyte", ""), Some(0));
         assert_eq!(completion_prefix_len("ensembyte", "dev"), None);
         // Longer than the name → not a prefix.
@@ -8961,6 +9170,99 @@ mod tests {
         ];
         let offered = offered_harnesses_impl(&catalog, false);
         assert!(offered.is_empty());
+    }
+
+    #[test]
+    fn extended_and_unc_folder_navigation_preserves_roots() {
+        for root in [r"\\?\D:\", r"\\server\share\", r"\\?\UNC\server\share\"] {
+            let folder = format!("{root}projects\\ensembyte");
+            let parent = format!("{root}projects");
+            assert_eq!(parent_path(&folder), Some(parent.clone()));
+            assert_eq!(parent_path(&parent), Some(root.to_owned()));
+            assert_eq!(parent_path(root), None);
+            assert_eq!(child_path(&parent, "ensembyte"), folder);
+            let crumbs = breadcrumbs(&folder);
+            assert_eq!(
+                crumbs,
+                vec![
+                    (root.to_owned(), root.to_owned()),
+                    ("projects".into(), parent),
+                    ("ensembyte".into(), folder.clone()),
+                ]
+            );
+            assert!(is_typed_path(&folder));
+            assert_eq!(
+                typed_path_target(&format!("{folder}\\"), None),
+                Some(folder)
+            );
+            assert_eq!(typed_path_target(root, None), Some(root.to_owned()));
+        }
+        assert!(!is_windows_path(r"\\server"));
+        assert!(!is_windows_path(r"\\server\\repo"));
+        assert!(!is_windows_path(r"\\.\C:\repo"));
+        assert!(!is_windows_path(r"\\?\Volume{123}\repo"));
+    }
+
+    #[test]
+    fn windows_folder_identity_handles_prefixes_without_changing_posix_names() {
+        assert!(same_folder_path(
+            r"C:\Users\Ana\repo",
+            r"\\?\C:\Users\Ana\repo"
+        ));
+        assert!(same_folder_path(
+            r"C:/Users/Ana/repo/",
+            r"\\?\C:\Users\Ana\repo"
+        ));
+        assert!(same_folder_path(
+            r"\\server\share\repo",
+            r"\\?\UNC\server\share\repo"
+        ));
+        assert!(!same_folder_path(
+            r"\\server\share\repo",
+            r"\\server\other\repo"
+        ));
+        assert!(!same_folder_path(r"C:\repo", r"D:\repo"));
+        assert!(!same_folder_path(r"C:\Repo", r"C:\repo"));
+        assert!(same_folder_path(r"c:\Users\Ana", r"C:\Users\Ana"));
+        assert!(same_folder_path(r"c:/Users/Ana/", r"\\?\C:\Users\Ana"));
+        assert!(same_folder_path(r"\\?\c:\repo.", r"\\?\C:\repo."));
+        assert!(same_folder_path(r"d:\", r"D:\"));
+        assert!(!same_folder_path(r"c:\users\ana", r"C:\Users\Ana"));
+        for name in ["repo.", "repo ", "..", "NUL.txt", "COM¹"] {
+            assert!(!same_folder_path(
+                &format!(r"C:\{name}"),
+                &format!(r"\\?\C:\{name}")
+            ));
+        }
+        for path in [
+            "/home/ana/repo",
+            "/Users/Ana/repo",
+            r"/tmp/name\with\backslashes",
+            "//server/share",
+        ] {
+            assert_eq!(folder_path_key(path), path);
+        }
+        assert!(!same_folder_path("/home/Ana", "/home/ana"));
+    }
+
+    #[test]
+    fn home_relative_jumps_use_the_remote_windows_separator() {
+        for home in [
+            r"C:\Users\Ana",
+            r"\\?\C:\Users\Ana",
+            r"\\server\share\Ana",
+            r"\\?\UNC\server\share\Ana",
+        ] {
+            assert_eq!(
+                typed_path_target("~/code/ensembyte/", Some(home)),
+                Some(format!("{home}\\code\\ensembyte"))
+            );
+            assert_eq!(
+                typed_path_target(r"~\code\ensembyte\", Some(home)),
+                Some(format!("{home}\\code\\ensembyte"))
+            );
+            assert_eq!(typed_path_target("~", Some(home)), Some(home.to_string()));
+        }
     }
 }
 

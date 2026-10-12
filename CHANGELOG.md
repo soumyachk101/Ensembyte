@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.5] - 2026-10-12
+
+Ensembyte 1.1.5 delivers critical Voice Mode ChatGPT account token refresh stability on macOS, alongside comprehensive Linux and Windows engine upgrades including native WebView2 embedded browser support, path traversal security, and 5-button mouse route navigation.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Voice Token Refresh**: Fixed voice eligibility probing by refreshing tokens on `account/read` (`refreshToken: true`). Prevents premature session timeouts and spurious `chatgptRequired` rejections when starting Voice Mode sessions.
+- **Codex Voice Host Stability**: Hardened realtime connection establishment and voice catalog listing across long-running background sessions.
+
+### Windows & Linux Updates (`Ensembyte-rust/`)
+- **Native Embedded WebView2 Browser**: Added full Windows WebView2 in-app browser implementation with sanitized IPC and navigation surfaces.
+- **Windows Drive & Network Path Support**: Added support for Windows drive letters (`D:\`), extended paths (`\\?\D:\`), and UNC network shares with case-insensitive root handling.
+- **UNC / SMB Security**: Protected against Windows NTLM credential leaks and path traversal attacks via lexical path component jailing prior to filesystem calls.
+- **5-Button Mouse Navigation**: Added Mouse 4 and Mouse 5 back/forward route history walking across desktop shell and embedded browser canvases.
+- **Engine Performance**: Bounded MCP bridge runtime to 2 worker threads, offloaded chunk disk reads to `spawn_blocking`, and implemented periodic glibc malloc trimming on Linux.
+
 ## [1.1.4] - 2026-10-11
 
 Ensembyte 1.1.4 is a major feature update delivering interactive Voice Mode with 3D fluid Orb visualization, a redesigned dynamic model picker with provider rails and mid-session switching, GitHub integration, multi-account management, automated CLI updates, system-wide zoom, and custom terminal typography.

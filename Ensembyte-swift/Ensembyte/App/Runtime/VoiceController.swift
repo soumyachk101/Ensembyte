@@ -199,7 +199,7 @@ final class VoiceController {
         }
 
         // Eligibility: a ChatGPT-signed-in Codex with realtime voice.
-        let account = try await session.voiceRequest("account/read", ["refreshToken": false], seconds: 15)
+        let account = try await session.voiceRequest("account/read", ["refreshToken": true], seconds: 15)
         guard account["account"]?["type"]?.string == "chatgpt" else { throw VoiceRejection.chatgptRequired }
         let listed = try? await session.voiceRequest("thread/realtime/listVoices", .object([:]), seconds: 15)
         guard let catalog = listed?["voices"]?["v1"]?.array?.compactMap(\.string) else { throw VoiceRejection.unsupported }

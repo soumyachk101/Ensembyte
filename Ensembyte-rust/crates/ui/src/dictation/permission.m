@@ -1,7 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
 // No Rust callbacks or audio retained by permission blocks.
-int orbit_microphone_permission(void) {
+int ensembyte_microphone_permission(void) {
     NSBundle *bundle = NSBundle.mainBundle;
     if (![bundle.bundlePath.pathExtension isEqualToString:@"app"] || ![bundle objectForInfoDictionaryKey:@"NSMicrophoneUsageDescription"]) return -2;
     AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
@@ -9,9 +9,9 @@ int orbit_microphone_permission(void) {
     if (status == AVAuthorizationStatusNotDetermined) return 0;
     return -1;
 }
-void orbit_request_microphone(void) {
+void ensembyte_request_microphone(void) {
     [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {}];
 }
-uintptr_t orbit_microphone_window(void) {
+uintptr_t ensembyte_microphone_window(void) {
     return NSApp.active ? (uintptr_t)(__bridge void *)NSApp.keyWindow : 0;
 }

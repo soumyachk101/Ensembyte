@@ -519,9 +519,13 @@ impl GitCheckoutInspector {
                 .or_else(|| (remotes.len() == 1).then(|| remotes[0].to_owned()));
         }
 
+        // A push URL that isn't a remote (a fork's
+        // `DISABLED--push-to-your-fork-origin-instead`) falls back to the
+        // fetch URL, which still identifies the repository.
         let remote_url = if let Some(remote) = remote_name.as_deref() {
             self.git_optional(&checkout_root, &["remote", "get-url", "--push", remote])
                 .await
+                .filter(|url| parse_git_remote(url).is_some())
         } else {
             None
         };
@@ -1533,6 +1537,31 @@ printf '%s\n' '[{"number":90,"title":"Host-resolved pull request","url":"https:/
         assert_eq!(requests[0].cwd, Path::new("/nested/path"));
         assert_eq!(requests[0].args, ["rev-parse", "--show-toplevel"]);
         assert_eq!(requests[4].args, ["remote", "get-url", "--push", "fork"]);
+    }
+
+    #[tokio::test]
+    async fn git_inspector_ignores_a_disabled_push_url() {
+        let runner = FakeProcessRunner::with_responses([
+            command_success("/checkout\n"),
+            command_success("main\n"),
+            command_success("upstream/main\n"),
+            command_success("upstream\n"),
+            command_success("DISABLED--push-to-your-fork-origin-instead\n"),
+            command_success("git@github.com:acme/ensembyte.git\n"),
+            command_success("upstream/main\n"),
+        ]);
+        let inspector = GitCheckoutInspector::new(runner.clone());
+
+        let source = inspector.inspect(Path::new("/checkout")).await.unwrap();
+
+        assert_eq!(source.branch.remote_name.as_deref(), Some("upstream"));
+        assert_eq!(
+            source.branch.remote_url.as_deref(),
+            Some("git@github.com:acme/ensembyte.git")
+        );
+        let requests = runner.requests();
+        assert_eq!(requests[4].args, ["remote", "get-url", "--push", "upstream"]);
+        assert_eq!(requests[5].args, ["remote", "get-url", "upstream"]);
     }
 
     #[test]
