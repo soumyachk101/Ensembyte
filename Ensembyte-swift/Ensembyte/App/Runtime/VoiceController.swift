@@ -200,7 +200,11 @@ final class VoiceController {
 
         // Eligibility: a ChatGPT-signed-in Codex with realtime voice.
         let account = try await session.voiceRequest("account/read", ["refreshToken": true], seconds: 15)
-        guard account["account"]?["type"]?.string == "chatgpt" else { throw VoiceRejection.chatgptRequired }
+        let isChatGPT = account["account"]?["type"]?.string == "chatgpt"
+            || account["account"]?["authMode"]?.string == "chatgpt"
+            || account["authMode"]?.string == "chatgpt"
+            || account["type"]?.string == "chatgpt"
+        guard isChatGPT else { throw VoiceRejection.chatgptRequired }
         let listed = try? await session.voiceRequest("thread/realtime/listVoices", .object([:]), seconds: 15)
         guard let catalog = listed?["voices"]?["v1"]?.array?.compactMap(\.string) else { throw VoiceRejection.unsupported }
         if !catalog.isEmpty { voices = catalog }
@@ -301,7 +305,13 @@ final class VoiceController {
     private func handle(_ method: String, _ params: JSONValue, thread: String, epoch: Int) {
         guard epoch == self.epoch else { return }
         if method == "account/updated" {
-            fail(epoch: epoch, .chatgptRequired)
+            let authMode = params["authMode"]?.string
+                ?? params["account"]?["type"]?.string
+                ?? params["account"]?["authMode"]?.string
+                ?? params["type"]?.string
+            if let authMode, authMode.lowercased() != "chatgpt" {
+                fail(epoch: epoch, .chatgptRequired)
+            }
             return
         }
         guard params["threadId"]?.string == thread else { return }
