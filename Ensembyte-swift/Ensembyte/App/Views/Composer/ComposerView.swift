@@ -900,6 +900,8 @@ private struct SendDraftState: View {
     let queueGoesToHead: Bool
     let send: () -> Void
 
+    @State private var isHovering = false
+
     var body: some View {
         let draftEmpty = runtime.draft.isEmpty
         let isEnabled = isRunning || !draftEmpty
@@ -907,16 +909,27 @@ private struct SendDraftState: View {
             if isRunning { runtime.interrupt() } else { send() }
         } label: {
             Image(systemName: isRunning ? "stop.fill" : "arrow.up")
-                .font(Chrome.iconFont)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 28, height: 28)
-                .background(isEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary), in: .circle)
+                .background(
+                    Circle()
+                        .fill(isEnabled ? (isRunning ? AnyShapeStyle(Color.red.opacity(0.85)) : AnyShapeStyle(.tint)) : AnyShapeStyle(.quaternary))
+                )
+                .overlay {
+                    Circle()
+                        .strokeBorder(isEnabled ? Color.white.opacity(isHovering ? 0.35 : 0.15) : Color.clear, lineWidth: 0.8)
+                }
+                .shadow(color: isEnabled && isHovering ? Color.accentColor.opacity(0.35) : .clear, radius: 4, y: 1)
+                .scaleEffect(isHovering && isEnabled ? 1.05 : 1.0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.72), value: isHovering)
         }
         .buttonStyle(.plain)
         .focusable(false)
         .disabled(!isEnabled || runtime.isReverting)
         .padding(.leading, 4)
+        .onHover { isHovering = $0 }
         .help(helpText(isRunning: isRunning, headsWorking: headsWorking))
         .accessibilityLabel(Text(isRunning ? "Stop" : (goesToHead ? "Send to a head" : "Send")))
     }

@@ -486,6 +486,7 @@ final class ThreadRuntime {
     @ObservationIgnored private var pendingDeltas: [String: PendingDelta] = [:]
     @ObservationIgnored private var flushTask: Task<Void, Never>?
     @ObservationIgnored private var streamByteLengths: [String: Int] = [:]
+    @ObservationIgnored private var reasoningStartTimes: [String: Date] = [:]
     @ObservationIgnored private var pendingFlushBytes = 0
     /// Bumped by anything that changes what `saveNow` writes, so the periodic save
     /// during a quiet stretch finds nothing new and does no work.
@@ -3404,6 +3405,7 @@ final class ThreadRuntime {
                 // Not until there is something to read: a redacted thinking block
                 // only ever sends empty deltas and would leave a blank entry behind.
                 guard !text.isEmpty else { return }
+                if reasoningStartTimes[id] == nil { reasoningStartTimes[id] = Date() }
                 append(TimelineItem(id: id, turnID: turnIDForNewRows, content: .reasoning(ReasoningBlock(text: "", isStreaming: true))))
             case .plan:
                 append(TimelineItem(id: id, turnID: turnIDForNewRows, content: .plan(ProposedPlan(markdown: "", state: .drafting))))
@@ -3560,14 +3562,16 @@ final class ThreadRuntime {
 
     private func completeReasoning(_ id: String, text: String) {
         streamByteLengths[id] = nil
+        let duration = reasoningStartTimes.removeValue(forKey: id).map { Date().timeIntervalSince($0) }
         let text = TextCleanup.withoutEmDashes(text)
         guard let entry = entryIndex[id], case .reasoning(var block) = entry.item.content else {
             guard !text.isEmpty else { return }
-            append(TimelineItem(id: id, turnID: turnIDForNewRows, content: .reasoning(ReasoningBlock(text: text))))
+            append(TimelineItem(id: id, turnID: turnIDForNewRows, content: .reasoning(ReasoningBlock(text: text, isStreaming: false, durationSeconds: duration))))
             return
         }
         if !text.isEmpty { block.text = text }
         block.isStreaming = false
+        if let duration { block.durationSeconds = duration }
         if !block.text.contains(where: { !$0.isWhitespace }) {
             remove(id)
         } else {

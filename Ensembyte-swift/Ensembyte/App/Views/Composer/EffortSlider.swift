@@ -671,6 +671,13 @@ struct EffortSliderCard: View {
         return efforts.firstIndex(of: "medium") ?? 0
     }
 
+    private var recommendedIndex: Int? {
+        if let defaultEffort, let idx = efforts.firstIndex(of: defaultEffort) { return idx }
+        if let idx = efforts.firstIndex(of: "medium") { return idx }
+        if efforts.count >= 3 { return efforts.count / 2 }
+        return nil
+    }
+
     private var isMaxEffort: Bool {
         efforts.count > 1 && resolvedIndex == efforts.count - 1
     }
@@ -684,9 +691,7 @@ struct EffortSliderCard: View {
 
     private var brand: EffortBrand { EffortBrand(provider: provider) }
 
-    /// The title takes the slider's colour: the provider's brand at maximum, gold in
-    /// fast mode, and both blended when the two are on together. In a pair it runs from
-    /// the lead's colour into the heads', like the track, gold at the end in fast mode.
+    /// The title takes the slider's colour: at maximum it bursts into the HextaUI cyan-violet-fuchsia gradient.
     private var titleStyle: AnyShapeStyle {
         if let pair {
             var colors = [brand.titleColor] + pair.brand.titleColors
@@ -694,47 +699,51 @@ struct EffortSliderCard: View {
             return AnyShapeStyle(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
         }
         switch (isMaxEffort, isFast) {
-        case (true, true): return AnyShapeStyle(LinearGradient(colors: [brand.titleColor, EffortPalette.fast], startPoint: .leading, endPoint: .trailing))
-        case (true, false): return brand.title
-        case (false, true): return AnyShapeStyle(EffortPalette.fast)
-        case (false, false): return AnyShapeStyle(EffortPalette.title)
+        case (true, true):
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.75, green: 0.45, blue: 1.0), EffortPalette.fast],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        case (true, false):
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.45, green: 0.65, blue: 1.0), Color(red: 0.75, green: 0.45, blue: 1.0), Color(red: 0.95, green: 0.55, blue: 0.95)],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        case (false, true):
+            return AnyShapeStyle(EffortPalette.fast)
+        case (false, false):
+            return AnyShapeStyle(EffortPalette.title)
         }
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                HStack {
-                    if supportsFast {
-                        FastModeButton(isOn: $fastMode)
-                    }
-                    Spacer()
-                    RoundIconButton(symbol: "arrow.counterclockwise", help: "Reset to default", action: onReset)
-                }
-                VStack(spacing: 2) {
+        VStack(spacing: 12) {
+            // Top header: "Effort", current level title with transition, help tooltip, and actions
+            HStack(alignment: .center, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("Effort")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Chrome.secondaryText)
                     Button {
                         onTitleTap?()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 3) {
                             Text(verbatim: title)
-                                .font(.system(.title2, weight: .medium))
+                                .font(.system(size: 14, weight: .bold))
                                 .contentTransition(.numericText())
                             if onTitleTap != nil {
                                 Image(systemName: "chevron.right")
-                                    .font(.system(.callout, weight: .semibold))
+                                    .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(Chrome.secondaryText)
                             }
                         }
                         .foregroundStyle(titleStyle)
-                        .animation(.smooth(duration: 0.3), value: isMaxEffort)
-                        .animation(.smooth(duration: 0.3), value: isFast)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .fill(isTitleHovering && onTitleTap != nil ? Chrome.overlay(0.08) : Color.clear)
                         }
-                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .disabled(onTitleTap == nil)
@@ -743,27 +752,54 @@ struct EffortSliderCard: View {
                     }
                     .help(onTitleTap == nil ? "" : "Choose a model")
 
-                    // In a pair the line under the effort is the pair itself, behind the
-                    // Hydra mark: the slider is the lead's, and the lead is named first.
-                    HStack(spacing: 5) {
-                        if pair != nil {
-                            HydraMarkImage()
-                                .foregroundStyle(Chrome.primaryText.opacity(0.75))
-                                .frame(width: 12, height: 12)
-                        } else if let provider {
-                            ProviderIcon(provider: provider, size: 12)
-                        }
-                        Text(verbatim: pair?.title ?? modelName)
-                            .font(.system(.body))
-                            .foregroundStyle(Chrome.primaryText.opacity(0.7))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .minimumScaleFactor(0.85)
-                    }
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Chrome.secondaryText.opacity(0.8))
+                        .help("How long the model thinks before it answers. Higher is smarter but slower.")
                 }
-                .padding(.horizontal, 44)
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 6) {
+                    if supportsFast {
+                        FastModeButton(isOn: $fastMode)
+                    }
+                    RoundIconButton(symbol: "arrow.counterclockwise", help: "Reset to default", action: onReset)
+                }
             }
 
+            // Captions row above track: Faster, Model name, Smarter
+            HStack(alignment: .center) {
+                Text("Faster")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Chrome.secondaryText.opacity(0.85))
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    if pair != nil {
+                        HydraMarkImage()
+                            .foregroundStyle(Chrome.primaryText.opacity(0.75))
+                            .frame(width: 11, height: 11)
+                    } else if let provider {
+                        ProviderIcon(provider: provider, size: 11)
+                    }
+                    Text(verbatim: pair?.title ?? modelName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Chrome.primaryText.opacity(0.7))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer()
+
+                Text("Smarter")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Chrome.secondaryText.opacity(0.85))
+            }
+            .padding(.horizontal, 4)
+
+            // Slider Track
             if efforts.isEmpty {
                 Text("This model has one reasoning level.")
                     .font(.system(.callout))
@@ -781,6 +817,7 @@ struct EffortSliderCard: View {
                     fastMode: isFast,
                     brand: brand,
                     pair: pair?.brand,
+                    recommendedIndex: recommendedIndex,
                     accessibilityTitle: title
                 )
             }
@@ -793,13 +830,45 @@ struct EffortSliderCard: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .minimumScaleFactor(0.9)
-                    .padding(.top, -6)
+                    .padding(.top, -4)
                     .transition(.softAppear)
+            }
+
+            // Extended thinking toggle section
+            if !efforts.isEmpty {
+                Divider()
+                    .padding(.vertical, 2)
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Extended thinking")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Chrome.primaryText)
+                        Text("Higher reasoning for complex reasoning and planning")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Chrome.secondaryText)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { resolvedIndex > 0 },
+                        set: { enabled in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                if enabled {
+                                    effort = recommendedIndex != nil && recommendedIndex! < efforts.count ? efforts[recommendedIndex!] : (efforts.last ?? "high")
+                                } else {
+                                    effort = efforts.first ?? "low"
+                                }
+                            }
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
-        .padding(.bottom, 16)
+        .padding(.bottom, 14)
     }
 }
 
@@ -869,6 +938,7 @@ struct EffortSlider: View {
     /// The pair the chat leads with, if one: the fill runs from the lead's colour into the
     /// heads' and the two fuse at a seam, whatever the effort.
     var pair: EffortPairBrand? = nil
+    var recommendedIndex: Int? = nil
     let accessibilityTitle: String
 
     @State private var dragX: CGFloat?
@@ -916,11 +986,23 @@ struct EffortSlider: View {
                     }
                 ForEach(0..<count, id: \.self) { stop in
                     let stopX = inset + CGFloat(stop) * step
+                    let isSelected = stop == index
                     Circle()
                         .fill(stopX <= x ? look.stopColor : Chrome.overlay(0.32))
-                        .frame(width: 5, height: 5)
+                        .frame(width: isSelected ? 6 : 4, height: isSelected ? 6 : 4)
+                        .scaleEffect(isSelected ? 1.35 : 1.0)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
                         .position(x: stopX, y: midY)
                 }
+
+                if let rec = recommendedIndex, count > 1, rec < count {
+                    let recX = inset + CGFloat(rec) * step
+                    Text("Recommended")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(Chrome.secondaryText)
+                        .position(x: recX, y: midY + Self.thumbSize / 2 + 7)
+                }
+
                 // The knob is a Liquid Glass lens: it refracts the fill's edge, the stops and
                 // the particles as it slides over them, lit white just enough to read as the
                 // knob on the dark track. The charged fills keep their glow under it: a blurred
@@ -975,7 +1057,7 @@ struct EffortSlider: View {
                     }
             )
         }
-        .frame(height: Self.thumbSize)
+        .frame(height: recommendedIndex != nil && count > 1 ? Self.thumbSize + 16 : Self.thumbSize)
         .accessibilityElement()
         .accessibilityLabel(Text(pair == nil ? "Reasoning effort" : "The lead's reasoning effort"))
         .accessibilityValue(Text(verbatim: accessibilityTitle))

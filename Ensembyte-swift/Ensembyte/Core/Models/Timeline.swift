@@ -144,7 +144,14 @@ struct AssistantMessage: Codable, Hashable, Sendable {
 
 struct ReasoningBlock: Codable, Hashable, Sendable {
     var text: String
-    var isStreaming = false
+    var isStreaming: Bool = false
+    var durationSeconds: Double? = nil
+
+    init(text: String, isStreaming: Bool = false, durationSeconds: Double? = nil) {
+        self.text = text
+        self.isStreaming = isStreaming
+        self.durationSeconds = durationSeconds
+    }
 }
 
 struct ToolCall: Codable, Hashable, Sendable {

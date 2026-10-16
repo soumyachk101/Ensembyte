@@ -416,13 +416,106 @@ struct ActivityGroup: View, Equatable {
     }
 }
 
-/// The agent's thinking as a step: "Thought process" with its bubble, open while the
-/// thinking still arrives and closing once it is done, unless the reader chose otherwise.
+/// An animated, glowing AI reasoning shader orb inspired by HextaUI Pro Thinking component.
+struct ThinkingShaderOrb: View {
+    var isThinking: Bool = true
+    var size: CGFloat = 13
+
+    @State private var isRotating = false
+    @State private var isBreathing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // HextaUI cyan/purple/fuchsia/blue gradient
+    private static let orbColors = [
+        Color(red: 0.22, green: 0.74, blue: 0.97), // Cyan
+        Color(red: 0.55, green: 0.36, blue: 0.96), // Violet
+        Color(red: 0.91, green: 0.30, blue: 0.65), // Fuchsia
+        Color(red: 0.23, green: 0.51, blue: 0.96)  // Blue
+    ]
+
+    var body: some View {
+        ZStack {
+            if isThinking {
+                Circle()
+                    .fill(
+                        AngularGradient(
+                            colors: Self.orbColors,
+                            center: .center,
+                            angle: .degrees(isRotating ? 360 : 0)
+                        )
+                    )
+                    .blur(radius: 3.5)
+                    .opacity(isBreathing ? 0.8 : 0.45)
+                    .scaleEffect(isBreathing ? 1.25 : 1.0)
+
+                Circle()
+                    .fill(
+                        AngularGradient(
+                            colors: Self.orbColors,
+                            center: .center,
+                            angle: .degrees(isRotating ? 360 : 0)
+                        )
+                    )
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.6)
+                    }
+                    .scaleEffect(isBreathing ? 1.05 : 0.95)
+            } else {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.55, green: 0.36, blue: 0.96).opacity(0.85),
+                                Color(red: 0.22, green: 0.74, blue: 0.97).opacity(0.85)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
+                    }
+            }
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            guard !reduceMotion, isThinking else { return }
+            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                isRotating = true
+            }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .onChange(of: isThinking) { _, thinking in
+            guard !reduceMotion else { return }
+            if thinking {
+                withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                    isRotating = true
+                }
+                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                    isBreathing = true
+                }
+            } else {
+                isRotating = false
+                isBreathing = false
+            }
+        }
+    }
+}
+
+/// The agent's thinking as an expandable trail, inspired by HextaUI Pro Thinking component:
+/// features a live shader orb, present-tense step with running timer while streaming,
+/// auto-collapsing to "Thought for 12s" when done, and an expandable trail with vertical guide line.
 private struct ActivityThoughtStep: View {
     let entry: TimelineEntry
     let revealBox: TimelineRevealBox?
     @State private var fallbackPin: Bool?
     @State private var isHovering = false
+    @State private var streamStartedAt: Date? = nil
+    @State private var liveElapsed: Int = 0
 
     /// Kept with the timeline's presentation, so a windowed-out block comes back as it was.
     private var pin: Bool? {
@@ -432,6 +525,20 @@ private struct ActivityThoughtStep: View {
         }
     }
 
+    private func durationText(for block: ReasoningBlock) -> String {
+        let sec: Int
+        if let d = block.durationSeconds, d > 0 {
+            sec = max(1, Int(round(d)))
+        } else if liveElapsed > 0 {
+            sec = liveElapsed
+        } else {
+            let words = block.text.split(separator: " ").count
+            sec = max(1, Int(round(Double(words) / 30.0)))
+        }
+        if sec < 60 { return "\(sec)s" }
+        return "\(sec / 60)m \(sec % 60)s"
+    }
+
     var body: some View {
         if case .reasoning(let block) = entry.item.content {
             let isOpen = pin ?? block.isStreaming
@@ -439,33 +546,87 @@ private struct ActivityThoughtStep: View {
                 Button {
                     withAnimation(ActivityMetrics.fold) { pin = !isOpen }
                 } label: {
-                    HStack(spacing: TimelineMetrics.iconSpacing) {
-                        Image(systemName: "bubble.left")
-                            .font(.chat(.caption))
+                    HStack(spacing: 8) {
+                        ThinkingShaderOrb(isThinking: block.isStreaming, size: 13)
+
+                        if block.isStreaming {
+                            Text("Thinking…")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Chrome.primaryText)
+
+                            Text("\(max(1, liveElapsed))s")
+                                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                                .foregroundStyle(Chrome.secondaryText)
+                                .contentTransition(.numericText())
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().fill(Chrome.overlay(0.08)))
+                        } else {
+                            Text("Thought for \(durationText(for: block))")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(isHovering ? Chrome.primaryText : Chrome.secondaryText)
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Chrome.secondaryText)
-                            .frame(width: TimelineMetrics.iconWidth)
-                        Text("Thought process")
-                            .foregroundStyle(isHovering ? Chrome.primaryText : Chrome.secondaryText)
-                        Image(systemName: isOpen ? "chevron.down" : "chevron.right")
-                            .font(.chat(.caption2, weight: .semibold))
-                            .foregroundStyle(Chrome.secondaryText)
-                            .opacity(isHovering ? 1 : 0)
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isOpen)
+                            .opacity(isHovering || !block.isStreaming ? 0.9 : 0.5)
                     }
-                    .font(.chat(.callout))
-                    .padding(.trailing, 12)
-                    .contentShape(.rect)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(isHovering ? Chrome.overlay(0.08) : Chrome.overlay(0.035))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(isHovering ? Color.white.opacity(0.12) : Color.white.opacity(0.05), lineWidth: 0.8)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .onHover { isHovering = $0 }
-                .help(isOpen ? "Hide the thinking" : "Show the thinking")
+                .help(isOpen ? "Hide reasoning trail" : "Show reasoning trail")
+
                 if isOpen {
-                    MarkdownView(text: block.text, isStreaming: block.isStreaming).equatable()
-                        .foregroundStyle(.secondary)
-                        .environment(\.markdownPointSize, 12)
-                        .environment(\.markdownDimmed, true)
-                        .padding(.leading, TimelineMetrics.iconWidth + TimelineMetrics.iconSpacing)
-                        .padding(.trailing, 12)
-                        .transition(.opacity)
+                    HStack(alignment: .top, spacing: 10) {
+                        // Vertical trail guide line
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.55, green: 0.36, blue: 0.96).opacity(0.7),
+                                        Color(red: 0.22, green: 0.74, blue: 0.97).opacity(0.3),
+                                        Color.white.opacity(0.06)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 2)
+                            .padding(.leading, 15)
+                            .padding(.vertical, 2)
+
+                        MarkdownView(text: block.text, isStreaming: block.isStreaming).equatable()
+                            .foregroundStyle(.secondary)
+                            .environment(\.markdownPointSize, 12)
+                            .environment(\.markdownDimmed, true)
+                            .padding(.trailing, 12)
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .task(id: block.isStreaming) {
+                if block.isStreaming {
+                    if streamStartedAt == nil { streamStartedAt = .now }
+                    while !Task.isCancelled && block.isStreaming {
+                        if let start = streamStartedAt {
+                            liveElapsed = max(1, Int(Date.now.timeIntervalSince(start)))
+                        }
+                        try? await Task.sleep(for: .seconds(1))
+                    }
                 }
             }
         }
@@ -510,10 +671,10 @@ struct ActivityStatusLine: View {
         // start over; until then the line says the message is on its way.
         let word = startedAt == nil ? "Sending" : WorkingWords.word(seed: WorkingWords.seed(runtime.threadID.uuidString), elapsedSeconds: elapsed)
         HStack(spacing: 8) {
-            WorkingSpinner(cellSize: 2.5)
+            ThinkingShaderOrb(isThinking: true, size: 13)
             Text("\(word)…")
                 .font(.chat(.callout))
-                .foregroundStyle(Chrome.secondaryText)
+                .foregroundStyle(Chrome.primaryText.opacity(0.85))
                 .id(word)
                 .transition(.asymmetric(
                     insertion: .offset(y: 6).combined(with: .opacity),
@@ -522,11 +683,24 @@ struct ActivityStatusLine: View {
             if startedAt != nil {
                 Text(Self.format(elapsed))
                     .font(.chat(.subheadline).monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Chrome.secondaryText)
                     .contentTransition(.numericText())
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(Capsule().fill(Chrome.overlay(0.08)))
                     .offset(y: 1)
             }
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Chrome.overlay(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.8)
+        )
         .animation(.easeOut(duration: 0.55), value: word)
         .animation(.easeOut(duration: 0.3), value: elapsed)
         .accessibilityElement(children: .combine)
