@@ -455,6 +455,65 @@ struct ThreadTimeline: View, Equatable {
             }
             .transition(measurements.liveIDs.contains(block.id) && !measurements.materializedIDs.contains(block.id) ? Self.transition(for: block) : .identity)
             .onAppear { measurements.materializedIDs.insert(block.id) }
+    @ViewBuilder
+    private func timelineContent(blocks: [DisplayBlock], visible: [DisplayBlock], hidden: Int, topSpace: CGFloat, bottomSpace: CGFloat, rewindable: Set<UUID>) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 0)
+            if let continuation = runtime.continuation {
+                ContinuationSourceLabel(sourceTitle: continuation.sourceTitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Chrome.secondaryText)
+                    .padding(.bottom, TimelineMetrics.rowSpacing)
+            }
+            if hidden > 0 {
+                Button {
+                    loadEarlier(in: blocks)
+                } label: {
+                    Label("Show \(hidden) earlier messages", systemImage: "chevron.up")
+                        .font(.chat(.callout))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.quaternary.opacity(0.5), in: Capsule(style: .continuous))
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, TimelineMetrics.rowSpacing)
+                .onScrollVisibilityChange(threshold: 0.1) { isVisible in
+                    if isVisible { loadEarlier(in: blocks) }
+                }
+            }
+            VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
+                if topSpace > 0 { Color.clear.frame(height: max(0, topSpace - TimelineMetrics.rowSpacing)) }
+                ForEach(visible) { block in
+                    row(block, rewindable: rewindable)
+                }
+                if bottomSpace > 0 { Color.clear.frame(height: max(0, bottomSpace - TimelineMetrics.rowSpacing)) }
+                ForEach(runtime.questions) { request in
+                    QuestionBadgeRow(request: request, runtime: runtime)
+                        .id("question-" + request.id)
+                        .transition(measurements.liveQuestions.contains(request.id) ? .softAppear : .identity)
+                }
+            }
+            .id(stackGeneration)
+            .modifier(ScrollFreeze(tracking: tracking))
+        }
+        .coordinateSpace(name: "timelineContent")
+        .environment(\.revealTimelineEnd, revealBox)
+        .frame(maxWidth: 820, alignment: .leading)
+        .padding(.horizontal, 20)
+        .frame(width: layoutWidth, alignment: .leading)
+        .padding(.top, Chrome.contentTopInset)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, minHeight: viewportHeight, alignment: .top)
+        .background(alignment: .top) {
+            ScrollViewProbe {
+                tracking.probe = $0
+                TimelineTopFade.attach(to: $0.enclosingScrollView)
+            }
+            .frame(width: 0, height: 0)
+        }
     }
 
     private func timelineScroll(blocks: [DisplayBlock], visible: [DisplayBlock], hidden: Int, topSpace: CGFloat, bottomSpace: CGFloat, rewindable: Set<UUID>) -> some View {
@@ -477,80 +536,7 @@ struct ThreadTimeline: View, Equatable {
         revealBox.action = revealEnd
         revealBox.follow = followEnd
         return ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 0)
-                // A forwarded thread keeps saying where it came from, once, at the head of
-                // the conversation and outside the folds.
-                if let continuation = runtime.continuation {
-                    ContinuationSourceLabel(sourceTitle: continuation.sourceTitle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Chrome.secondaryText)
-                        .padding(.bottom, TimelineMetrics.rowSpacing)
-                }
-                if hidden > 0 {
-                    // Older history loads itself as the reader nears the top, a page at a
-                    // time, so scrolling back never stops at a button; the pill is still
-                    // there to tap for anyone who gets to it first.
-                    Button {
-                        loadEarlier(in: blocks)
-                    } label: {
-                        Label("Show \(hidden) earlier messages", systemImage: "chevron.up")
-                            .font(.chat(.callout))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(.quaternary.opacity(0.5), in: Capsule(style: .continuous))
-                            .contentShape(.capsule)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, TimelineMetrics.rowSpacing)
-                    .onScrollVisibilityChange(threshold: 0.1) { isVisible in
-                        if isVisible { loadEarlier(in: blocks) }
-                    }
-                }
-                // Eager, not lazy: rows of varying height at the visible edge sent a lazy
-                // stack pinned to the bottom into a placement loop that never returned to
-                // the run loop (release hangs of 16 s to 20 min, all in the lazy item
-                // phases). The window keeps the eager stack bounded instead.
-                VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
-                    if topSpace > 0 { Color.clear.frame(height: max(0, topSpace - TimelineMetrics.rowSpacing)) }
-                    ForEach(visible) { block in
-                        row(block, rewindable: rewindable)
-                    }
-                    if bottomSpace > 0 { Color.clear.frame(height: max(0, bottomSpace - TimelineMetrics.rowSpacing)) }
-                    // The agent's questions end the conversation as badges until they are answered.
-                    ForEach(runtime.questions) { request in
-                        QuestionBadgeRow(request: request, runtime: runtime)
-                            .id("question-" + request.id)
-                            .transition(measurements.liveQuestions.contains(request.id) ? .softAppear : .identity)
-                    }
-                }
-                .id(stackGeneration)
-                .modifier(ScrollFreeze(tracking: tracking))
-            }
-            // The rows open their steps against this: an expansion at the end of the
-            // conversation scrolls the timeline down to show what opened, in the tap's own
-            // transaction, so the glide and the opening are one motion.
-            .coordinateSpace(name: "timelineContent")
-            .environment(\.revealTimelineEnd, revealBox)
-            // The same column as the composer, so messages line up with its edges.
-            .frame(maxWidth: 820, alignment: .leading)
-            .padding(.horizontal, 20)
-            .frame(width: layoutWidth, alignment: .leading)
-            .padding(.top, Chrome.contentTopInset)
-            .padding(.bottom, 18)
-            // A short conversation still fills the pane, with its messages resting at the bottom.
-            .frame(maxWidth: .infinity, minHeight: viewportHeight, alignment: .top)
-            // Inside the content, so the scroll view hosting it can be found for the nudge
-            // that tells the lazy stack where the viewport is (`refreshViewport`).
-            .background(alignment: .top) {
-                ScrollViewProbe {
-                    tracking.probe = $0
-                    TimelineTopFade.attach(to: $0.enclosingScrollView)
-                }
-                    .frame(width: 0, height: 0)
-            }
+            timelineContent(blocks: blocks, visible: visible, hidden: hidden, topSpace: topSpace, bottomSpace: bottomSpace, rewindable: rewindable)
         }
         .id(runtime.threadID)
         // Torn down mid-scroll (a thread switch, a panel closed): the freeze lifts with it,
@@ -1747,6 +1733,7 @@ private enum TimelineTopFade {
             if let observer { NotificationCenter.default.removeObserver(observer) }
         }
 
+        @MainActor
         func place(in scrollView: NSScrollView, clearAt: CGFloat, solidAt: CGFloat) {
             let bounds = scrollView.bounds
             guard bounds.height > solidAt else { return }

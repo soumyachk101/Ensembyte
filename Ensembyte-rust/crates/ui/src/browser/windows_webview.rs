@@ -518,6 +518,13 @@ pub(super) enum PointerKind {
     Move,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct NativeComposition {
+    pub device: *mut std::ffi::c_void,
+    pub layer: *mut std::ffi::c_void,
+    pub generation: u64,
+}
+
 impl Host {
     /// Create the page in `data`'s environment. A busy folder at any step
     /// moves the window to its own folder and retries once.
@@ -941,13 +948,6 @@ impl Host {
 
     /// Mount, position and clip the page for a painted frame. Runs from the
     /// frame's presentation callback; the renderer commits it with the frame.
-#[derive(Clone, Copy, Debug)]
-pub struct NativeComposition {
-    pub device: *mut std::ffi::c_void,
-    pub layer: *mut std::ffi::c_void,
-    pub generation: u64,
-}
-
     pub fn sync(
         &self,
         bounds: Bounds<Pixels>,
