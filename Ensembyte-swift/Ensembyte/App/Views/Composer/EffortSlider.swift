@@ -92,8 +92,18 @@ struct ModelEffortButton: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                     if let current, !current.efforts.isEmpty {
-                        Text(verbatim: ModelOption.effortTitle(thread.effort ?? current.defaultEffort ?? ""))
-                            .foregroundStyle(Chrome.primaryText.opacity(0.72))
+                        let effortName = thread.effort ?? current.defaultEffort ?? ""
+                        let effortTitle = ModelOption.effortTitle(effortName)
+                        let isMax = current.efforts.last == effortName && current.efforts.count > 1
+                        Text(verbatim: effortTitle)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(isMax ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.75, green: 0.45, blue: 1.0)], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Chrome.secondaryText))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background {
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(isMax ? Color(red: 0.66, green: 0.33, blue: 0.97).opacity(0.15) : Chrome.overlay(0.08))
+                            }
                             .lineLimit(1)
                             .fixedSize()
                     }
@@ -923,10 +933,14 @@ private struct RoundIconButton: View {
     }
 }
 
-/// A thick capsule track with a dot per level, filled up to a large glass knob that snaps to each level.
+/// The modern HextaUI Pro effort slider track with rectangular sliding puck, live tier gradients, and pop haptics.
 struct EffortSlider: View {
-    static let trackHeight: CGFloat = 34
-    static let thumbSize: CGFloat = 42
+    static let trackHeight: CGFloat = 28
+    static let thumbWidth: CGFloat = 28
+    static let thumbHeight: CGFloat = 24
+    static let cornerRadius: CGFloat = 8
+    static let thumbCornerRadius: CGFloat = 6
+    static var thumbSize: CGFloat { thumbWidth }
 
     let count: Int
     @Binding var index: Int
@@ -942,6 +956,7 @@ struct EffortSlider: View {
     let accessibilityTitle: String
 
     @State private var dragX: CGFloat?
+    @State private var poppedStop: Int? = nil
     @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
 
     private var look: TrackLook {
@@ -952,91 +967,105 @@ struct EffortSlider: View {
         case (false, true): .fast
         case (false, false): .plain
         }
-        return TrackLook(kind: kind, brand: brand, pair: pair)
+        return TrackLook(kind: kind, brand: brand, pair: pair, index: index, count: count)
     }
 
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            // The lens is wider than the track: stop centres sit a lens radius in
-            // from each end so the whole knob stays visible at the extremes and
-            // the fill ends flush with its far edge.
-            let inset = Self.thumbSize / 2
-            let midY = proxy.size.height / 2
+            let inset: CGFloat = 16
+            let midY: CGFloat = Self.trackHeight / 2
             let step = count > 1 ? (width - inset * 2) / CGFloat(count - 1) : 0
             let restingX = inset + CGFloat(index) * step
-            let x = min(max(dragX ?? restingX, inset), width - inset)
+            let thumbX = min(max(dragX ?? restingX, inset), width - inset)
             let look = look
+            let isMax = count > 1 && index == count - 1
+            let fillWidth = min(width, max(Self.thumbWidth, thumbX + Self.thumbWidth / 2))
 
             ZStack(alignment: .leading) {
-                Capsule(style: .continuous)
-                    .fill(Chrome.overlay(0.1))
+                // 1. Base track background (RoundedRectangle cornerRadius 8, h-7)
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
                     .frame(width: width, height: Self.trackHeight)
-                Capsule(style: .continuous)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                    }
+
+                // 2. Filled track with HextaUI tier gradient
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .fill(look.fill)
-                    .frame(width: x + inset, height: Self.trackHeight)
+                    .frame(width: fillWidth, height: Self.trackHeight)
                     .overlay(alignment: .leading) {
                         if !performanceMode && (look.kind != .plain || look.pair != nil) {
                             TrackEffect(look: look)
-                                .frame(width: x + inset, height: Self.trackHeight)
-                                .clipShape(Capsule(style: .continuous))
+                                .frame(width: fillWidth, height: Self.trackHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
                                 .transition(.opacity)
                                 .id(look.effectIdentity)
                         }
                     }
+
+                // 3. Step Dots (HextaUI 4px circular markers, popped on drag, opacity-0 at max)
                 ForEach(0..<count, id: \.self) { stop in
                     let stopX = inset + CGFloat(stop) * step
                     let isSelected = stop == index
+                    let isPopped = poppedStop == stop
                     Circle()
-                        .fill(stopX <= x ? look.stopColor : Chrome.overlay(0.32))
-                        .frame(width: isSelected ? 6 : 4, height: isSelected ? 6 : 4)
-                        .scaleEffect(isSelected ? 1.35 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                        .fill(stopX <= thumbX ? Color.white.opacity(0.85) : Color.primary.opacity(0.3))
+                        .frame(width: 4, height: 4)
+                        .scaleEffect(isPopped ? 1.85 : (isSelected ? 1.25 : 1.0))
                         .position(x: stopX, y: midY)
+                        .opacity(isMax ? 0.0 : 1.0)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPopped)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                        .animation(.easeOut(duration: 0.2), value: isMax)
                 }
 
+                // 4. Thumb Puck (HextaUI rectangular sliding puck w-7, inset-y-0.5, rounded-md)
+                ZStack {
+                    if isMax && !performanceMode {
+                        RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
+                            .fill(LinearGradient(
+                                colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.66, green: 0.33, blue: 0.97)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            ))
+                            .blur(radius: 5)
+                            .opacity(0.8)
+                    }
+
+                    RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                        }
+                        .shadow(color: Color.black.opacity(dragX != nil ? 0.28 : 0.16), radius: dragX != nil ? 3 : 1.5, y: 1)
+                        .overlay {
+                            Capsule()
+                                .fill(Color.primary.opacity(0.22))
+                                .frame(width: 2.5, height: 9)
+                        }
+                }
+                .frame(width: Self.thumbWidth, height: Self.thumbHeight)
+                .scaleEffect(dragX == nil ? 1.0 : 0.96)
+                .position(x: thumbX, y: midY)
+
+                // 5. Recommended marker underneath the track
                 if let rec = recommendedIndex, count > 1, rec < count {
                     let recX = inset + CGFloat(rec) * step
-                    Text("Recommended")
-                        .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(Chrome.secondaryText)
-                        .position(x: recX, y: midY + Self.thumbSize / 2 + 7)
-                }
-
-                // The knob is a Liquid Glass lens: it refracts the fill's edge, the stops and
-                // the particles as it slides over them, lit white just enough to read as the
-                // knob on the dark track. The charged fills keep their glow under it: a blurred
-                // disc beneath the lens rather than a shadow on it, because a shadow that
-                // changes colour and radius on glass makes the lens flash as the look changes.
-                ZStack {
-                    if !performanceMode {
-                        Circle()
-                            .fill(look.glow)
-                            .blur(radius: look.kind == .plain ? 4 : 8)
-                            .offset(y: 1)
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrowtriangle.up.fill")
+                            .font(.system(size: 5))
+                        Text("Recommended")
+                            .font(.system(size: 9.5, weight: .medium))
                     }
-                    if !performanceMode {
-                        Circle()
-                            .fill(.clear)
-                            .glassEffect(.regular.tint(Color.white.opacity(look.isLightFill ? 0.55 : 0.32)).interactive(), in: Circle())
-                            // On a white fill the lens needs an edge to read against it.
-                            .overlay {
-                                Circle().strokeBorder(Color.black.opacity(look.isLightFill ? 0.14 : 0), lineWidth: 1)
-                            }
-                    } else {
-                        Circle()
-                            .fill(Color(nsColor: .controlColor))
-                            .overlay {
-                                Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
-                            }
-                    }
+                    .foregroundStyle(Chrome.secondaryText.opacity(0.85))
+                    .position(x: recX, y: Self.trackHeight + 11)
                 }
-                .frame(width: Self.thumbSize, height: Self.thumbSize)
-                .scaleEffect(dragX == nil ? 1 : 1.06)
-                .position(x: x, y: midY)
             }
             .frame(width: width, height: proxy.size.height, alignment: .leading)
-            .animation(.smooth(duration: 0.3), value: look)
+            .animation(.smooth(duration: 0.25), value: look)
             .contentShape(.rect)
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -1049,7 +1078,14 @@ struct EffortSlider: View {
                         let nearest = nearestStop(to: value.location.x, inset: inset, step: step)
                         if nearest != index {
                             index = nearest
+                            poppedStop = nearest
                             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 220_000_000)
+                                if poppedStop == nearest {
+                                    withAnimation(.easeOut(duration: 0.15)) { poppedStop = nil }
+                                }
+                            }
                         }
                     }
                     .onEnded { _ in
@@ -1057,7 +1093,7 @@ struct EffortSlider: View {
                     }
             )
         }
-        .frame(height: recommendedIndex != nil && count > 1 ? Self.thumbSize + 16 : Self.thumbSize)
+        .frame(height: recommendedIndex != nil && count > 1 ? Self.trackHeight + 22 : Self.trackHeight + 4)
         .accessibilityElement()
         .accessibilityLabel(Text(pair == nil ? "Reasoning effort" : "The lead's reasoning effort"))
         .accessibilityValue(Text(verbatim: accessibilityTitle))
@@ -1221,27 +1257,65 @@ struct TrackLook: Hashable {
     /// The pair the chat leads with: its colours take the fill over, whatever the kind, and
     /// the kind's own effects play on top.
     var pair: EffortPairBrand? = nil
+    var index: Int = 0
+    var count: Int = 1
+
+    private var isMax: Bool { count > 1 && index == count - 1 }
 
     var fill: AnyShapeStyle {
         if let pair {
             return AnyShapeStyle(LinearGradient(colors: [brand.fillColor] + pair.colors, startPoint: .leading, endPoint: .trailing))
         }
-        switch kind {
-        case .plain: return AnyShapeStyle(Chrome.accent)
-        case .supercharged: return brand.fill
-        case .fast: return AnyShapeStyle(EffortPalette.fastFill)
-        case .fusion: return AnyShapeStyle(LinearGradient(
-            colors: [brand.fillColor, brand.fillColor, EffortPalette.fastFill],
-            startPoint: .leading, endPoint: .trailing
-        ))
+        if kind == .fusion {
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.66, green: 0.33, blue: 0.97), EffortPalette.fastFill],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        }
+        if kind == .fast {
+            return AnyShapeStyle(EffortPalette.fastFill)
+        }
+        if isMax {
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.66, green: 0.33, blue: 0.97), Color(red: 0.96, green: 0.82, blue: 1.0)],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        }
+        // HextaUI palettes for tiers 0 to 3:
+        // Tier 0: Zinc/Gray [#d4d4d8 -> #a1a1aa]
+        // Tier 1: Calm Blue [#93c5fd -> #3b82f6]
+        // Tier 2: Indigo [#a5b4fc -> #6366f1]
+        // Tier 3: Violet [#a78bfa -> #7c3aed]
+        let tier: Int = count > 1 ? Int(round(Double(index) / Double(max(1, count - 1)) * 4.0)) : 1
+        switch tier {
+        case 0:
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.83, green: 0.83, blue: 0.85).opacity(0.35), Color(red: 0.63, green: 0.63, blue: 0.67).opacity(0.65)],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        case 1:
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.58, green: 0.77, blue: 0.99).opacity(0.65), Color(red: 0.23, green: 0.51, blue: 0.96).opacity(0.88)],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        case 2:
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.65, green: 0.71, blue: 0.99).opacity(0.65), Color(red: 0.39, green: 0.40, blue: 0.95).opacity(0.88)],
+                startPoint: .leading, endPoint: .trailing
+            ))
+        default:
+            return AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.65, green: 0.55, blue: 0.98).opacity(0.65), Color(red: 0.49, green: 0.23, blue: 0.93).opacity(0.92)],
+                startPoint: .leading, endPoint: .trailing
+            ))
         }
     }
 
     var glow: Color {
         if let pair, let last = pair.colors.last { return pair.isLight ? .black.opacity(0.35) : last.opacity(0.7) }
         switch kind {
-        case .plain: return .black.opacity(0.28)
-        case .supercharged: return brand.glow
+        case .plain: return Color(red: 0.23, green: 0.51, blue: 0.96).opacity(0.35)
+        case .supercharged: return Color(red: 0.66, green: 0.33, blue: 0.97).opacity(0.7)
         case .fast: return EffortPalette.fastFill.opacity(0.7)
         case .fusion: return EffortPalette.fast.opacity(0.75)
         }
@@ -1249,20 +1323,22 @@ struct TrackLook: Hashable {
 
     /// Whether the fill under the knob is light (a white brand at maximum, not in fusion,
     /// whose far end is gold; or a pair whose heads' colours are white).
-    var isLightFill: Bool { pair.map(\.isLight) ?? (kind == .supercharged && brand.isLight) }
+    var isLightFill: Bool {
+        if pair != nil { return pair?.isLight ?? false }
+        if isMax { return brand.isLight }
+        let tier: Int = count > 1 ? Int(round(Double(index) / Double(max(1, count - 1)) * 4.0)) : 1
+        return tier == 0
+    }
 
     /// The passed stops: white on colour, dark on a white fill.
-    var stopColor: Color { isLightFill ? .black.opacity(0.35) : .white.opacity(0.6) }
+    var stopColor: Color { isLightFill ? .black.opacity(0.35) : .white.opacity(0.85) }
 
     /// The particles' and sheen's colour.
     var spark: Color { pair == nil && (kind == .supercharged || kind == .fusion) ? brand.spark : .white }
 
-    /// What one run of the track's animation stands for. A look without a pair starts its
-    /// effect over on every change, crossfading. A pair's fusion is the whole track's
-    /// animation, so it keeps its time through the kind's changes: the seam does not jump
-    /// because the knob reached maximum, and the kind's effects join it in place.
+    /// What one run of the track's animation stands for.
     var effectIdentity: AnyHashable {
-        pair.map { AnyHashable(TrackLook(kind: .plain, brand: brand, pair: $0)) } ?? AnyHashable(self)
+        pair.map { AnyHashable(TrackLook(kind: .plain, brand: brand, pair: $0, index: index, count: count)) } ?? AnyHashable(self)
     }
 }
 
