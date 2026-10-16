@@ -455,6 +455,8 @@ struct ThreadTimeline: View, Equatable {
             }
             .transition(measurements.liveIDs.contains(block.id) && !measurements.materializedIDs.contains(block.id) ? Self.transition(for: block) : .identity)
             .onAppear { measurements.materializedIDs.insert(block.id) }
+    }
+
     @ViewBuilder
     private func timelineContent(blocks: [DisplayBlock], visible: [DisplayBlock], hidden: Int, topSpace: CGFloat, bottomSpace: CGFloat, rewindable: Set<UUID>) -> some View {
         VStack(alignment: .leading, spacing: 0) {
