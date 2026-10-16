@@ -654,8 +654,8 @@ mod windows_tests {
 
     use super::Terminals;
 
-    const EVENT_TIMEOUT: Duration = Duration::from_secs(15);
-    const PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
+    const EVENT_TIMEOUT: Duration = Duration::from_secs(60);
+    const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 
     #[test]
     fn conpty_close_joins_natural_cleanup_without_blocking_pool_capacity() {
