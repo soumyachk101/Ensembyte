@@ -537,7 +537,7 @@ struct ThreadTimeline: View, Equatable {
         revealBox.disclosure = anchorDisclosure
         revealBox.action = revealEnd
         revealBox.follow = followEnd
-        return ScrollView {
+        let scroll = ScrollView {
             timelineContent(blocks: blocks, visible: visible, hidden: hidden, topSpace: topSpace, bottomSpace: bottomSpace, rewindable: rewindable)
         }
         .id(runtime.threadID)
@@ -557,6 +557,12 @@ struct ThreadTimeline: View, Equatable {
         .defaultScrollAnchor(.bottom, for: .initialOffset)
         .defaultScrollAnchor(.bottom, for: .alignment)
         .defaultScrollAnchor(anchorsBottomOnGrowth ? .bottom : .top, for: .sizeChanges)
+
+        return applyScrollModifiers(scroll, blocks: blocks, visible: visible, lastEntryID: lastEntryID)
+    }
+
+    private func applyScrollModifiers(_ content: some View, blocks: [DisplayBlock], visible: [DisplayBlock], lastEntryID: String?) -> some View {
+        let withScrollEvents = content
         // One value per frame, and only when it moved: `onGeometryChange` fires solely
         // on change, and the settle below runs once when the resize ends. The height is
         // quantized like `layoutWidth`: the body reads it (the short-thread filler, the
@@ -719,7 +725,13 @@ struct ThreadTimeline: View, Equatable {
                 scheduleBottomSnap()
             }
         }
-        .task(id: ObjectIdentifier(scrollState)) {
+
+        return applyStateChangeListeners(withScrollEvents, blocks: blocks, visible: visible, lastEntryID: lastEntryID)
+    }
+
+    private func applyStateChangeListeners(_ content: some View, blocks: [DisplayBlock], visible: [DisplayBlock], lastEntryID: String?) -> some View {
+        content
+            .task(id: ObjectIdentifier(scrollState)) {
             // Restart after ChatView replaces its scroll state on a thread switch.
             // Yield past that reset before restoring this timeline.
             await Task.yield()
