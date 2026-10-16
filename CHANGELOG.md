@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.6] - 2026-10-16
+
+Ensembyte 1.1.6 introduces a full redesign of the Prompt Input controls and AI Reasoning interface inspired by HextaUI Pro, delivering an elevated effort slider with live tier gradients, pearl-white slider puck, and animated thinking shader orbs with live duration tracking.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **HextaUI Pro Effort Slider**: 28pt rectangular rounded track (`h-7`) with pearl-white elevated puck, drop shadow, center grip notch, and dynamic electric aura glow at Max effort.
+- **Dynamic Tier Gradients**: Distinct HextaUI-inspired palettes for Low (zinc/gray), Medium (sky blue), High (indigo), Extra High (violet), and Max (electric cyan/violet/fuchsia).
+- **Extended Thinking Integration**: Added extended thinking toggle directly within the composer effort slider card.
+- **Thinking Shader Orb & Live Timer**: Integrated rotating multi-gradient shader orb during reasoning, live counting timer pill ("Thinking…"), and auto-collapsing summary badge ("Thought for 12s") with expandable trail.
+- **UI Alignment Refinements**: Clean vertical spacing between track and "Recommended" indicator marker, smooth light sheen wave, and edge-to-edge gradient coverage.
+
 ## [1.1.5] - 2026-10-12
 
 Ensembyte 1.1.5 delivers critical Voice Mode ChatGPT account token refresh stability on macOS, alongside comprehensive Linux and Windows engine upgrades including native WebView2 embedded browser support, path traversal security, and 5-button mouse route navigation.

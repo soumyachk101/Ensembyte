@@ -72,3 +72,5 @@ plans/
 Make-Your-Own-Mascot.pdf
 cubee.avatar.json
 skills-lock.json
+graphify-out/
+.graphifyignore
