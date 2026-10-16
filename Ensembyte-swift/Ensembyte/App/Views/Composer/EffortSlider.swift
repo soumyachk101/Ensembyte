@@ -971,129 +971,138 @@ struct EffortSlider: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let inset: CGFloat = 16
-            let midY: CGFloat = Self.trackHeight / 2
-            let step = count > 1 ? (width - inset * 2) / CGFloat(count - 1) : 0
-            let restingX = inset + CGFloat(index) * step
-            let thumbX = min(max(dragX ?? restingX, inset), width - inset)
-            let look = look
-            let isMax = count > 1 && index == count - 1
-            let fillWidth = min(width, max(Self.thumbWidth, thumbX + Self.thumbWidth / 2))
+        VStack(spacing: 5) {
+            // 1. Track row with fixed height matching trackHeight (28pt)
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let inset: CGFloat = 16
+                let midY: CGFloat = Self.trackHeight / 2
+                let step = count > 1 ? (width - inset * 2) / CGFloat(count - 1) : 0
+                let restingX = inset + CGFloat(index) * step
+                let thumbX = min(max(dragX ?? restingX, inset), width - inset)
+                let isMax = count > 1 && index == count - 1
+                let fillWidth = isMax ? width : min(width, max(Self.thumbWidth, thumbX + Self.thumbWidth / 2))
 
-            ZStack(alignment: .leading) {
-                // 1. Base track background (RoundedRectangle cornerRadius 8, h-7)
-                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-                    .frame(width: width, height: Self.trackHeight)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                    }
-
-                // 2. Filled track with HextaUI tier gradient
-                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                    .fill(look.fill)
-                    .frame(width: fillWidth, height: Self.trackHeight)
-                    .overlay(alignment: .leading) {
-                        if !performanceMode && (look.kind != .plain || look.pair != nil) {
-                            TrackEffect(look: look)
-                                .frame(width: fillWidth, height: Self.trackHeight)
-                                .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-                                .transition(.opacity)
-                                .id(look.effectIdentity)
-                        }
-                    }
-
-                // 3. Step Dots (HextaUI 4px circular markers, popped on drag, opacity-0 at max)
-                ForEach(0..<count, id: \.self) { stop in
-                    let stopX = inset + CGFloat(stop) * step
-                    let isSelected = stop == index
-                    let isPopped = poppedStop == stop
-                    Circle()
-                        .fill(stopX <= thumbX ? Color.white.opacity(0.85) : Color.primary.opacity(0.3))
-                        .frame(width: 4, height: 4)
-                        .scaleEffect(isPopped ? 1.85 : (isSelected ? 1.25 : 1.0))
-                        .position(x: stopX, y: midY)
-                        .opacity(isMax ? 0.0 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPopped)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-                        .animation(.easeOut(duration: 0.2), value: isMax)
-                }
-
-                // 4. Thumb Puck (HextaUI rectangular sliding puck w-7, inset-y-0.5, rounded-md)
-                ZStack {
-                    if isMax && !performanceMode {
-                        RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
-                            .fill(LinearGradient(
-                                colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.66, green: 0.33, blue: 0.97)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
-                            .blur(radius: 5)
-                            .opacity(0.8)
-                    }
-
-                    RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
+                ZStack(alignment: .leading) {
+                    // Base track background
+                    RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(width: width, height: Self.trackHeight)
                         .overlay {
+                            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        }
+
+                    // Filled track with HextaUI tier gradient
+                    RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                        .fill(look.fill)
+                        .frame(width: fillWidth, height: Self.trackHeight)
+                        .overlay(alignment: .leading) {
+                            if !performanceMode && (look.kind == .fast || look.kind == .fusion) {
+                                TrackEffect(look: look)
+                                    .frame(width: fillWidth, height: Self.trackHeight)
+                                    .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+                                    .transition(.opacity)
+                                    .id(look.effectIdentity)
+                            }
+                        }
+
+                    // Step Dots: spaced across stops, fades at Max
+                    ForEach(0..<count, id: \.self) { stop in
+                        let stopX = inset + CGFloat(stop) * step
+                        let isSelected = stop == index
+                        let isPopped = poppedStop == stop
+                        Circle()
+                            .fill(stopX <= thumbX ? Color.white.opacity(0.9) : Color.white.opacity(0.35))
+                            .frame(width: 4, height: 4)
+                            .scaleEffect(isPopped ? 1.85 : (isSelected ? 1.25 : 1.0))
+                            .position(x: stopX, y: midY)
+                            .opacity(isMax ? 0.0 : 1.0)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPopped)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                            .animation(.easeOut(duration: 0.2), value: isMax)
+                    }
+
+                    // Thumb Puck: HextaUI elevated pearl-white puck with border & drop shadow
+                    ZStack {
+                        if isMax && !performanceMode {
                             RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                                .fill(LinearGradient(
+                                    colors: [Color(red: 0.38, green: 0.65, blue: 0.98), Color(red: 0.66, green: 0.33, blue: 0.97)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                ))
+                                .blur(radius: 6)
+                                .opacity(0.85)
                         }
-                        .shadow(color: Color.black.opacity(dragX != nil ? 0.28 : 0.16), radius: dragX != nil ? 3 : 1.5, y: 1)
-                        .overlay {
-                            Capsule()
-                                .fill(Color.primary.opacity(0.22))
-                                .frame(width: 2.5, height: 9)
-                        }
-                }
-                .frame(width: Self.thumbWidth, height: Self.thumbHeight)
-                .scaleEffect(dragX == nil ? 1.0 : 0.96)
-                .position(x: thumbX, y: midY)
 
-                // 5. Recommended marker underneath the track
-                if let rec = recommendedIndex, count > 1, rec < count {
+                        RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
+                            .fill(Color(white: 0.95))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
+                                    .strokeBorder(Color.white.opacity(0.65), lineWidth: 1)
+                            }
+                            .shadow(color: Color.black.opacity(dragX != nil ? 0.35 : 0.18), radius: dragX != nil ? 3.5 : 1.5, y: 1)
+                            .overlay {
+                                Capsule()
+                                    .fill(Color(white: 0.35))
+                                    .frame(width: 2.5, height: 9)
+                            }
+                    }
+                    .frame(width: Self.thumbWidth, height: Self.thumbHeight)
+                    .scaleEffect(dragX == nil ? 1.0 : 0.96)
+                    .position(x: thumbX, y: midY)
+                }
+                .frame(width: width, height: Self.trackHeight)
+                .contentShape(.rect)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if dragX == nil {
+                                withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) { dragX = value.location.x }
+                            } else {
+                                dragX = value.location.x
+                            }
+                            let nearest = nearestStop(to: value.location.x, inset: inset, step: step)
+                            if nearest != index {
+                                index = nearest
+                                poppedStop = nearest
+                                NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 220_000_000)
+                                    if poppedStop == nearest {
+                                        withAnimation(.easeOut(duration: 0.15)) { poppedStop = nil }
+                                    }
+                                }
+                            }
+                        }
+                        .onEnded { _ in
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) { dragX = nil }
+                        }
+                )
+            }
+            .frame(height: Self.trackHeight)
+
+            // 2. Recommended label row (Cleanly separated under the track)
+            if let rec = recommendedIndex, count > 1, rec < count {
+                GeometryReader { proxy in
+                    let width = proxy.size.width
+                    let inset: CGFloat = 16
+                    let step = (width - inset * 2) / CGFloat(count - 1)
                     let recX = inset + CGFloat(rec) * step
+
                     HStack(spacing: 3) {
                         Image(systemName: "arrowtriangle.up.fill")
                             .font(.system(size: 5))
                         Text("Recommended")
-                            .font(.system(size: 9.5, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                     }
                     .foregroundStyle(Chrome.secondaryText.opacity(0.85))
-                    .position(x: recX, y: Self.trackHeight + 11)
+                    .position(x: recX, y: 7)
                 }
+                .frame(height: 14)
             }
-            .frame(width: width, height: proxy.size.height, alignment: .leading)
-            .animation(.smooth(duration: 0.25), value: look)
-            .contentShape(.rect)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if dragX == nil {
-                            withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) { dragX = value.location.x }
-                        } else {
-                            dragX = value.location.x
-                        }
-                        let nearest = nearestStop(to: value.location.x, inset: inset, step: step)
-                        if nearest != index {
-                            index = nearest
-                            poppedStop = nearest
-                            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
-                            Task { @MainActor in
-                                try? await Task.sleep(nanoseconds: 220_000_000)
-                                if poppedStop == nearest {
-                                    withAnimation(.easeOut(duration: 0.15)) { poppedStop = nil }
-                                }
-                            }
-                        }
-                    }
-                    .onEnded { _ in
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) { dragX = nil }
-                    }
-            )
         }
-        .frame(height: recommendedIndex != nil && count > 1 ? Self.trackHeight + 22 : Self.trackHeight + 4)
+        .frame(height: recommendedIndex != nil && count > 1 ? Self.trackHeight + 19 : Self.trackHeight)
         .accessibilityElement()
         .accessibilityLabel(Text(pair == nil ? "Reasoning effort" : "The lead's reasoning effort"))
         .accessibilityValue(Text(verbatim: accessibilityTitle))
@@ -1195,8 +1204,8 @@ enum EffortBrand: Hashable {
         }
     }
 
-    /// The particles and sheen: white on colour, dark on white.
-    var spark: Color { self == .silver ? .black : .white }
+    /// The particles and sheen: white glow.
+    var spark: Color { .white }
 
     /// Whether the fill is light enough that the knob and stops must read dark against it.
     var isLight: Bool { self == .silver }
@@ -1334,7 +1343,7 @@ struct TrackLook: Hashable {
     var stopColor: Color { isLightFill ? .black.opacity(0.35) : .white.opacity(0.85) }
 
     /// The particles' and sheen's colour.
-    var spark: Color { pair == nil && (kind == .supercharged || kind == .fusion) ? brand.spark : .white }
+    var spark: Color { .white }
 
     /// What one run of the track's animation stands for.
     var effectIdentity: AnyHashable {
@@ -1344,14 +1353,8 @@ struct TrackLook: Hashable {
 
 /// The track's animation, one small Canvas drawn only while the slider needs it.
 ///
-/// Maximum effort: particles drifting through the fill toward the knob, each with its own height,
-/// size, speed and shimmer, fading at the ends. Fast mode: speed streaks zipping toward the knob
-/// and a lightning bolt flashing now and then. Both together layer the two, over a fill that runs
-/// from purple into gold, with a glossy sheen sweeping across. 30fps, 60 when streaks move.
-///
-/// Each particle's and streak's traits are fixed by its index, so they are worked out once
-/// per fill width (`Traits`) and every frame is arithmetic and fills; six `sin` per element
-/// per frame was most of what a frame cost.
+/// Maximum effort: smooth sheen sweeping across the fill. Fast mode: speed streaks
+/// zipping toward the knob and a lightning bolt flashing now and then.
 struct TrackEffect: View {
     let look: TrackLook
     @AppStorage("performanceMode", store: CaptureRun.defaults ?? .standard) private var performanceMode = false
@@ -1364,7 +1367,6 @@ struct TrackEffect: View {
             EmptyView()
         } else {
             let kind = look.kind
-            let spark = look.spark
             let pair = look.pair
             let paused = reduceMotion || !FrontMonitor.shared.isVisible
             TimelineView(.animation(minimumInterval: 1.0 / (kind == .supercharged && pair == nil ? 30 : 60), paused: paused)) { timeline in
@@ -1376,14 +1378,11 @@ struct TrackEffect: View {
                     }
                     let traits = traits.traits(width: Double(size.width))
                     if kind == .supercharged || kind == .fusion {
-                        Self.drawParticles(context, size: size, time: time, color: spark, particles: traits.particles)
+                        Self.drawSheen(context, size: size, time: time, color: .white.opacity(0.35))
                     }
                     if kind == .fast || kind == .fusion {
                         Self.drawStreaks(context, size: size, time: time, streaks: traits.streaks)
                         Self.drawBolts(context, size: size, time: time)
-                    }
-                    if kind == .fusion {
-                        Self.drawSheen(context, size: size, time: time, color: spark)
                     }
                 }
             }
