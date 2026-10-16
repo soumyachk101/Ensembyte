@@ -137,6 +137,14 @@ pub fn allowed_navigation(address: &str) -> bool {
     })
 }
 
+pub fn allowed_frame_navigation(address: &str) -> bool {
+    let lower = address.trim().to_ascii_lowercase();
+    if lower.starts_with("about:") || lower.starts_with("data:") || lower.starts_with("blob:") {
+        return true;
+    }
+    allowed_navigation(address)
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Presentation {
     #[default]

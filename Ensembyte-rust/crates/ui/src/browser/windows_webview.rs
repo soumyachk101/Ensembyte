@@ -941,12 +941,19 @@ impl Host {
 
     /// Mount, position and clip the page for a painted frame. Runs from the
     /// frame's presentation callback; the renderer commits it with the frame.
+#[derive(Clone, Copy, Debug)]
+pub struct NativeComposition {
+    pub device: *mut std::ffi::c_void,
+    pub layer: *mut std::ffi::c_void,
+    pub generation: u64,
+}
+
     pub fn sync(
         &self,
         bounds: Bounds<Pixels>,
         mask: Bounds<Pixels>,
         scale: f32,
-        composition: Option<gpui::NativeComposition>,
+        composition: Option<NativeComposition>,
     ) {
         let visible = bounds.intersect(&mask);
         {
@@ -977,7 +984,7 @@ impl Host {
 
     /// (Re)create the page visual when the renderer's device generation
     /// changes (first frame, or GPU recovery).
-    fn remount(&self, composition: gpui::NativeComposition) {
+    fn remount(&self, composition: NativeComposition) {
         let mut page = self.page.borrow_mut();
         let Some(page) = page.as_mut() else { return };
         // Handles are only valid for their generation, and the renderer frees

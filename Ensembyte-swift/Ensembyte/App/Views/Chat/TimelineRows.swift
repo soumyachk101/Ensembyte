@@ -904,7 +904,7 @@ private struct HydraMergeTrackBody: View, Animatable {
     let count: Int
     let hops: Bool
 
-    var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+    nonisolated var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
         get { AnimatablePair(position, AnimatablePair(done, rest)) }
         set { position = newValue.first; done = newValue.second.first; rest = newValue.second.second }
     }

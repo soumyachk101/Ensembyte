@@ -42,6 +42,8 @@ public struct GlassEffectStyle: Sendable {
     public func tint(_ color: Color) -> GlassEffectStyle { self }
 }
 
+public typealias Glass = GlassEffectStyle
+
 extension View {
     @ViewBuilder
     public func glassEffect<S: Shape>(_ style: GlassEffectStyle = .regular, in shape: S) -> some View {

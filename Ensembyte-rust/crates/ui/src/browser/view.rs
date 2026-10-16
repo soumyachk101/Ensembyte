@@ -433,7 +433,7 @@ impl BrowserSurface {
                     let right = (window.viewport_size().width - right_occlusion).max(mask.left());
                     mask.size.width = mask.size.width.min(right - mask.left());
                     let scale = window.scale_factor();
-                    let composition = window.native_composition();
+                    let composition = None;
                     let page = std::rc::Rc::downgrade(&host);
                     window.on_present(move || {
                         if let Some(page) = page.upgrade() {

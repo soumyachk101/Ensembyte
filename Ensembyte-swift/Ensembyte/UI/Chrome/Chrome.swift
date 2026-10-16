@@ -1074,7 +1074,7 @@ extension Animation {
 private struct SettleGlideModifier: ViewModifier, Animatable {
     var progress: Double
 
-    var animatableData: Double {
+    nonisolated var animatableData: Double {
         get { progress }
         set { progress = newValue }
     }

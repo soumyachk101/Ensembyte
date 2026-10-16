@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import Speech
 
+#if !COMPILER_PRE_MACOS26
 actor LocalDictationEngine {
     static let shared = LocalDictationEngine()
 
@@ -118,6 +119,32 @@ actor LocalDictationEngine {
         analyzer = nil
     }
 }
+#else
+actor LocalDictationEngine {
+    static let shared = LocalDictationEngine()
+
+    static var isInstalled: Bool {
+        get async throws { false }
+    }
+
+    private var isInstalling = false
+    private var isTranscribing = false
+
+    func install(progress: @escaping @Sendable (Double) -> Void) async throws {
+        throw DictationError.modelUnavailable
+    }
+
+    func prepare() async throws {
+        throw DictationError.modelUnavailable
+    }
+
+    func transcribe(path: String) async throws -> String {
+        throw DictationError.modelUnavailable
+    }
+
+    func release() async {}
+}
+#endif
 
 enum DictationError: LocalizedError {
     case modelUnavailable, assetsNotInstalled, microphoneDenied, recordingFailed, noSpeech
