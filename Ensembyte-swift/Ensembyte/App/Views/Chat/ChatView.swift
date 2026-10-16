@@ -854,6 +854,7 @@ extension EnvironmentValues {
 /// bottom. A critically damped spring: no overshoot, and a reversal mid-flight keeps its
 /// speed. Twelve time constants fit 0.42s docking and 0.47s returning, so its response is
 /// 2π/12 of each. The fades run on the same clocks as fractions of those durations.
+@MainActor
 enum ComposerDock {
     static let dockingDuration = 0.42
     static let returningDuration = 0.47
