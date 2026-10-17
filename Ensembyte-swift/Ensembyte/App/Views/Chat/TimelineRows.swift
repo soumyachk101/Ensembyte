@@ -1589,7 +1589,7 @@ struct ToolRow: View {
                     line(call: call, imagePath: imagePath, opensPopover: opensPopover, opensHead: opensHead, showsOutput: showsOutput)
                 }
                 if isExpanded, showsOutput, !opensImage {
-                    ToolDetailView(call: call, workingDirectory: workingDirectory)
+                    ToolDetailView(call: call, workingDirectory: workingDirectory, runtime: runtime)
                         .padding(.trailing, 12)
                 }
                 // What a command changed reads as the edit tools' work does: one edit line
@@ -2034,6 +2034,7 @@ private struct ToolStatusIcon: View {
 private struct ToolDetailView: View {
     let call: ToolCall
     var workingDirectory: String?
+    var runtime: ThreadRuntime? = nil
 
     @State private var showsFullOutput = false
 
@@ -2079,26 +2080,33 @@ private struct ToolDetailView: View {
                 }
             }
             if !call.output.isEmpty {
-                // A running command's row re-renders on every flush of its output: the
-                // preview scans for its thirty-first newline rather than splitting the
-                // whole output into lines, as `CodeBlock` does.
-                let output = call.output.trimmingCharacters(in: .newlines)
-                let lineCount = 1 + output.utf8.count { $0 == 0x0A }
-                let collapsed = !showsFullOutput && lineCount > Self.outputLineLimit
-                let visible = collapsed ? Self.head(of: output, lines: Self.outputLineLimit) : output
-                VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
-                    Text(visible)
-                        .font(.chat(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(.quaternary.opacity(0.45), in: .rect(cornerRadius: 10, style: .continuous))
-                    if lineCount > Self.outputLineLimit {
-                        Button(showsFullOutput ? "Show less" : "Show full output (\(lineCount) lines)") {
-                            showsFullOutput.toggle()
+                if let report = TestDetailCache.report(command: call.title, output: call.output) {
+                    TestResultsView(report: report, rawOutput: call.output, onAskToFix: { prompt in
+                        runtime?.draft.text = prompt
+                        runtime?.isDiffVisible = false
+                    })
+                } else {
+                    // A running command's row re-renders on every flush of its output: the
+                    // preview scans for its thirty-first newline rather than splitting the
+                    // whole output into lines, as `CodeBlock` does.
+                    let output = call.output.trimmingCharacters(in: .newlines)
+                    let lineCount = 1 + output.utf8.count { $0 == 0x0A }
+                    let collapsed = !showsFullOutput && lineCount > Self.outputLineLimit
+                    let visible = collapsed ? Self.head(of: output, lines: Self.outputLineLimit) : output
+                    VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
+                        Text(visible)
+                            .font(.chat(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(.quaternary.opacity(0.45), in: .rect(cornerRadius: 10, style: .continuous))
+                        if lineCount > Self.outputLineLimit {
+                            Button(showsFullOutput ? "Show less" : "Show full output (\(lineCount) lines)") {
+                                showsFullOutput.toggle()
+                            }
+                            .buttonStyle(.link)
+                            .font(.chat(.caption))
                         }
-                        .buttonStyle(.link)
-                        .font(.chat(.caption))
                     }
                 }
             }
@@ -2108,6 +2116,20 @@ private struct ToolDetailView: View {
 
 /// Parsed per-file diffs for expanded tool rows. Parsing runs once per distinct diff,
 /// so opening and closing a row is instant no matter how large the patch is.
+/// Parsed test runner outputs for expanded tool rows.
+private enum TestDetailCache {
+    @MainActor private static var cache = RecentCache<String, TestReport>(limit: 40)
+
+    @MainActor
+    static func report(command: String, output: String) -> TestReport? {
+        let key = command + "\n" + output
+        if let hit = cache.value(for: key) { return hit }
+        guard let parsed = TestOutputParser.parse(command: command, output: output) else { return nil }
+        cache.insert(parsed, for: key)
+        return parsed
+    }
+}
+
 private enum DiffDetailCache {
     @MainActor private static var cache = RecentCache<String, DiffFile>(limit: 60)
 
