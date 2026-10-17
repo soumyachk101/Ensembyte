@@ -81,11 +81,10 @@ enum DaemonCommand {
 /// `ENSEMBYTE_EDGE_URL` / `ENSEMBYTE_EDGE_URL` overrides (local dev / self-hosting).
 const DEFAULT_EDGE_URL: &str = "https://edge.ensembyte.org";
 
-/// Production WorkOS AuthKit client id — public knowledge (it appears in every
-/// authorize URL), so baking it in is safe. Overridden by `ENSEMBYTE_WORKOS_CLIENT_ID` /
-/// `ORBIT_WORKOS_CLIENT_ID`; set it to the empty string — or set a dev bearer via
-/// `ENSEMBYTE_EDGE_TOKEN` / `ORBIT_EDGE_TOKEN` — to force dev-mode auth instead.
-const DEFAULT_WORKOS_CLIENT_ID: &str = "client_01KWD0EAKZKD50YCQJNYSRE4BY";
+/// Production WorkOS AuthKit client id — disabled by default (`""`) to keep
+/// Ensembyte strictly local/offline unless explicitly configured by the user via
+/// `ENSEMBYTE_WORKOS_CLIENT_ID`.
+const DEFAULT_WORKOS_CLIENT_ID: &str = "";
 
 fn edge_url_from_env() -> String {
     std::env::var("ENSEMBYTE_EDGE_URL")
@@ -97,14 +96,19 @@ fn edge_url_from_env() -> String {
 
 /// WorkOS client id resolution: explicit env wins (empty string = dev mode);
 /// otherwise a dev bearer keeps dev mode (smoke tests,
-/// local wrangler); otherwise the baked production client id makes optional
-/// sync available while a bare start remains local-only.
+/// local wrangler); otherwise if DEFAULT_WORKOS_CLIENT_ID is empty, it defaults to None (local-only).
 fn workos_client_id_from_env(edge_token: &Option<String>) -> Option<String> {
     match std::env::var("ENSEMBYTE_WORKOS_CLIENT_ID").or_else(|_| std::env::var("ORBIT_WORKOS_CLIENT_ID")) {
         Ok(v) if v.trim().is_empty() => None,
         Ok(v) => Some(v),
         Err(_) if edge_token.is_some() => None,
-        Err(_) => Some(DEFAULT_WORKOS_CLIENT_ID.into()),
+        Err(_) => {
+            if DEFAULT_WORKOS_CLIENT_ID.trim().is_empty() {
+                None
+            } else {
+                Some(DEFAULT_WORKOS_CLIENT_ID.into())
+            }
+        }
     }
 }
 

@@ -1535,6 +1535,7 @@ fn resolve_shell_escape(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AccountMenuAction {
+    #[allow(dead_code)]
     EnableSync,
     SyncInProgress,
     /// Postponed switch wizard (or legacy restart fallback) — reopen it.
@@ -1653,7 +1654,7 @@ fn local_work_phrase(chats: usize, spaces: usize) -> Option<String> {
 fn account_menu_action(scope: Option<WorkspaceScope>, flow: SyncFlow) -> Option<AccountMenuAction> {
     match scope {
         Some(WorkspaceScope::Local) => match flow {
-            SyncFlow::Idle => Some(AccountMenuAction::EnableSync),
+            SyncFlow::Idle => None, // Sync disabled: stay strictly local and offline
             SyncFlow::Enabling | SyncFlow::Canceling => Some(AccountMenuAction::SyncInProgress),
             SyncFlow::SwitchOffer { .. } | SyncFlow::RestartPending { .. } => {
                 Some(AccountMenuAction::RestartPending)
@@ -6050,7 +6051,9 @@ impl Shell {
             this.update(cx, |shell, cx| match result {
                 Ok(value) => {
                     if let Some(url) = value.get("url").and_then(|u| u.as_str()) {
-                        cx.open_url(url);
+                        if !url.trim().is_empty() {
+                            cx.open_url(url);
+                        }
                     }
                     cx.notify();
                 }
@@ -8822,7 +8825,7 @@ impl Shell {
             } else {
                 motion::hover_blend("user-menu-trigger", theme.text.opacity(0.8), theme.text)
             })
-            .cursor_pointer()
+            .when(action.is_some(), |el| el.cursor_pointer())
             // user-menu.tsx trigger: hover `bg-white/[0.04]`, open state
             // (`data-[state=open]`) the slightly stronger `bg-white/[0.06]`;
             // the hover wash fades over `transition-colors`.
@@ -8841,6 +8844,10 @@ impl Shell {
                 cx.listener(|this, _, _, _| this.user_menu.note_trigger_press()),
             )
             .on_click(cx.listener(|this, _, _, cx| {
+                let action = account_menu_action(this.state.read(cx).workspace_scope, this.sync_flow);
+                if action.is_none() {
+                    return;
+                }
                 // A press that found the menu open closes it (the card's
                 // mouse-down-out already began the close) — never reopen.
                 if this.user_menu.take_press_was_open() {
@@ -13685,7 +13692,7 @@ mod tests {
     fn account_actions_follow_the_attached_workspace_scope() {
         assert_eq!(
             account_menu_action(Some(WorkspaceScope::Local), SyncFlow::Idle),
-            Some(AccountMenuAction::EnableSync)
+            None
         );
         assert_eq!(
             account_menu_action(Some(WorkspaceScope::Synced), SyncFlow::Idle),
