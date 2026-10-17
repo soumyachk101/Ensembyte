@@ -77,9 +77,9 @@ enum DaemonCommand {
     Status,
 }
 
-/// Production edge (Cloudflare Worker + Durable Objects on the ensembyte.org zone).
-/// `ENSEMBYTE_EDGE_URL` / `ENSEMBYTE_EDGE_URL` overrides (local dev / self-hosting).
-const DEFAULT_EDGE_URL: &str = "https://edge.ensembyte.org";
+/// Production edge — disabled by default (`""`) to keep Ensembyte strictly local/offline
+/// unless explicitly configured via `ENSEMBYTE_EDGE_URL`.
+const DEFAULT_EDGE_URL: &str = "";
 
 /// Production WorkOS AuthKit client id — disabled by default (`""`) to keep
 /// Ensembyte strictly local/offline unless explicitly configured by the user via

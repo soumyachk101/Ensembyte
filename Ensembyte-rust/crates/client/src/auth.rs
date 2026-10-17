@@ -25,9 +25,9 @@ use crate::lock;
 /// Refresh this long before `exp` (legacy AppConfig: 60s early margin).
 pub const EARLY_REFRESH_SECS: i64 = 60;
 
-/// Production endpoints (edge/wrangler.jsonc). Mobile always talks to prod —
-/// a stale override once broke sign-in in the worst ghost way.
-pub const PRODUCTION_EDGE_URL: &str = "https://edge.ensembyte.org";
+/// Production edge base URL — empty by default since Ensembyte runs local-only
+/// unless overridden via ENSEMBYTE_EDGE_URL.
+pub const PRODUCTION_EDGE_URL: &str = "";
 pub const WORKOS_CLIENT_ID: &str = "";
 pub const WORKOS_API_BASE: &str = "https://api.workos.com";
 /// OAuth redirect: `ensembyte://callback?code=…&state=…`.
