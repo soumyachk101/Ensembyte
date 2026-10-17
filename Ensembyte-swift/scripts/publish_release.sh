@@ -13,7 +13,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PROJECT="soumyachk101/Ensembyte"
-VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"([^"]+)".*/\1/p' project.yml | head -1)
+if [ -f project.yml ]; then
+  VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"([^"]+)".*/\1/p' project.yml | head -1)
+else
+  VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*([^;]+);.*/\1/p' Ensembyte.xcodeproj/project.pbxproj | head -1)
+fi
 TAG="v$VERSION"
 DMG="${1:-build.noindex/Ensembyte-$VERSION.dmg}"
 NOTES="ReleaseNotes/$VERSION.md"
