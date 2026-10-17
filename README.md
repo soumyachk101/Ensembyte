@@ -39,15 +39,15 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 
 | | **Ensembyte for macOS** | **Ensembyte Desktop** |
 |---|---|---|
-| **Platform** | **macOS** (Apple silicon, macOS 26+) | **Windows & Linux** (x86_64, ARM64) |
+| **Platform** | **macOS** (Apple silicon & Intel, macOS 14+) | **Windows & Linux** (x86_64, ARM64) |
 | **Stack** | Swift 6 / SwiftUI + Liquid Glass | Rust 2024 / GPUI (GPU-accelerated) |
 | **Source** | [`Ensembyte-swift/`](Ensembyte-swift/) | [`Ensembyte-rust/`](Ensembyte-rust/) |
-| **Packages** | Signed & Notarized `.dmg` | `.exe` / `.zip`, `.tar.gz` |
+| **Packages** | Signed & Notarized `.dmg` (arm64 & x86_64) | `.exe` / `.zip`, `.tar.gz` |
 | **Multi-Agent** | Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
 | **Design** | 26 tinted-glass themes, Liquid Glass | Minimalist dark/light, immediate-mode GPU |
 | **Sync** | Local-first, hidden git checkpoints | Local-first, optional Loro CRDT sync |
 
-> **macOS user?** → [Ensembyte for macOS](Ensembyte-swift/) — Liquid Glass, Hydra multi-agent, embedded terminal.
+> **macOS user?** → [Ensembyte for macOS](Ensembyte-swift/) — Liquid Glass, Hydra multi-agent, embedded terminal, GitHub cloning.
 > **Windows / Linux user?** → [Ensembyte Desktop](Ensembyte-rust/) — GPU-accelerated, CRDT sync, lightweight.
 
 ---
@@ -88,11 +88,13 @@ Ensembyte connects to the CLI tools installed on your machine. Sign in once with
 | **Grok** | `grok` | Agent Client Protocol (ACP) | ✅ | ✅ |
 | **Antigravity** | `agy` | stream-json headless | ✅ | ✅ |
 | **Pi** | `pi` | JSONL over stdio | ✅ | ✅ |
+| **omp** | `omp` | RPC mode (oh-my-pi) | ✅ | — |
 | **OpenCode** | `opencode` | Agent Client Protocol (ACP) | ✅ | — |
 | **Devin** | `devin` | local agent | — | ✅ |
 | **Hermes** | `hermes` | local agent | — | ✅ |
 | **DeepSeek** | `DEEPSEEK_API_KEY` | Native API (OpenAI-compatible) | ✅ | — |
 | **Meta** | `MODEL_API_KEY` | Native API (Muse Spark) | ✅ | — |
+| **GitHub** | `gh` / PAT | GitHub API & Repo Cloning | ✅ | — |
 
 ---
 
@@ -374,7 +376,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 
-**Latest documented version:** v1.1.6. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
+**Latest documented version:** v1.1.7. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
 
 ---
 

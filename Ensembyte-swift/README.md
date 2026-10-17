@@ -18,18 +18,22 @@ It connects directly to local coding agent CLIs (Claude Code, Codex, Cursor, Gro
 
 - **Pure SwiftUI & Liquid Glass:** Crafted with genuine Apple AppKit and SwiftUI components, delivering responsive glass surfaces, smooth translucent vibrancy, and 26 bespoke color themes.
 - **Hydra Multi-Agent Orchestration:** One lead agent plans and delegates work to up to 8 parallel heads, each operating in an isolated git worktree, automatically merged upon completion.
+- **Direct GitHub Repository Cloning:** Single-click repository cloning directly from the Welcome screen, the Sidebar's "Add project" menu, and `File › Clone from GitHub…`.
+- **HextaUI Pro Effort Slider & Thinking Block:** 28pt rounded-rect track layout with pearl-white elevated puck, live reasoning tier gradients, and animated thinking shader orbs with real-time duration tracking.
+- **Realtime Voice Agent Mode & Local Dictation:** Hands-free voice interactions with interactive Orb visualizer, Codex voice host, and private on-device dictation via SpeechAnalyzer.
+- **AppZoom Interface Scaling:** Direct keyboard shortcuts (`⌘+`, `⌘-`, `⌘0`) in the Window menu to scale the entire application proportionally.
 - **Built-In Terminal & Diff Inspector:** Embedded `SwiftTerm` terminal sessions and instant per-turn diff review with hidden git checkpoints.
-- **Local Credential Security:** Seamless integration with the macOS Keychain for API keys and tokens.
+- **Local Credential Security:** Seamless integration with the macOS Keychain for API keys, multi-account configurations, and GitHub tokens.
 - **MCP Integration:** Model Context Protocol client with preconfigured developer, filesystem, and browser tools.
 
 ---
 
 ## Installation
 
-Official signed and notarized `.dmg` packages are hosted at:
+Official signed and notarized `.dmg` packages for both **Apple Silicon** (`arm64`) and **Intel** (`x86_64`) are hosted at:
 👉 **[Ensembyte Releases](https://github.com/soumyachk101/Ensembyte/releases)**
 
-1. Download **`Ensembyte.dmg`**.
+1. Download **`Ensembyte.dmg`** (or the architecture-specific image for your Mac).
 2. Mount the disk image and drag **Ensembyte.app** into `/Applications`.
 3. Launch Ensembyte from your Applications folder or Spotlight.
 
