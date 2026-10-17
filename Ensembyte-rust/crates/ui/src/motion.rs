@@ -308,6 +308,8 @@ pub const EASE_RESORT: CubicBezier = EASE_OUT_QUINT;
 /// CSS `ease-in-out` — the transcript scroll glide (browser smooth-scroll
 /// shape: gentle start, cruise, gentle landing).
 pub const EASE_IN_OUT: CubicBezier = CubicBezier::new(0.42, 0.0, 0.58, 1.0);
+/// Linear progression — constant speed for rotating shader spinners.
+pub const EASE_LINEAR: CubicBezier = CubicBezier::new(0.0, 0.0, 1.0, 1.0);
 
 // ---------------------------------------------------------------------------
 // Motion specs (the catalog)
@@ -413,6 +415,8 @@ pub const HOVER_FADE: MotionSpec = MotionSpec::new(150, EASE_TAILWIND);
 pub const ENSEMBYTE_PULSE: MotionSpec = MotionSpec::new(2400, EASE);
 /// Gradient matrix spinner wave period: 750ms.
 pub const GRADIENT_SPIN: MotionSpec = MotionSpec::new(750, EASE);
+/// Thinking shader orb cycle: 2800ms.
+pub const THINKING_ORB_SPIN: MotionSpec = MotionSpec::new(2800, EASE_LINEAR);
 
 // ---------------------------------------------------------------------------
 // Resize-edge feedback

@@ -32,6 +32,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
+use gpui::AnimationExt as _;
 use gpui::{
     AnyElement, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Entity, ListAlignment,
     ListOffset, ListScrollEvent, ListState, MouseButton, MouseMoveEvent, MouseUpEvent, ObjectFit,
@@ -41,13 +42,14 @@ use gpui::{
 
 use ensembyte_doc::{MessagePart, MessageRole, MessageStatus, SessionMessageEntry, SubagentStatus};
 use ensembyte_proto::ToolCall;
+use ensembyte_proto::test_report::{TestOutputParser, TestReport};
 
 use crate::markdown::parser::{
     Block, BlockTree, IncrementalParser, InlineRun, InlineStyle, parse_full,
 };
 use crate::markdown::render::{self, RenderCache, RenderOptions};
 use crate::markdown::veil::RowVeil;
-use crate::motion::{self, AnimationExt as _};
+use crate::motion;
 use crate::notice::{NoticeChipIcon::Tile, notice_chip};
 use crate::state::AppState;
 use crate::syntax_cache::{DocumentHighlightKey, SyntaxHighlightCache};
@@ -776,6 +778,11 @@ pub enum ToolDetail {
     Stats {
         stats: Arc<Vec<ensembyte_doc::ToolDiffStat>>,
     },
+    /// Interactive test report parsed from tool output.
+    TestReport {
+        report: Arc<TestReport>,
+        raw_output: Arc<str>,
+    },
 }
 
 /// Max verbatim output lines per chip before the counted tail row.
@@ -826,6 +833,14 @@ pub fn tool_detail(
         });
     }
     let output = output?;
+    if TestOutputParser::contains_test_output(output) {
+        if let Some(report) = TestOutputParser::parse("", output) {
+            return Some(ToolDetail::TestReport {
+                report: Arc::new(report),
+                raw_output: Arc::from(output),
+            });
+        }
+    }
     let mut lines: Vec<SharedString> = output
         .lines()
         .map(|l| SharedString::from(l.to_owned()))
@@ -1194,6 +1209,12 @@ fn tool_fingerprint(tools: &[ToolItem], auto_open: bool) -> u64 {
                     acc.extend_from_slice(&stat.additions.to_le_bytes());
                     acc.extend_from_slice(&stat.deletions.to_le_bytes());
                 }
+            }
+            Some(ToolDetail::TestReport { report, .. }) => {
+                acc.push(5);
+                acc.extend_from_slice(&(report.passed_count as u32).to_le_bytes());
+                acc.extend_from_slice(&(report.failed_count as u32).to_le_bytes());
+                acc.extend_from_slice(&(report.skipped_count as u32).to_le_bytes());
             }
         }
         // The invocation block is pure over `call`, which the one-line hash
@@ -2130,6 +2151,7 @@ pub fn detail_height(detail: &ToolDetail) -> f32 {
         }
         ToolDetail::Diff { file, .. } => crate::changes::body_height(file),
         ToolDetail::Stats { stats } => stats.len() as f32 * OUTPUT_LINE_HEIGHT + OUTPUT_BODY_PAD,
+        ToolDetail::TestReport { report, .. } => crate::test_results::test_report_height(report),
     };
     DETAIL_SEPARATOR + body
 }
@@ -7005,6 +7027,7 @@ impl Transcript {
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let view = cx.entity_id();
         let mut fold = self.folds.get(row_id).copied().unwrap_or_default();
         // Agent/spawn chips never fold: they are their own row, always open,
         // no "Called N tools" header — a running subagent stays visible.
@@ -7538,7 +7561,7 @@ impl Transcript {
                                     .flex_none()
                                     .when(!collapses, |line| line.bg(crate::theme::hairline(0.06))),
                             )
-                            .child(detail_body(invocation, None, theme));
+                            .child(detail_body(invocation, None, theme, view, cx));
                     }
                     if let Some(detail) = detail.as_deref() {
                         panel = panel
@@ -7548,7 +7571,7 @@ impl Transcript {
                                     .flex_none()
                                     .when(!collapses, |line| line.bg(crate::theme::hairline(0.06))),
                             )
-                            .child(detail_body(detail, detail_highlights[ix].clone(), theme));
+                            .child(detail_body(detail, detail_highlights[ix].clone(), theme, view, cx));
                     }
                     if let Some(ChipAffordance { blob_ref, label }) = affordance {
                         let loading = matches!(
@@ -7594,6 +7617,8 @@ impl Transcript {
                             continuation_reveal,
                             base_row_height,
                             theme,
+                            view,
+                            cx,
                         ))
                     })
                     .child(card.when(collapses && content_reveal < 1.0, |card| {
@@ -8002,6 +8027,8 @@ fn detail_body(
     detail: &ToolDetail,
     diff_highlights: Option<Arc<crate::changes::DiffHighlights>>,
     theme: &Theme,
+    view: gpui::EntityId,
+    cx: &mut gpui::App,
 ) -> AnyElement {
     let body = div().w_full().min_w_0().flex().flex_col().overflow_hidden();
     match detail {
@@ -8105,6 +8132,15 @@ fn detail_body(
                 block.child(more_lines_row(*truncated_by, theme))
             })
             .into_any_element(),
+        ToolDetail::TestReport { report, raw_output } => body
+            .child(crate::test_results::render_test_report(
+                report,
+                raw_output,
+                theme,
+                view,
+                cx,
+            ))
+            .into_any_element(),
     }
 }
 
@@ -8206,9 +8242,21 @@ fn chip_header_row(
     cx: &mut gpui::App,
 ) -> gpui::Div {
     let (label, detail) = match tool.kind {
-        ToolItemKind::Thought => ("Thought process", String::new()),
+        ToolItemKind::Thought => {
+            if !tool.resolved {
+                ("Thinking…", String::new())
+            } else {
+                ("Thought process", String::new())
+            }
+        }
         ToolItemKind::Note => ("Wrote", note_chip_detail(tool)),
-        ToolItemKind::Call => tool_chip_content(&tool.call),
+        ToolItemKind::Call => {
+            if let Some(ToolDetail::TestReport { report, .. }) = tool.detail.as_deref() {
+                ("Tests", report.summary_text.clone())
+            } else {
+                tool_chip_content(&tool.call)
+            }
+        }
     };
     let activity = !is_agent_tool(tool);
     let file_path = match &tool.call {
@@ -8260,13 +8308,28 @@ fn chip_header_row(
                     .items_center()
                     .justify_center()
                     .child(
-                        crate::icons::icon(match tool.kind {
-                            ToolItemKind::Thought => crate::icons::CHAT_ROUND_LINE,
-                            ToolItemKind::Note => crate::icons::PEN,
-                            ToolItemKind::Call => tool_icon_path(&tool.call),
-                        })
-                        .size(px(12.0))
-                        .text_color(theme.text_muted),
+                        if tool.kind == ToolItemKind::Thought {
+                            crate::loaders::thinking_shader_orb(13.0, !tool.resolved, view, cx)
+                                .into_any_element()
+                        } else if matches!(tool.detail.as_deref(), Some(ToolDetail::TestReport { .. })) {
+                            crate::icons::icon(crate::icons::ACTION_TEST)
+                                .size(px(12.0))
+                                .text_color(if tool.is_error || tool.detail.as_deref().is_some_and(|d| matches!(d, ToolDetail::TestReport { report, .. } if report.has_failures())) {
+                                    theme.danger
+                                } else {
+                                    theme.success
+                                })
+                                .into_any_element()
+                        } else {
+                            crate::icons::icon(match tool.kind {
+                                ToolItemKind::Thought => crate::icons::CHAT_ROUND_LINE,
+                                ToolItemKind::Note => crate::icons::PEN,
+                                ToolItemKind::Call => tool_icon_path(&tool.call),
+                            })
+                            .size(px(12.0))
+                            .text_color(theme.text_muted)
+                            .into_any_element()
+                        }
                     ),
             )
         })
@@ -8562,6 +8625,8 @@ fn activity_rail(
     continuation_reveal: f32,
     row_height: f32,
     theme: &Theme,
+    view: gpui::EntityId,
+    cx: &mut gpui::App,
 ) -> gpui::Div {
     let color = theme.hairline(0.12);
     let tint = if tool.is_error {
@@ -8617,17 +8682,45 @@ fn activity_rail(
             .inset_0(),
         )
         .child(
-            crate::icons::icon(match tool.kind {
-                ToolItemKind::Thought => crate::icons::CHAT_ROUND_LINE,
-                ToolItemKind::Note => crate::icons::PEN,
-                ToolItemKind::Call => tool_icon_path(&tool.call),
-            })
-            .absolute()
-            .left(px(ACTIVITY_ICON_LEFT))
-            .top(px(row_height / 2.0 - ACTIVITY_ICON_SIZE / 2.0))
-            .size(px(ACTIVITY_ICON_SIZE))
-            .opacity(branch_reveal)
-            .text_color(tint),
+            if tool.kind == ToolItemKind::Thought {
+                div()
+                    .absolute()
+                    .left(px(ACTIVITY_ICON_LEFT))
+                    .top(px(row_height / 2.0 - ACTIVITY_ICON_SIZE / 2.0))
+                    .size(px(ACTIVITY_ICON_SIZE))
+                    .opacity(branch_reveal)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(crate::loaders::thinking_shader_orb(12.0, !tool.resolved, view, cx))
+                    .into_any_element()
+            } else if matches!(tool.detail.as_deref(), Some(ToolDetail::TestReport { .. })) {
+                crate::icons::icon(crate::icons::ACTION_TEST)
+                    .absolute()
+                    .left(px(ACTIVITY_ICON_LEFT))
+                    .top(px(row_height / 2.0 - ACTIVITY_ICON_SIZE / 2.0))
+                    .size(px(ACTIVITY_ICON_SIZE))
+                    .opacity(branch_reveal)
+                    .text_color(if tool.is_error || tool.detail.as_deref().is_some_and(|d| matches!(d, ToolDetail::TestReport { report, .. } if report.has_failures())) {
+                        theme.danger
+                    } else {
+                        theme.success
+                    })
+                    .into_any_element()
+            } else {
+                crate::icons::icon(match tool.kind {
+                    ToolItemKind::Thought => crate::icons::CHAT_ROUND_LINE,
+                    ToolItemKind::Note => crate::icons::PEN,
+                    ToolItemKind::Call => tool_icon_path(&tool.call),
+                })
+                .absolute()
+                .left(px(ACTIVITY_ICON_LEFT))
+                .top(px(row_height / 2.0 - ACTIVITY_ICON_SIZE / 2.0))
+                .size(px(ACTIVITY_ICON_SIZE))
+                .opacity(branch_reveal)
+                .text_color(tint)
+                .into_any_element()
+            }
         )
 }
 
@@ -8686,6 +8779,8 @@ fn tool_chip(
                 continuation_reveal,
                 row_height,
                 theme,
+                view,
+                cx,
             ))
         })
         .child(

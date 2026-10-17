@@ -404,3 +404,160 @@ mod tests {
         }
     }
 }
+
+/// An animated, glowing AI reasoning shader orb with dynamic multi-color rotation
+/// (cyan, violet, fuchsia, blue) and breathing pulse effect while thinking,
+/// settling to a calm gradient orb when done.
+pub fn thinking_shader_orb(
+    size_px: f32,
+    is_thinking: bool,
+    view: EntityId,
+    cx: &mut App,
+) -> impl IntoElement {
+    let delta = if is_thinking {
+        motion::pulse_delta(&motion::THINKING_ORB_SPIN, view, cx)
+    } else {
+        0.0
+    };
+
+    let diameter = size_px.max(8.0);
+    let radius = diameter / 2.0;
+
+    div()
+        .relative()
+        .size(px(diameter))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            canvas(
+                move |_, _, _| (),
+                move |bounds, _, window, _| {
+                    let center = bounds.center();
+                    if is_thinking {
+                        // Breathing pulse scale factor: 0.90..1.08
+                        let breathe = 0.92 + 0.14 * (delta * std::f32::consts::TAU * 2.0).sin().abs();
+                        let active_radius = radius * breathe;
+                        let rotation_offset = delta * std::f32::consts::TAU;
+
+                        // 4 vibrant chromatic color stops:
+                        // 0: Cyan   (0.22, 0.74, 0.97) -> hsl(198, 93%, 60%)
+                        // 1: Violet (0.55, 0.36, 0.96) -> hsl(259, 89%, 66%)
+                        // 2: Fuchsia(0.91, 0.30, 0.65) -> hsl(326, 85%, 61%)
+                        // 3: Blue   (0.23, 0.51, 0.96) -> hsl(217, 92%, 60%)
+                        const STOPS: [(f32, f32, f32); 4] = [
+                            (198.0 / 360.0, 0.93, 0.60),
+                            (259.0 / 360.0, 0.89, 0.66),
+                            (326.0 / 360.0, 0.85, 0.61),
+                            (217.0 / 360.0, 0.92, 0.60),
+                        ];
+
+                        // Draw outer soft chromatic halo (16 angular wedges)
+                        let glow_radius = active_radius * 1.35;
+                        const WEDGES: usize = 16;
+                        for i in 0..WEDGES {
+                            let f0 = i as f32 / WEDGES as f32;
+                            let f1 = (i + 1) as f32 / WEDGES as f32;
+                            let theta0 = rotation_offset + f0 * std::f32::consts::TAU;
+                            let theta1 = rotation_offset + f1 * std::f32::consts::TAU;
+
+                            let stop_idx = (f0 * 4.0) as usize % 4;
+                            let next_stop = (stop_idx + 1) % 4;
+                            let local_f = (f0 * 4.0).fract();
+                            let h = STOPS[stop_idx].0 + (STOPS[next_stop].0 - STOPS[stop_idx].0) * local_f;
+                            let s = STOPS[stop_idx].1 + (STOPS[next_stop].1 - STOPS[stop_idx].1) * local_f;
+                            let l = STOPS[stop_idx].2 + (STOPS[next_stop].2 - STOPS[stop_idx].2) * local_f;
+
+                            // Outer glow wedge
+                            let mut glow_path = PathBuilder::fill();
+                            glow_path.move_to(center);
+                            glow_path.line_to(point(
+                                center.x + px(glow_radius * theta0.cos()),
+                                center.y + px(glow_radius * theta0.sin()),
+                            ));
+                            glow_path.line_to(point(
+                                center.x + px(glow_radius * theta1.cos()),
+                                center.y + px(glow_radius * theta1.sin()),
+                            ));
+                            glow_path.close();
+                            if let Ok(p) = glow_path.build() {
+                                window.paint_path(p, gpui::hsla(h, s, l, 0.28));
+                            }
+
+                            // Inner sharp wedge
+                            let mut inner_path = PathBuilder::fill();
+                            inner_path.move_to(center);
+                            inner_path.line_to(point(
+                                center.x + px(active_radius * theta0.cos()),
+                                center.y + px(active_radius * theta0.sin()),
+                            ));
+                            inner_path.line_to(point(
+                                center.x + px(active_radius * theta1.cos()),
+                                center.y + px(active_radius * theta1.sin()),
+                            ));
+                            inner_path.close();
+                            if let Ok(p) = inner_path.build() {
+                                window.paint_path(p, gpui::hsla(h, s, l, 0.92));
+                            }
+                        }
+
+                        // Center glowing core highlight
+                        let mut core = PathBuilder::fill();
+                        let core_radius = active_radius * 0.45;
+                        for i in 0..16 {
+                            let a = std::f32::consts::TAU * i as f32 / 16.0;
+                            let pt = point(center.x + px(core_radius * a.cos()), center.y + px(core_radius * a.sin()));
+                            if i == 0 { core.move_to(pt); } else { core.line_to(pt); }
+                        }
+                        core.close();
+                        if let Ok(p) = core.build() {
+                            window.paint_path(p, gpui::hsla(0.0, 0.0, 1.0, 0.35));
+                        }
+
+                        // Fine perimeter rim
+                        let mut rim = PathBuilder::stroke(px(0.6));
+                        for i in 0..=24 {
+                            let a = std::f32::consts::TAU * i as f32 / 24.0;
+                            let pt = point(center.x + px(active_radius * a.cos()), center.y + px(active_radius * a.sin()));
+                            if i == 0 { rim.move_to(pt); } else { rim.line_to(pt); }
+                        }
+                        if let Ok(p) = rim.build() {
+                            window.paint_path(p, gpui::hsla(0.0, 0.0, 1.0, 0.40));
+                        }
+                    } else {
+                        // Settled: calm violet & cyan gradient disc
+                        const WEDGES: usize = 16;
+                        for i in 0..WEDGES {
+                            let f0 = i as f32 / WEDGES as f32;
+                            let f1 = (i + 1) as f32 / WEDGES as f32;
+                            let theta0 = f0 * std::f32::consts::TAU;
+                            let theta1 = f1 * std::f32::consts::TAU;
+                            // Blend between violet (259°) and cyan (198°)
+                            let h = 259.0 / 360.0 - (61.0 / 360.0) * f0;
+                            let mut path = PathBuilder::fill();
+                            path.move_to(center);
+                            path.line_to(point(center.x + px(radius * theta0.cos()), center.y + px(radius * theta0.sin())));
+                            path.line_to(point(center.x + px(radius * theta1.cos()), center.y + px(radius * theta1.sin())));
+                            path.close();
+                            if let Ok(p) = path.build() {
+                                window.paint_path(p, gpui::hsla(h, 0.85, 0.65, 0.85));
+                            }
+                        }
+
+                        // Delicate settled rim
+                        let mut rim = PathBuilder::stroke(px(0.5));
+                        for i in 0..=24 {
+                            let a = std::f32::consts::TAU * i as f32 / 24.0;
+                            let pt = point(center.x + px(radius * a.cos()), center.y + px(radius * a.sin()));
+                            if i == 0 { rim.move_to(pt); } else { rim.line_to(pt); }
+                        }
+                        if let Ok(p) = rim.build() {
+                            window.paint_path(p, gpui::hsla(0.0, 0.0, 1.0, 0.25));
+                        }
+                    }
+                },
+            )
+            .absolute()
+            .inset_0(),
+        )
+}

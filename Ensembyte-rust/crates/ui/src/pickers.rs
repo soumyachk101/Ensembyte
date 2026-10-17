@@ -5214,6 +5214,32 @@ impl Pickers {
                                     }))
                                     .child(SharedString::from(choice.label))
                                     .child(div().flex_1())
+                                    .when_some(choice.reasoning, |el, level| {
+                                        let tint = match level {
+                                            ReasoningLevel::Minimal | ReasoningLevel::Low => gpui::hsla(215.0 / 360.0, 0.16, 0.55, 0.85),
+                                            ReasoningLevel::Medium => gpui::hsla(199.0 / 360.0, 0.89, 0.55, 1.0),
+                                            ReasoningLevel::High => gpui::hsla(243.0 / 360.0, 0.75, 0.65, 1.0),
+                                            ReasoningLevel::XHigh | ReasoningLevel::Max => gpui::hsla(265.0 / 360.0, 0.89, 0.66, 1.0),
+                                            ReasoningLevel::Ultra | ReasoningLevel::Ultracode | ReasoningLevel::Ultrathink => gpui::hsla(320.0 / 360.0, 0.90, 0.65, 1.0),
+                                        };
+                                        el.child(
+                                            div()
+                                                .px(px(6.0))
+                                                .py(px(1.5))
+                                                .rounded(px(4.0))
+                                                .bg(tint.opacity(0.14))
+                                                .text_size(px(10.0))
+                                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                .text_color(tint)
+                                                .child(SharedString::from(match level {
+                                                    ReasoningLevel::Minimal | ReasoningLevel::Low => "Light",
+                                                    ReasoningLevel::Medium => "Standard",
+                                                    ReasoningLevel::High => "Deep",
+                                                    ReasoningLevel::XHigh | ReasoningLevel::Max => "Max",
+                                                    ReasoningLevel::Ultra | ReasoningLevel::Ultracode | ReasoningLevel::Ultrathink => "Ultra",
+                                                }))
+                                        )
+                                    })
                                     .when(choice.default, |el| el.child(default_badge(&theme)))
                                     .when(
                                         choice.selected,
