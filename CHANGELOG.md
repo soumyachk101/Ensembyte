@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.8] - 2026-10-17
+
+Ensembyte 1.1.8 introduces an interactive Pro Diff Review system with unified/split views, word-level diff highlights, and inline feedback directly in chat, alongside intelligent auto-scrolling for active chat threads.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Interactive Pro Diff Review**: Complete native implementation of side-by-side split diff review with synced scrolling, intra-line word/token-level diff highlighting, inline commenting on diff lines, and file action cards (`Accept` / `Revert`).
+- **Chat Thread Auto-Scroll**: Added smart bottom-following auto-scroll for streaming tokens, reasoning blocks, and tool executions with intelligent user scroll detection.
+- **Diff Cache Management**: Real-time diff cache invalidation on file revert and expanded popover viewport (`780×580`).
+
 ## [1.1.7] - 2026-10-17
 
 Ensembyte 1.1.7 brings integrated GitHub repository cloning directly from the welcome screen, sidebar, and menu bar, window zoom keyboard shortcuts for full-app scaling, and upgraded multi-architecture release pipelines for macOS (Apple Silicon and Intel).
@@ -20,11 +29,11 @@ Ensembyte 1.1.7 brings integrated GitHub repository cloning directly from the we
 
 ## [1.1.6] - 2026-10-16
 
-Ensembyte 1.1.6 introduces a full redesign of the Prompt Input controls and AI Reasoning interface inspired by HextaUI Pro, delivering an elevated effort slider with live tier gradients, pearl-white slider puck, and animated thinking shader orbs with live duration tracking.
+Ensembyte 1.1.6 introduces a full redesign of the Prompt Input controls and AI Reasoning interface, delivering an elevated effort slider with live tier gradients, pearl-white slider puck, and animated thinking shader orbs with live duration tracking.
 
 ### macOS Updates (`Ensembyte-swift/`)
-- **HextaUI Pro Effort Slider**: 28pt rectangular rounded track (`h-7`) with pearl-white elevated puck, drop shadow, center grip notch, and dynamic electric aura glow at Max effort.
-- **Dynamic Tier Gradients**: Distinct HextaUI-inspired palettes for Low (zinc/gray), Medium (sky blue), High (indigo), Extra High (violet), and Max (electric cyan/violet/fuchsia).
+- **Precision Effort Slider**: 28pt rectangular rounded track (`h-7`) with pearl-white elevated puck, drop shadow, center grip notch, and dynamic electric aura glow at Max effort.
+- **Dynamic Tier Gradients**: Distinct refined palettes for Low (zinc/gray), Medium (sky blue), High (indigo), Extra High (violet), and Max (electric cyan/violet/fuchsia).
 - **Extended Thinking Integration**: Added extended thinking toggle directly within the composer effort slider card.
 - **Thinking Shader Orb & Live Timer**: Integrated rotating multi-gradient shader orb during reasoning, live counting timer pill ("Thinking…"), and auto-collapsing summary badge ("Thought for 12s") with expandable trail.
 - **UI Alignment Refinements**: Clean vertical spacing between track and "Recommended" indicator marker, smooth light sheen wave, and edge-to-edge gradient coverage.

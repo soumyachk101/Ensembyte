@@ -701,7 +701,7 @@ struct EffortSliderCard: View {
 
     private var brand: EffortBrand { EffortBrand(provider: provider) }
 
-    /// The title takes the slider's colour: at maximum it bursts into the HextaUI cyan-violet-fuchsia gradient.
+    /// The title takes the slider's colour: at maximum it bursts into the dynamic cyan-violet-fuchsia gradient.
     private var titleStyle: AnyShapeStyle {
         if let pair {
             var colors = [brand.titleColor] + pair.brand.titleColors
@@ -933,7 +933,7 @@ private struct RoundIconButton: View {
     }
 }
 
-/// The modern HextaUI Pro effort slider track with rectangular sliding puck, live tier gradients, and pop haptics.
+/// The modern effort slider track with rectangular sliding puck, live tier gradients, and pop haptics.
 struct EffortSlider: View {
     static let trackHeight: CGFloat = 28
     static let thumbWidth: CGFloat = 28
@@ -993,7 +993,7 @@ struct EffortSlider: View {
                                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                         }
 
-                    // Filled track with HextaUI tier gradient
+                    // Filled track with tier gradient
                     RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                         .fill(look.fill)
                         .frame(width: fillWidth, height: Self.trackHeight)
@@ -1023,7 +1023,7 @@ struct EffortSlider: View {
                             .animation(.easeOut(duration: 0.2), value: isMax)
                     }
 
-                    // Thumb Puck: HextaUI elevated pearl-white puck with border & drop shadow
+                    // Thumb Puck: elevated pearl-white puck with border & drop shadow
                     ZStack {
                         if isMax && !performanceMode {
                             RoundedRectangle(cornerRadius: Self.thumbCornerRadius, style: .continuous)
@@ -1290,7 +1290,7 @@ struct TrackLook: Hashable {
                 startPoint: .leading, endPoint: .trailing
             ))
         }
-        // HextaUI palettes for tiers 0 to 3:
+        // Dynamic palettes for tiers 0 to 3:
         // Tier 0: Zinc/Gray [#d4d4d8 -> #a1a1aa]
         // Tier 1: Calm Blue [#93c5fd -> #3b82f6]
         // Tier 2: Indigo [#a5b4fc -> #6366f1]

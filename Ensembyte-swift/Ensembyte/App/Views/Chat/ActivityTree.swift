@@ -416,7 +416,7 @@ struct ActivityGroup: View, Equatable {
     }
 }
 
-/// An animated, glowing AI reasoning shader orb inspired by HextaUI Pro Thinking component.
+/// An animated, glowing AI reasoning shader orb with dynamic multi-color rotation.
 struct ThinkingShaderOrb: View {
     var isThinking: Bool = true
     var size: CGFloat = 13
@@ -425,7 +425,7 @@ struct ThinkingShaderOrb: View {
     @State private var isBreathing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // HextaUI cyan/purple/fuchsia/blue gradient
+    // Vibrant cyan/purple/fuchsia/blue gradient
     private static let orbColors = [
         Color(red: 0.22, green: 0.74, blue: 0.97), // Cyan
         Color(red: 0.55, green: 0.36, blue: 0.96), // Violet
@@ -506,7 +506,7 @@ struct ThinkingShaderOrb: View {
     }
 }
 
-/// The agent's thinking as an expandable trail, inspired by HextaUI Pro Thinking component:
+/// The agent's thinking as an expandable trail:
 /// features a live shader orb, present-tense step with running timer while streaming,
 /// auto-collapsing to "Thought for 12s" when done, and an expandable trail with vertical guide line.
 private struct ActivityThoughtStep: View {
