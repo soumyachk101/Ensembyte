@@ -77,14 +77,11 @@ enum DaemonCommand {
     Status,
 }
 
-/// Production edge — disabled by default (`""`) to keep Ensembyte strictly local/offline
-/// unless explicitly configured via `ENSEMBYTE_EDGE_URL`.
-const DEFAULT_EDGE_URL: &str = "";
+/// Production edge — points to Ensembyte's auth exchange on Vercel.
+const DEFAULT_EDGE_URL: &str = "https://ensembyte.vercel.app";
 
-/// Production WorkOS AuthKit client id — disabled by default (`""`) to keep
-/// Ensembyte strictly local/offline unless explicitly configured by the user via
-/// `ENSEMBYTE_WORKOS_CLIENT_ID`.
-const DEFAULT_WORKOS_CLIENT_ID: &str = "";
+/// Production WorkOS AuthKit client id.
+const DEFAULT_WORKOS_CLIENT_ID: &str = "client_01M55181GVHA5FECWKZ4KD7N5W";
 
 fn edge_url_from_env() -> String {
     std::env::var("ENSEMBYTE_EDGE_URL")

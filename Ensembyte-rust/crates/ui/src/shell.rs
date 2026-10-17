@@ -1535,7 +1535,6 @@ fn resolve_shell_escape(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AccountMenuAction {
-    #[allow(dead_code)]
     EnableSync,
     SyncInProgress,
     /// Postponed switch wizard (or legacy restart fallback) — reopen it.
@@ -1654,7 +1653,7 @@ fn local_work_phrase(chats: usize, spaces: usize) -> Option<String> {
 fn account_menu_action(scope: Option<WorkspaceScope>, flow: SyncFlow) -> Option<AccountMenuAction> {
     match scope {
         Some(WorkspaceScope::Local) => match flow {
-            SyncFlow::Idle => None, // Sync disabled: stay strictly local and offline
+            SyncFlow::Idle => Some(AccountMenuAction::EnableSync),
             SyncFlow::Enabling | SyncFlow::Canceling => Some(AccountMenuAction::SyncInProgress),
             SyncFlow::SwitchOffer { .. } | SyncFlow::RestartPending { .. } => {
                 Some(AccountMenuAction::RestartPending)
@@ -13692,7 +13691,7 @@ mod tests {
     fn account_actions_follow_the_attached_workspace_scope() {
         assert_eq!(
             account_menu_action(Some(WorkspaceScope::Local), SyncFlow::Idle),
-            None
+            Some(AccountMenuAction::EnableSync)
         );
         assert_eq!(
             account_menu_action(Some(WorkspaceScope::Synced), SyncFlow::Idle),
