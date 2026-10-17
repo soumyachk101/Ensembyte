@@ -421,17 +421,19 @@ private struct DiffFileCard: View, Equatable {
     @State private var isHovering = false
 
     nonisolated static func == (lhs: DiffFileCard, rhs: DiffFileCard) -> Bool {
-        lhs.file.id == rhs.file.id
-            && lhs.file.additions == rhs.file.additions
-            && lhs.file.deletions == rhs.file.deletions
-            && lhs.file.hunks.count == rhs.file.hunks.count
-            && lhs.file.change == rhs.file.change
-            && lhs.file.isBinary == rhs.file.isBinary
-            && lhs.isCollapsed == rhs.isCollapsed
-            && lhs.isAccepted == rhs.isAccepted
-            && lhs.reviewMode == rhs.reviewMode
-            && lhs.activeComment?.path == rhs.activeComment?.path
-            && lhs.activeComment?.lineNumber == rhs.activeComment?.lineNumber
+        MainActor.assumeIsolated {
+            lhs.file.id == rhs.file.id
+                && lhs.file.additions == rhs.file.additions
+                && lhs.file.deletions == rhs.file.deletions
+                && lhs.file.hunks.count == rhs.file.hunks.count
+                && lhs.file.change == rhs.file.change
+                && lhs.file.isBinary == rhs.file.isBinary
+                && lhs.isCollapsed == rhs.isCollapsed
+                && lhs.isAccepted == rhs.isAccepted
+                && lhs.reviewMode == rhs.reviewMode
+                && lhs.activeComment?.path == rhs.activeComment?.path
+                && lhs.activeComment?.lineNumber == rhs.activeComment?.lineNumber
+        }
     }
 
     var body: some View {
