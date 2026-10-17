@@ -2343,6 +2343,44 @@ final class ThreadRuntime {
         return turns.filter { $0.endCheckpoint != nil || $0.providerDiff != nil || $0.touchedPaths?.isEmpty == false || edited.contains($0.id) }
     }
 
+    /// Reverts changes made to a specific file back to the base checkpoint or HEAD.
+    func revertFile(path: String) async throws {
+        guard let app, let thread = app.thread(threadID), let project = app.project(thread.projectID) else { return }
+        let root = thread.worktreePath ?? project.path
+        let git = Git(root)
+        let baseRef: String = {
+            if let selection = diffSelection, let turn = turns.first(where: { $0.id == selection }), let base = turn.baseCheckpoint {
+                return base
+            }
+            if let firstBase = turns.first(where: { $0.baseCheckpoint != nil })?.baseCheckpoint {
+                return firstBase
+            }
+            return "HEAD"
+        }()
+        try await git.restore([path], from: baseRef)
+        turnDiffs = RecentCache<UUID, Task<[DiffFile], Never>>(limit: 64)
+        diffRevision += 1
+    }
+
+    /// Reverts changes made to multiple files.
+    func revertAllFiles(paths: [String]) async throws {
+        guard !paths.isEmpty, let app, let thread = app.thread(threadID), let project = app.project(thread.projectID) else { return }
+        let root = thread.worktreePath ?? project.path
+        let git = Git(root)
+        let baseRef: String = {
+            if let selection = diffSelection, let turn = turns.first(where: { $0.id == selection }), let base = turn.baseCheckpoint {
+                return base
+            }
+            if let firstBase = turns.first(where: { $0.baseCheckpoint != nil })?.baseCheckpoint {
+                return firstBase
+            }
+            return "HEAD"
+        }()
+        try await git.restore(paths, from: baseRef)
+        turnDiffs = RecentCache<UUID, Task<[DiffFile], Never>>(limit: 64)
+        diffRevision += 1
+    }
+
     func parsedDiff(selection: UUID?, providerFiles: [DiffFile]? = nil) async -> [DiffFile] {
         if let task = cachedDiff(selection: selection) { return await task.value }
         guard let app, let thread = app.thread(threadID), let project = app.project(thread.projectID) else { return [] }
