@@ -32,6 +32,20 @@ struct AppCommands: Commands {
             Divider()
             Button("Add project…") { model.chooseProjectFolder() }
                 .keyboardShortcut(shortcuts.keyboardShortcut(for: .addProject))
+            Button("Clone from GitHub…") { GitHubClonePanel.shared.present(model: model) }
+        }
+
+        CommandGroup(after: .windowSize) {
+            Button("Zoom In") { model.settings.appZoom = AppZoom.next(model.settings.appZoom, increasing: true) }
+                .keyboardShortcut("+", modifiers: .command)
+            Button("Zoom Out") { model.settings.appZoom = AppZoom.next(model.settings.appZoom, increasing: false) }
+                .keyboardShortcut("-", modifiers: .command)
+            Button("Actual Size") { model.settings.appZoom = 100 }
+                .keyboardShortcut("0", modifiers: .command)
+            // US keyboards produce '=' for Command-plus without Shift.
+            Button("Zoom In") { model.settings.appZoom = AppZoom.next(model.settings.appZoom, increasing: true) }
+                .keyboardShortcut("=", modifiers: .command)
+            Divider()
         }
 
         CommandGroup(after: .sidebar) {

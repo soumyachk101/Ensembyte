@@ -292,14 +292,29 @@ struct WelcomeView: View {
         @Bindable var settings = model.settings
         return VStack(spacing: 30) {
             VStack(spacing: 10) {
-                Button {
-                    model.chooseProjectFolder()
-                } label: {
-                    Label("Add a project", systemImage: "folder.badge.plus")
+                HStack(spacing: 10) {
+                    Button {
+                        model.chooseProjectFolder()
+                    } label: {
+                        Label("Add a project", systemImage: "folder.badge.plus")
+                            .padding(.horizontal, 6)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .controlSize(.extraLarge)
+                    Button {
+                        GitHubClonePanel.shared.present(model: model)
+                    } label: {
+                        Label {
+                            Text("Clone from GitHub")
+                        } icon: {
+                            Image("mcp-github").resizable().scaledToFit()
+                                .frame(width: 16, height: 16)
+                        }
                         .padding(.horizontal, 6)
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.extraLarge)
                 }
-                .buttonStyle(.glassProminent)
-                .controlSize(.extraLarge)
                 Text("Or drop a folder anywhere in this window.")
                     .font(.system(size: 12))
                     .foregroundStyle(Chrome.secondaryText)

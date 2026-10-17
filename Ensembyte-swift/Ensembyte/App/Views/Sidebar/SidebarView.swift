@@ -10,6 +10,7 @@ struct SidebarView: View {
     var dismiss: (() -> Void)? = nil
 
     @State private var search = ""
+    @State private var isAddingProject = false
     @State private var renaming: ChatThread?
     @State private var renameText = ""
     /// The thread whose delete popover is open, by id: the popover's binding compares two
@@ -161,8 +162,21 @@ struct SidebarView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                SidebarRow(title: "Add project", action: { addProject() }) {
+                SidebarRow(title: "Add project", action: { isAddingProject.toggle() }) {
                     SidebarIconBadge { SidebarSymbol("plus") }
+                }
+                .popover(isPresented: $isAddingProject, arrowEdge: .bottom) {
+                    PopoverMenu {
+                        PopoverItem("Choose a folder…", symbol: "folder") {
+                            isAddingProject = false
+                            addProject()
+                        }
+                        PopoverDivider()
+                        PopoverItem("Clone from GitHub…", leading: AnyView(Image("mcp-github").resizable().scaledToFit().frame(width: 12, height: 12))) {
+                            isAddingProject = false
+                            GitHubClonePanel.shared.present(model: model)
+                        }
+                    }
                 }
                 if !inPopover { VoiceSidebarTrigger() }
                 SidebarRow(title: "Settings", action: { WindowManager.shared.showSettings() }) {

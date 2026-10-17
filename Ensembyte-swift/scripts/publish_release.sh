@@ -46,9 +46,16 @@ fi
 UNVERSIONED_DMG="$(dirname "$DMG")/Ensembyte.dmg"
 cp "$DMG" "$UNVERSIONED_DMG"
 
+ASSETS=("$DMG#Ensembyte $VERSION (Apple silicon)" "$UNVERSIONED_DMG#Ensembyte (Apple silicon)")
+if [ -f "build.noindex/Ensembyte-$VERSION-arm64.dmg" ]; then
+  ASSETS+=("build.noindex/Ensembyte-$VERSION-arm64.dmg#Ensembyte $VERSION (arm64)")
+fi
+if [ -f "build.noindex/Ensembyte-$VERSION-x86_64.dmg" ]; then
+  ASSETS+=("build.noindex/Ensembyte-$VERSION-x86_64.dmg#Ensembyte $VERSION (Intel x86_64)")
+fi
+
 gh release create "$TAG" \
-  "$DMG#Ensembyte $VERSION (Apple silicon)" \
-  "$UNVERSIONED_DMG#Ensembyte (Apple silicon)" \
+  "${ASSETS[@]}" \
   -R "$PROJECT" \
   --title "Ensembyte $VERSION" \
   --notes-file "$NOTES"

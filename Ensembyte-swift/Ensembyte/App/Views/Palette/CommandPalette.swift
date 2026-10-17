@@ -160,6 +160,9 @@ struct CommandPalette: View {
             Item(id: "add-project", title: "Add project", symbol: "folder.badge.plus", shortcut: ShortcutStore.label(for: .addProject)) {
                 model.chooseProjectFolder()
             },
+            Item(id: "clone-github", title: "Clone from GitHub", symbol: "arrow.down.circle", shortcut: nil) {
+                GitHubClonePanel.shared.present(model: model)
+            },
         ]
         if let threadID = model.selectedThreadID {
             let runtime = model.runtime(for: threadID)
