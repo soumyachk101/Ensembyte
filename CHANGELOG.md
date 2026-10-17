@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.7] - 2026-10-17
+
+Ensembyte 1.1.7 brings integrated GitHub repository cloning directly from the welcome screen, sidebar, and menu bar, window zoom keyboard shortcuts for full-app scaling, and upgraded multi-architecture release pipelines for macOS (Apple Silicon and Intel).
+
+### macOS Updates (`Ensembyte-swift/`)
+- **GitHub Repository Cloning Integration**: Added direct "Clone from GitHub" button on the Welcome screen, quick contextual popover on the sidebar "Add project" button, and `File › Clone from GitHub…` menu command.
+- **Command Palette Action**: Searchable "Clone from GitHub" command added to the Command Palette (`⌘K`).
+- **AppZoom Window Menu Shortcuts**: Native `⌘+` (Zoom In), `⌘-` (Zoom Out), and `⌘0` (Actual Size) keyboard shortcuts in the Window menu.
+- **Multi-Architecture Release Support**: Automated release packaging for single-architecture Apple Silicon (`arm64`) and Intel (`x86_64`) disk images.
+
 ## [1.1.6] - 2026-10-16
 
 Ensembyte 1.1.6 introduces a full redesign of the Prompt Input controls and AI Reasoning interface inspired by HextaUI Pro, delivering an elevated effort slider with live tier gradients, pearl-white slider puck, and animated thinking shader orbs with live duration tracking.

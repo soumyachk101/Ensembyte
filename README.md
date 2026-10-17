@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>The open-source multi-agent coding client.</b><br/>
-  Drive your AI coding agents locally — with style, speed, and zero telemetry.<br/>
+  A local-first desktop for AI coding agents.<br/>
   <a href="https://ensembyte.vercel.app"><b>🌐 ensembyte.vercel.app</b></a>
 </p>
 
@@ -27,7 +27,7 @@
 
 ## What is Ensembyte?
 
-Ensembyte is the unified open-source project that brings together **two blazing-fast native desktop clients** for driving AI coding agents right from your own machine. Both apps connect directly to the CLI tools you already have installed and signed into — **Claude Code, Codex, Cursor, OpenCode, Grok, Pi, Devin, Hermes, DeepSeek, Antigravity**, and more. Your subscriptions stay entirely yours. Your code never leaves your machine.
+Ensembyte is the unified open-source project that brings together **two native desktop clients** for working with AI coding agents. They integrate with local CLI tools and supported provider APIs, including **Claude Code, Codex, Cursor, OpenCode, Grok, Pi, Devin, Hermes, DeepSeek, Antigravity**, and more. Provider accounts and subscriptions stay yours. Requests to hosted providers are sent to those providers, and the Rust app can sync chat data when account-backed sync is enabled.
 
 Built by **Soumya Chakraborty** with a focus on native performance, multi-agent orchestration, and a first-class desktop experience.
 
@@ -42,7 +42,7 @@ To deliver uncompromising native speed, memory efficiency, and platform-perfect 
 | **Platform** | **macOS** (Apple silicon, macOS 26+) | **Windows & Linux** (x86_64, ARM64) |
 | **Stack** | Swift 6 / SwiftUI + Liquid Glass | Rust 2024 / GPUI (GPU-accelerated) |
 | **Source** | [`Ensembyte-swift/`](Ensembyte-swift/) | [`Ensembyte-rust/`](Ensembyte-rust/) |
-| **Packages** | Signed & Notarized `.dmg` | `.exe` / `.zip`, `.tar.gz` / `.AppImage` / `.deb` |
+| **Packages** | Signed & Notarized `.dmg` | `.exe` / `.zip`, `.tar.gz` |
 | **Multi-Agent** | Hydra: Lead + parallel worktree heads | Dedicated local + synced sessions |
 | **Design** | 26 tinted-glass themes, Liquid Glass | Minimalist dark/light, immediate-mode GPU |
 | **Sync** | Local-first, hidden git checkpoints | Local-first, optional Loro CRDT sync |
@@ -71,8 +71,8 @@ Preloaded with MCP servers for system tools, web search, browser automation, and
 ### Spend & Quota Transparency
 Live token expenditure and rolling rate-limit counters keep provider costs **visible and honest**.
 
-### Local-First, Zero Telemetry
-Everything runs on your machine. No cloud accounts, no data collection, no middleware. Your code, your subscriptions, your hardware.
+### Local-First
+The apps run locally and do not send product analytics to Ensembyte. Local-first does not mean that no data leaves your device: hosted providers receive the prompts and context sent to them, and the Rust app can sync chat data when account-backed sync is enabled. Workspace files and provider credentials are stored locally; any file context included in a provider request is handled by that provider.
 
 ---
 
@@ -187,8 +187,6 @@ Download the appropriate package for your platform from:
 | Windows x86_64 (portable) | `ensembyte-windows-x86_64.zip` |
 | Linux x86_64 | `ensembyte-linux-x86_64.tar.gz` |
 | Linux aarch64 | `ensembyte-linux-aarch64.tar.gz` |
-| Linux (AppImage) | `ensembyte-linux.AppImage` |
-| Linux (deb) | `ensembyte-linux.deb` |
 
 ---
 
@@ -198,19 +196,8 @@ Download the appropriate package for your platform from:
 
 **Requirements:**
 - Mac with Apple Silicon (M1 / M2 / M3 / M4 or later)
-- macOS Sequoia (macOS 15) or later
-- Xcode 16+ with Swift 6 toolchain
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
-
-**Build in Xcode:**
-```bash
-# Generate the project from project.yml
-xcodegen generate
-
-# Open the project
-open Ensembyte.xcodeproj
-```
-Select the **Ensembyte** scheme and press **⌘B** to build or **⌘R** to run.
+- Xcode 26+ with Swift 6 and the macOS 26 SDK
+- The app targets macOS 26.0 and later
 
 **Build from CLI:**
 ```bash
@@ -223,7 +210,7 @@ xcodebuild -project Ensembyte.xcodeproj \
 ### Ensembyte Desktop (Windows / Linux)
 
 **Requirements:**
-- Rust 2024 toolchain (`rustup default 2024`)
+- Rust stable toolchain with Rust 2024 Edition support (install with `rustup`)
 - Node.js 20+ (for the edge/worker component)
 
 **Build from CLI:**
@@ -254,7 +241,14 @@ scripts/release.sh
 # Produces: build.noindex/Ensembyte-<version>.dmg
 ```
 
-The release pipeline builds a production archive, verifies code signatures, notarizes with Apple `notarytool`, and packages a styled DMG installer.
+`scripts/release.sh` builds a production archive, verifies code signatures, notarizes with Apple `notarytool`, and creates a compressed DMG. It does not create the styled Finder window. To package an already-built app into the styled DMG, run:
+
+```bash
+cd Ensembyte-swift
+scripts/package_dmg.sh \
+  --app path/to/Ensembyte.app \
+  --output path/to/Ensembyte.dmg
+```
 
 ### Rust — Platform Packages
 
@@ -266,21 +260,7 @@ scripts/package-windows.ps1   # Produces .exe installer
 
 ### Publishing
 
-All releases are published to the designated release repository:
-
-```bash
-# macOS
-gh release create v1.0.0 build.noindex/Ensembyte-1.0.0.dmg \
-  --repo soumyachk101/Ensembyte \
-  --title "v1.0.0"
-
-# Linux / Windows
-gh release create v1.0.0 \
-  dist/ensembyte-linux-x86_64.tar.gz \
-  dist/Ensembyte-Setup.exe \
-  --repo soumyachk101/Ensembyte \
-  --title "v1.0.0"
-```
+All releases are published to the designated [GitHub Releases repository](https://github.com/soumyachk101/Ensembyte/releases). For macOS, use `Ensembyte-swift/scripts/publish_release.sh` after packaging. Rust releases are built and attached by `.github/workflows/release.yml` when a version tag is pushed. After publishing, update the website's download links and changelog.
 
 ---
 
@@ -384,7 +364,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 2. **Open an Issue** — For new features or significant changes, open a GitHub Issue first to align on design
 3. **Keep PRs Focused** — One concern per PR (bugfix, enhancement, refactoring)
 4. **Follow Guidelines** — Adhere to our [Code of Conduct](CODE_OF_CONDUCT.md) and [Contributing Guide](CONTRIBUTING.md)
-5. **Sign Off** — All commits must include `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
+5. **Sign Off** — Follow the DCO instructions in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 > The macOS app uses **worktrees for all experimental work**. See [`AGENTS.md`](AGENTS.md) for the workflow.
 
@@ -394,7 +374,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 
-**Latest:** Ensembyte v1.0 — macOS Liquid Glass client with Hydra multi-agent orchestration, embedded terminal, 26 themes, and full MCP integration.
+**Latest documented version:** v1.1.6. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
 
 ---
 
