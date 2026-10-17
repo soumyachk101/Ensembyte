@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.9] - 2026-10-17
+
+Ensembyte 1.1.9 delivers native WorkOS AuthKit cloud sync integration across desktop clients, custom loopback OAuth callback routing, refreshed high-resolution brand assets, and interactive test reporting with AI assistance.
+
+### Cross-Platform & Rust Updates (`Ensembyte-rust/`)
+- **WorkOS AuthKit & User Sync Integration**: Native WorkOS AuthKit integration replacing legacy third-party endpoints with loopback OAuth callbacks (`http://127.0.0.1:27641/callback`) and dynamic authentication endpoints (`https://ensembyte.vercel.app`).
+- **High-Resolution Vector Branding**: Upgraded `dist/ensembyte.svg` with embedded 1024×1024 high-resolution brand mark.
+- **Thinking Shader Orb & Test Results**: Added animated thinking shader orb with multi-gradient rotating states, dynamic reasoning tier indicators, and interactive test results runner.
+
 ## [1.1.8] - 2026-10-17
 
 Ensembyte 1.1.8 introduces an interactive Pro Diff Review system with unified/split views, word-level diff highlights, and inline feedback directly in chat, alongside intelligent auto-scrolling for active chat threads.

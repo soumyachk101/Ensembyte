@@ -5,6 +5,13 @@ All notable changes to Ensembyte are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-10-17
+
+### Added
+- **WorkOS AuthKit & Cloud Sync**: Complete custom WorkOS AuthKit integration for cloud synchronization with loopback callback server (`http://127.0.0.1:27641/callback`) and edge authentication routing.
+- **High-Resolution Vector Branding**: Updated `dist/ensembyte.svg` with embedded 1024×1024 high-resolution brand icon for crisp rendering on high-DPI displays.
+- **Thinking Shader Orb & Interactive Test Results**: Added interactive test results runner, motion loaders with multi-gradient shader orbs, and reasoning tier indicators in transcript views.
+
 ## [1.1.5] - 2026-10-12
 
 ### Added

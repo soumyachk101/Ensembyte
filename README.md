@@ -376,7 +376,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 
-**Latest documented version:** v1.1.8. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
+**Latest documented version:** v1.1.9. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
 
 ---
 
