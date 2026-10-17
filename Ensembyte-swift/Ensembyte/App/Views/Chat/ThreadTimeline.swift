@@ -519,9 +519,17 @@ struct ThreadTimeline: View, Equatable {
     }
 
     private func timelineScroll(blocks: [DisplayBlock], visible: [DisplayBlock], hidden: Int, topSpace: CGFloat, bottomSpace: CGFloat, rewindable: Set<UUID>) -> some View {
-        // What the stack renders last: the newest question badge, or the newest block.
-        // Its change is something arriving at the end of the conversation.
-        let lastEntryID = runtime.questions.last.map { "question-" + $0.id } ?? visible.last?.id
+        // What the timeline tracks for changes at the end of the conversation:
+        // questions, new blocks appended to the thread, or new entries within the current turn.
+        let lastEntryMarker: String = {
+            if let question = runtime.questions.last {
+                return "question-\(question.id)"
+            }
+            let blockID = blocks.last?.id ?? ""
+            let entryID = runtime.entries.last?.id ?? ""
+            let count = runtime.entries.count
+            return "\(blockID):\(entryID):\(count)"
+        }()
         // The outline the rail resolves against, kept in step with what is laid out. Rows
         // coming and going is when the stack can lose its place; a look a beat from now
         // costs nothing and catches it whether or not any row says so.
@@ -558,10 +566,10 @@ struct ThreadTimeline: View, Equatable {
         .defaultScrollAnchor(.bottom, for: .alignment)
         .defaultScrollAnchor(anchorsBottomOnGrowth ? .bottom : .top, for: .sizeChanges)
 
-        return applyScrollModifiers(scroll, blocks: blocks, visible: visible, lastEntryID: lastEntryID)
+        return applyScrollModifiers(scroll, blocks: blocks, visible: visible, lastEntryMarker: lastEntryMarker)
     }
 
-    private func applyScrollModifiers(_ content: some View, blocks: [DisplayBlock], visible: [DisplayBlock], lastEntryID: String?) -> some View {
+    private func applyScrollModifiers(_ content: some View, blocks: [DisplayBlock], visible: [DisplayBlock], lastEntryMarker: String) -> some View {
         let withScrollEvents = content
         // One value per frame, and only when it moved: `onGeometryChange` fires solely
         // on change, and the settle below runs once when the resize ends. The height is
@@ -641,13 +649,22 @@ struct ThreadTimeline: View, Equatable {
             // moving then is the layout settling, and reading it as a scroll unpinned the
             // end and left a thread opened at its bottom sitting some way up it.
             let anchorMove = anchorsBottomOnGrowth ? new.contentHeight - old.contentHeight : 0
-            let readerMoved = abs((new.offset - old.offset) - anchorMove) > 1
+            let isUserEvent = NSApp.currentEvent.map {
+                $0.type == .scrollWheel || $0.type == .leftMouseDragged || $0.type == .keyDown
+            } ?? false
+            let contentSizeChanged = new.contentHeight != old.contentHeight || new.containerHeight != old.containerHeight
+            let readerMoved: Bool
+            if contentSizeChanged {
+                // When content size changes (streaming text, new messages, expands), offset changes
+                // are driven by SwiftUI layout unless the user is actively scrolling with trackpad/wheel/drag.
+                readerMoved = (tracking.isUserScrolling || isUserEvent) && abs((new.offset - old.offset) - anchorMove) > 1
+            } else {
+                readerMoved = abs(new.offset - old.offset) > 1
+            }
             if readerMoved { tracking.noteReaderMovement() }
             let scrolled = tracking.isUserScrolling
-                || (!nudging && !tracking.isArriving && readerMoved
-                    && new.containerHeight == old.containerHeight && !tracking.isCoasting)
-            if !nudging, readerMoved,
-               let event = NSApp.currentEvent, event.type == .scrollWheel || event.type == .leftMouseDragged {
+                || (!nudging && !tracking.isArriving && readerMoved && !tracking.isCoasting)
+            if !nudging, readerMoved, isUserEvent {
                 tracking.noteUserNavigation()
             }
             guard tracking.placementToken == nil else { return }
@@ -726,10 +743,10 @@ struct ThreadTimeline: View, Equatable {
             }
         }
 
-        return applyStateChangeListeners(withScrollEvents, blocks: blocks, visible: visible, lastEntryID: lastEntryID)
+        return applyStateChangeListeners(withScrollEvents, blocks: blocks, visible: visible, lastEntryMarker: lastEntryMarker)
     }
 
-    private func applyStateChangeListeners(_ content: some View, blocks: [DisplayBlock], visible: [DisplayBlock], lastEntryID: String?) -> some View {
+    private func applyStateChangeListeners(_ content: some View, blocks: [DisplayBlock], visible: [DisplayBlock], lastEntryMarker: String) -> some View {
         content
             .task(id: ObjectIdentifier(scrollState)) {
             // Restart after ChatView replaces its scroll state on a thread switch.
@@ -803,6 +820,7 @@ struct ThreadTimeline: View, Equatable {
                 mountTail(in: blocks)
                 tracking.isPinnedToBottom = true
                 anchorsBottomOnGrowth = true
+                scrollState.showsJumpButton = false
                 if wasAtEnd || far {
                     // Already there: the message and the working line appear in place.
                     // From far up it lands at once too (see `farJump`).
@@ -828,6 +846,7 @@ struct ThreadTimeline: View, Equatable {
             tracking.noteUserNavigation()
             tracking.isPinnedToBottom = true
             anchorsBottomOnGrowth = true
+            scrollState.showsJumpButton = false
             // From far up the end lands at once: the glide would cross blocks the stack
             // holds only as spacers.
             let far = tracking.distanceFromBottom > Self.farJump(viewportHeight)
@@ -855,23 +874,19 @@ struct ThreadTimeline: View, Equatable {
             guard abs(tracking.distanceFromBottom) > 1 else { return }
             withTransaction(Self.unanimated) { position.scrollTo(edge: .bottom) }
         }
-        .onChange(of: lastEntryID) {
+        .onChange(of: lastEntryMarker) {
             // A message, tool row or turn landing at the end of the conversation brings
             // a reader who was at the end down to it, whatever the stack made of the
             // growth; a reader who scrolled up to read is left there, the jump button
             // says something arrived. A question badge is the one row that fetches
             // anyone: it waits on the reader. History loading itself above the viewport
             // must not yank the reader down, and an active drag is never fought: the
-            // next entry, or the geometry branch, catches up once it lets go. Growth
-            // inside an existing row stays with the pinned machinery above; this is for
-            // new rows only. A reader whose pin flag went stale while they sat at the end
-            // is followed by the distance they hold as well.
+            // next entry, or the geometry branch, catches up once it lets go.
             guard tracking.placementToken == nil, !historyLoadPending, !tracking.isUserScrolling else { return }
-            let isQuestion = lastEntryID?.hasPrefix("question-") == true
-            guard tracking.isPinnedToBottom || tracking.distanceFromBottom < 48 || isQuestion else { return }
-            // A reader following a long run lets the oldest rows go, above the viewport, so
-            // the eager stack stays bounded; they come back as history on the way up.
-            if visible.count > TimelineWindow.eagerLimit {
+            let isQuestion = lastEntryMarker.hasPrefix("question-")
+            let shouldFollow = tracking.isPinnedToBottom || tracking.distanceFromBottom < 48 || isQuestion || (runtime.isRunning && !tracking.isReaderScrolling)
+            guard shouldFollow else { return }
+            if visible.count > TimelineWindow.eagerLimit, blocks.count >= TimelineWindow.initial {
                 windowStartID = blocks[blocks.count - TimelineWindow.initial].id
             }
             mountTail(in: blocks)
@@ -890,6 +905,7 @@ struct ThreadTimeline: View, Equatable {
             mountedWindow = nil
             measurements = TimelineMeasurements()
             anchorsBottomOnGrowth = true
+            tracking.isPinnedToBottom = true
             historyLoadPending = false
             tracking.clearVisible()
         }
