@@ -27,4 +27,4 @@ harness = false
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 core-text = "21"
 core-foundation = "0.10"
-core-graphics = "0.24"
+core-graphics = "0.25"
