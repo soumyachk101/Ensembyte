@@ -14,7 +14,7 @@ extension HydraPrompts {
     /// The delegation block of a reply as far as it has streamed: nil until its opening
     /// fence is there. See `streamedDelegations(inBody:)`.
     static func streamedDelegations(in text: String) -> StreamedDelegations? {
-        guard let opener = text.firstMatch(of: #/```[ \t]*hydra(?:-sent)?[ \t]*\r?\n/#.ignoresCase())?.range else { return nil }
+        guard let opener = text.firstMatch(of: #/```[ \t]*(?:json:)?hydra(?:-(?:sent|leaving))?(?::json)?[ \t]*(?:json)?[ \t]*\r?\n/#.ignoresCase())?.range else { return nil }
         return streamedDelegations(inBody: text[opener.upperBound...])
     }
 
@@ -107,16 +107,25 @@ extension HydraPrompts {
     /// against the sidebar. An entry may also name one of the pair's head profiles
     /// ("profile"), which the spawner resolves the same way; an unknown profile runs on
     /// the shared worker model.
+    private static func firstNonEmptyString(in entry: JSONValue, keys: [String]) -> String? {
+        for key in keys {
+            if let str = entry[key]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty {
+                return str
+            }
+        }
+        return nil
+    }
+
     static func delegation(fromEntry entry: JSONValue) -> HydraDelegation? {
-        guard let prompt = entry["prompt"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else { return nil }
-        let task = entry["task"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let name = entry["name"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? entry["head"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let announced = (name?.isEmpty == false) ? name : nil
-        let project = entry["project"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? entry["repo"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let profile = entry["profile"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return HydraDelegation(task: task.isEmpty ? TextCleanup.singleLine(prompt, limit: 60) : task, prompt: prompt, name: announced, project: (project?.isEmpty == false) ? project : nil, profile: (profile?.isEmpty == false) ? profile : nil)
+        let taskCandidate = firstNonEmptyString(in: entry, keys: ["task", "title", "summary", "task_name"]) ?? ""
+        let promptCandidate = firstNonEmptyString(in: entry, keys: ["prompt", "instructions", "instruction", "brief", "description", "details", "task_description"]) ?? ""
+        let prompt = !promptCandidate.isEmpty ? promptCandidate : taskCandidate
+        guard !prompt.isEmpty else { return nil }
+        let task = !taskCandidate.isEmpty ? taskCandidate : TextCleanup.singleLine(prompt, limit: 60)
+        let announced = firstNonEmptyString(in: entry, keys: ["name", "head", "agent"])
+        let project = firstNonEmptyString(in: entry, keys: ["project", "repo"])
+        let profile = firstNonEmptyString(in: entry, keys: ["profile", "role"])
+        return HydraDelegation(task: task, prompt: prompt, name: announced, project: project, profile: profile)
     }
 
     fileprivate static func isJSONWhitespace(_ byte: UInt8) -> Bool {
@@ -181,10 +190,9 @@ final class HydraDelegationStreamParser {
 
     private func readOpenerEnd(_ byte: UInt8) {
         switch byte {
-        case 32, 9: opener = 14
-        case 13: opener = 15
         case 10: inBody = true
-        default: opener = byte == 96 ? 1 : 0
+        case 13: opener = 15
+        default: opener = 14
         }
     }
 

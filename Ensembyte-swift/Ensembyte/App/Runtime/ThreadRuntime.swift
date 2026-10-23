@@ -1130,9 +1130,18 @@ final class ThreadRuntime {
     /// message goes to heads and the pair has room. The local commands stay with the chat.
     /// Returns whether the head went out; if not, the message goes the ordinary way.
     private func dispatchSentHead(text: String, attachments: [Attachment]) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("/spawn ") || trimmed.hasPrefix("/hydra ") {
+            let prefixLen = trimmed.hasPrefix("/spawn ") ? 7 : 7
+            let taskPrompt = String(trimmed.dropFirst(prefixLen)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !taskPrompt.isEmpty {
+                let prompt = FollowUpPrompt(text: taskPrompt, attachments: attachments)
+                if dispatchHead(prompt, origin: .sent) { return true }
+            }
+        }
         guard let app, app.settings.hydraAlwaysHeads else { return false }
-        let prompt = FollowUpPrompt(text: text.trimmingCharacters(in: .whitespacesAndNewlines), attachments: attachments)
-        guard !prompt.isEmpty, prompt.text != "/plan", prompt.text != "/compact" else { return false }
+        let prompt = FollowUpPrompt(text: trimmed, attachments: attachments)
+        guard !prompt.isEmpty, prompt.text != "/plan", prompt.text != "/compact", prompt.text != "/hydra" else { return false }
         return dispatchHead(prompt, origin: .sent)
     }
 
@@ -1275,6 +1284,12 @@ final class ThreadRuntime {
         case "/compact" where thread?.provider.supportsCompact == true:
             if let provider = thread?.provider { app?.providers.recordCommand("compact", for: provider) }
             compact()
+            return true
+        case "/hydra":
+            guard let app, let thread else { return false }
+            let next = !app.hydraIsOn(thread)
+            app.setHydra(next, for: thread.id)
+            appendHydraNote("Hydra is now \(next ? "enabled" : "disabled") for this chat.")
             return true
         default:
             return false
@@ -1433,7 +1448,12 @@ final class ThreadRuntime {
                 // user-input boundary as well as keeping the routing policy in the session.
                 // Automatic reports retain their round limit and review-only instructions.
                 if hydraHeads == nil {
-                    prompt = HydraPrompts.delegationRequest(launch) + prompt
+                    let lower = text.lowercased()
+                    let explicitSpawn = (lower.contains("hydra") && (lower.contains("spawn") || lower.contains("delegate") || lower.contains("head")))
+                        || lower.contains("spawn heads")
+                        || lower.contains("/hydra")
+                        || lower.contains("/spawn")
+                    prompt = HydraPrompts.delegationRequest(launch, explicitSpawn: explicitSpawn) + prompt
                 }
             }
             // Leave slash commands at the start of the input; deliver guidance with the next ordinary message.

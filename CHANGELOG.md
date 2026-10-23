@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.10] - 2026-10-23
+
+Ensembyte 1.1.10 brings resilient Hydra head spawning across all LLM providers, explicit user spawn intent detection, and a built-in `/hydra` slash command with direct task dispatch.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Resilient Hydra Head Spawning**: Resolved an issue where Claude Code and CLI sessions bypassed the delegation block with inline tool commands; injected clear delegation schemas and anti-inline tool instructions directly at the user-turn boundary.
+- **Permissive Block Parser**: Enhanced `HydraDelegationStream` to dynamically resolve keys (`instructions`, `brief`, `description`, `title`, etc.) and tolerate language tag variations in fenced blocks (`hydra json`, `hydra:json`).
+- **Slash Command & Direct Dispatch**: Added `/hydra` command autocompletion to the composer, allowing users to toggle Hydra or immediately dispatch background heads with `/hydra <task>`.
+- **Explicit Spawn Recognition**: Automatically identifies delegation keywords (e.g. "spawn hydra", "spawn heads") and guides the model to delegate immediately without inline tool loops.
+
 ## [1.1.9] - 2026-10-17
 
 Ensembyte 1.1.9 delivers native WorkOS AuthKit cloud sync integration across desktop clients, custom loopback OAuth callback routing, refreshed high-resolution brand assets, and interactive test reporting with AI assistance.
