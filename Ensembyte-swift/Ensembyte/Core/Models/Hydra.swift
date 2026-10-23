@@ -777,7 +777,7 @@ enum HydraPrompts {
         // the purpose, so the wording keeps the routing on the name's own meaning.
         let profileRule = profiles.isEmpty ? "" : " Some heads are tuned for a purpose: \(profiles.map(\.briefLabel).joined(separator: ", ")). Route a task to one with \"profile\", as in `{\"task\": \"...\", \"prompt\": \"...\", \"profile\": \"\(profiles[0].name)\"}`; a task that fits none of them goes without a profile and runs on the heads' shared model, as does one whose profile names none of these."
         return """
-        [Hydra is on] You lead \(team) ("heads"). Delegate first, work second: anything bigger than a single obvious change to a single file is a job for heads. Audits, reviews, a feature across several files, a refactor, "check everything", research across many files, several tasks in one message: in your first reply, look at the code only long enough to write good briefs, a minute and a handful of files rather than ten, and then send the heads out, all of them in that one block. Never spend minutes reading before you delegate, and never do inline what heads could be doing in parallel. Only a truly single-focus request, one file and one obvious change, is yours to do alone, and size the team to the work rather than to how many heads are free: a small job whose pieces depend on each other is one head's task, or your own, not a team of heads.         Finish your reply with one fenced block
+        [Hydra is on] You lead \(team) ("heads"). Delegate first, work second: anything bigger than a single obvious change to a single file is a job for heads. Audits, reviews, a feature across several files, a refactor, "check everything", research across many files, several tasks in one message: in your first reply, do NOT execute commands, builds, or code changes inline. Look at the code only long enough to write good briefs (at most a quick read), and then send the heads out, all of them in that one block. Never spend minutes reading before you delegate, and never do inline what heads could be doing in parallel. Only a truly single-focus request, one file and one obvious change, is yours to do alone, and size the team to the work rather than to how many heads are free: a small job whose pieces depend on each other is one head's task, or your own, not a team of heads.         Finish your reply with one fenced block
 
         ```hydra
         [{"task": "short title", "prompt": "complete, self-contained instructions with the exact files and acceptance criteria"}]
@@ -842,11 +842,21 @@ enum HydraPrompts {
     /// The user's enabled Hydra setting expressed alongside their request. Codex's
     /// manual delegation mode needs a user/project/skill request, not only the standing
     /// developer policy. Keep this out of automatic reports, which have their own limit.
-    static func delegationRequest(_ launch: HydraLaunch) -> String {
-        let route = "Delegate through the final hydra block so Ensembyte runs the selected heads; do not use native agent tools."
+    static func delegationRequest(_ launch: HydraLaunch, explicitSpawn: Bool = false) -> String {
+        let route = "Delegate through the final hydra block so Ensembyte runs the selected heads in parallel; do not use native agent tools."
+        let promptRule = explicitSpawn
+            ? "The user explicitly requested to spawn Hydra heads. Do NOT perform research, file edits, or tool commands inline yourself. You MUST immediately reply with the ```hydra block below."
+            : "Use Hydra heads for this request when it involves multiple files, an audit, broad research, independent tasks, or when asked to spawn heads. Keep only a single obvious change in one file with the lead. \(route) Follow any explicit request below to work alone or limit delegation."
         return """
         [Hydra setting: enabled]
-        Use Hydra heads for this request when it involves multiple files, an audit, broad research, or independent tasks. Keep a single obvious change in one file with the lead. \(route) Follow any explicit request below to work alone or limit delegation.
+        \(promptRule)
+        Finish your reply with one fenced block and stop there:
+
+        ```hydra
+        [{"task": "short title", "prompt": "complete, self-contained instructions with the exact files and acceptance criteria"}]
+        ```
+
+        Do not execute tool-use loops, commands, or edits inline before delegating: send the heads out in that block immediately.
 
         ---
 
@@ -910,7 +920,7 @@ enum HydraPrompts {
     /// The opening fence of a delegation block: three backticks, the word hydra in any
     /// case, and the end of that line.
     private static func delegationOpener(in text: String) -> Range<String.Index>? {
-        text.firstMatch(of: #/```[ \t]*hydra(?:-sent|-leaving)?[ \t]*\r?\n/#.ignoresCase())?.range
+        text.firstMatch(of: #/```[ \t]*(?:json:)?hydra(?:-(?:sent|leaving))?(?::json)?[ \t]*(?:json)?[ \t]*\r?\n/#.ignoresCase())?.range
     }
 
     /// Every three backticks that open a line from `start` on, in order. A fence with an
@@ -947,7 +957,7 @@ enum HydraPrompts {
     /// opening fence is, so a reader that has scanned the text up to some point only
     /// needs to scan what arrived since (see `HydraButton`).
     static func hasDelegationOpener(in tail: Substring) -> Bool {
-        tail.firstMatch(of: #/```[ \t]*hydra(?:-sent|-leaving)?[ \t]*\r?\n/#.ignoresCase()) != nil
+        tail.firstMatch(of: #/```[ \t]*(?:json:)?hydra(?:-(?:sent|leaving))?(?::json)?[ \t]*(?:json)?[ \t]*\r?\n/#.ignoresCase()) != nil
     }
 
     /// The delegation block at the end of a reply, if the lead wrote one. The body up to

@@ -544,6 +544,7 @@ struct ComposerView: View {
         if thread.provider.supportsCompact {
             commands.append(SlashCommand(name: "compact", detail: "Summarize the conversation to free up context", isBuiltIn: true))
         }
+        commands.append(SlashCommand(name: "hydra", detail: model.hydraIsOn(thread) ? "Spawn Hydra head(s) for task(s)" : "Turn Hydra on for this chat", isBuiltIn: true))
         commands += model.providers.commands[commandKey] ?? []
         return SlashCommand.suggestions(commands, matching: query, recent: model.providers.recentCommands[thread.provider.rawValue] ?? []).map { command in
             Suggestion(value: "/\(command.name) ", title: "/\(command.name)", detail: command.detail, symbol: command.isBuiltIn ? "command" : "sparkles", command: command)
