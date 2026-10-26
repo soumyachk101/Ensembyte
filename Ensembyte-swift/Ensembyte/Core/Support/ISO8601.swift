@@ -22,7 +22,8 @@ enum ISO8601 {
 
     /// A bare date with no time; `nil` for anything else.
     static func dateOnly(from text: String) -> Date? {
-        try? dateOnly.parse(text)
+        guard !text.contains("T"), text.count == 10 else { return nil }
+        return try? dateOnly.parse(text)
     }
 
     /// A stamp for a filename or a prompt: whole seconds, UTC, `Z` suffix.

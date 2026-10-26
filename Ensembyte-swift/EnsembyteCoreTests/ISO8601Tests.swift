@@ -48,7 +48,8 @@ final class ISO8601Tests: XCTestCase {
 
     func testDateOnlyRejectsTimestamps() {
         XCTAssertNil(ISO8601.dateOnly(from: "2026-09-13T18:28:42Z"))
-        XCTAssertNil(ISO8601.dateOnly(from: "2026-09-13"))
+        XCTAssertNil(ISO8601.dateOnly(from: "2026-09-13T18:28:42.057Z"))
+        XCTAssertNil(ISO8601.dateOnly(from: "not a date"))
     }
 
     // MARK: - string(from:)

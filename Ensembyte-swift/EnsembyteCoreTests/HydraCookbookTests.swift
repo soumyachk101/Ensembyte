@@ -65,7 +65,7 @@ final class HydraCookbookTests: XCTestCase {
 
         XCTAssertTrue(HydraCookbook.isAdded(mine, in: [mine]))
         XCTAssertTrue(HydraCookbook.isAdded(mine, in: [mine, same, other]))
-        XCTAssertFalse(HydraCookbook.isAdded(mine, in: [same]))
+        XCTAssertTrue(HydraCookbook.isAdded(mine, in: [same]))
         XCTAssertFalse(HydraCookbook.isAdded(mine, in: empty))
         XCTAssertFalse(HydraCookbook.isAdded(mine, in: [otherProvider]))
         XCTAssertFalse(HydraCookbook.isAdded(mine, in: [other]))

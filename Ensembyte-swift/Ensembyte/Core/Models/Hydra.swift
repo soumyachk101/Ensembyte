@@ -917,10 +917,15 @@ enum HydraPrompts {
         "[Hydra] " + message + "\n\n---\n\n"
     }
 
+    private nonisolated(unsafe) static let delegationOpenerRegex = #/```[ \t]*(?:json:)?hydra(?:-(?:sent|leaving))?(?::json)?[ \t]*(?:json)?[ \t]*\r?\n/#.ignoresCase()
+    private nonisolated(unsafe) static let sentDelegationBlockRegex = #/```[ \t]*hydra-(?:sent|leaving)[ \t]*\r?\n/#.ignoresCase()
+    private nonisolated(unsafe) static let leavingDelegationBlockRegex = #/```[ \t]*hydra-leaving[ \t]*\r?\n/#.ignoresCase()
+
     /// The opening fence of a delegation block: three backticks, the word hydra in any
     /// case, and the end of that line.
     private static func delegationOpener(in text: String) -> Range<String.Index>? {
-        text.firstMatch(of: #/```[ \t]*(?:json:)?hydra(?:-(?:sent|leaving))?(?::json)?[ \t]*(?:json)?[ \t]*\r?\n/#.ignoresCase())?.range
+        guard text.contains("```") else { return nil }
+        return text.firstMatch(of: delegationOpenerRegex)?.range
     }
 
     /// Every three backticks that open a line from `start` on, in order. A fence with an
@@ -957,7 +962,8 @@ enum HydraPrompts {
     /// opening fence is, so a reader that has scanned the text up to some point only
     /// needs to scan what arrived since (see `HydraButton`).
     static func hasDelegationOpener(in tail: Substring) -> Bool {
-        tail.firstMatch(of: #/```[ \t]*(?:json:)?hydra(?:-(?:sent|leaving))?(?::json)?[ \t]*(?:json)?[ \t]*\r?\n/#.ignoresCase()) != nil
+        guard tail.contains("```") else { return false }
+        return tail.firstMatch(of: delegationOpenerRegex) != nil
     }
 
     /// The delegation block at the end of a reply, if the lead wrote one. The body up to
@@ -993,6 +999,7 @@ enum HydraPrompts {
 
     /// The reply with its delegation block taken out, for what the lead said to the user.
     static func withoutDelegationBlock(_ text: String) -> String {
+        guard text.contains("```") else { return text.trimmed }
         var kept = text
         if let range = delegationBlockRange(in: text) { kept.removeSubrange(range) }
         return kept.trimmed
@@ -1009,12 +1016,14 @@ enum HydraPrompts {
     /// Whether the reply holds a delegation block already marked sent or on its way out
     /// (see `markingDelegationBlockSent` and `markingDelegationBlockLeaving`).
     static func hasSentDelegationBlock(in text: String) -> Bool {
-        text.contains(#/```[ \t]*hydra-(?:sent|leaving)[ \t]*\r?\n/#.ignoresCase())
+        guard text.contains("hydra-") else { return false }
+        return text.contains(sentDelegationBlockRegex)
     }
 
     /// Whether the reply's delegation block is fading out (its info string is `hydra-leaving`).
     static func hasLeavingDelegationBlock(in text: String) -> Bool {
-        text.contains(#/```[ \t]*hydra-leaving[ \t]*\r?\n/#.ignoresCase())
+        guard text.contains("hydra-leaving") else { return false }
+        return text.contains(leavingDelegationBlockRegex)
     }
 
     /// The reply with its sent block's info string turned into `hydra-leaving`: the card fades

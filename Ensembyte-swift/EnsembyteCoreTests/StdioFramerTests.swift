@@ -49,7 +49,7 @@ final class StdioFramerTests: XCTestCase {
     }
 
     func testContentLengthZeroBody() throws {
-        let frames = try frames(Data("Content-Length: 0\r\n\r\nNext: 2\r\n\r\nab".utf8), framing: .contentLength)
+        let frames = try frames(Data("Content-Length: 0\r\n\r\nContent-Length: 2\r\n\r\nab".utf8), framing: .contentLength)
         XCTAssertEqual(frames, [Data(), Data("ab".utf8)])
     }
 
@@ -60,7 +60,7 @@ final class StdioFramerTests: XCTestCase {
 
     func testContentLengthSplitAcrossChunks() throws {
         var framer = StdioFramer(framing: .contentLength)
-        XCTAssertEqual(try framer.append(Data("Content-Length: 6\r\n".utf8)), [])
+        XCTAssertEqual(try framer.append(Data("Content-Length: 12\r\n".utf8)), [])
         XCTAssertEqual(try framer.append(Data("\r\nhello ".utf8)), [])
         XCTAssertEqual(try framer.append(Data("world!".utf8)), [Data("hello world!".utf8)])
         XCTAssertNil(framer.finish())

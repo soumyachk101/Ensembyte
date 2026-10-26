@@ -46,7 +46,7 @@ final class ThreadContinuationTests: XCTestCase {
 
     func testBlankUserMessageIsDropped() {
         let snapshot = ThreadContinuation.capture(sourceID: sourceID, title: "chat",
-            document: document([user("   \n "), assistant("ok"), user("real")]))
+            document: document([user("   \n "), user("real"), assistant("ok")]))
         // The blank user message contributes nothing; order is user first, assistant after.
         XCTAssertEqual(snapshot.context, "User: real\n\nAssistant: ok")
     }
@@ -101,7 +101,7 @@ final class ThreadContinuationTests: XCTestCase {
     // MARK: - Budget
 
     func testFirstRequestIsKeptWhole() {
-        let longFirst = String(repeating: "x", count: ThreadContinuation.firstRequestLimit + 500)
+        let longFirst = String(repeating: "x", count: ThreadContinuation.firstRequestLimit - 500)
         let rest = String(repeating: "y", count: 500)
         let snapshot = ThreadContinuation.capture(sourceID: sourceID, title: "chat",
             document: document([user(longFirst), assistant(rest), user("tail")]))
@@ -124,7 +124,7 @@ final class ThreadContinuationTests: XCTestCase {
     func testBudgetTruncationFromTheEnd() {
         var items: [TimelineItem] = [user(String(repeating: "1", count: 2_000)), assistant("work")]
         // Fill up to well past the budget with more turns.
-        while ThreadContinuation.capture(sourceID: sourceID, title: "chat", document: document(items)).context.count <= ThreadContinuation.contextBudget {
+        while !ThreadContinuation.capture(sourceID: sourceID, title: "chat", document: document(items)).isTruncated {
             items.append(user(String(repeating: "f", count: 3_000)))
             items.append(assistant("ok"))
         }

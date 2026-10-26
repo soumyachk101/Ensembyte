@@ -104,8 +104,18 @@ extension ThreadContinuation {
         var parts: [String] = []
         if omittedHistory { parts.append(truncationMarker) }
         if let inherited { parts.append(inherited) }
-        if omittedMessages && !omittedHistory { parts.append(truncationMarker) }
-        parts.append(contentsOf: kept.map(\.text))
+        if omittedMessages && !omittedHistory {
+            if let first = kept.first, let firstRequest, first.index == firstRequest {
+                parts.append(first.text)
+                parts.append(truncationMarker)
+                parts.append(contentsOf: kept.dropFirst().map(\.text))
+            } else {
+                parts.append(truncationMarker)
+                parts.append(contentsOf: kept.map(\.text))
+            }
+        } else {
+            parts.append(contentsOf: kept.map(\.text))
+        }
 
         var seenPaths = Set<String>()
         let attachments = (inheritedAttachments + kept.flatMap { units[$0.index].attachments })
