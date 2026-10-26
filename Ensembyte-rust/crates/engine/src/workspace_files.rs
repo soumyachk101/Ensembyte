@@ -997,6 +997,91 @@ fn is_internal_temp_wire_path(path: &str) -> bool {
         .is_some_and(|name| name.starts_with(".ensembyte-save-") && name.ends_with(".tmp"))
 }
 
+/// Secrets a remote peer must never see through this surface.
+///
+/// `includeIgnored` makes git-ignored files visible to any device in the same
+/// synced account — ignored-file visibility is a display convenience, NOT an
+/// authorization boundary. So this denylist is enforced regardless of
+/// `include_ignored`: matching files are never listed, never read, and never
+/// written. The matcher is path-segment-aware (`.env` is denied but
+/// `environment.ts` is not) and case-insensitive where the asset class
+/// matters (`PEM` and `Pem` are still keys).
+pub const WORKSPACE_SECRET_DENYLIST: &[&str] = &[
+    ".env",
+    ".env.*",
+    "*.env",
+    "id_*",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    "credentials",
+    "credentials.*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*.keystore",
+    "*.jks",
+];
+
+/// True when a workspace-relative wire path (or any of its directory
+/// prefixes) matches [`WORKSPACE_SECRET_DENYLIST`]. Matching is done on the
+/// lowercased leaf name against the lowercased patterns, so `PEM` still means
+/// `pem`. A path is denied when its name matches OR any of its directory
+/// prefixes matches — `a/.env/b` hides its contents behind the denylisted
+/// directory just as the read paths would refuse to open it.
+pub fn is_sensitive_workspace_path(wire_path: &str) -> bool {
+    // Walk every segment of the wire path; a path is denied if ANY of its
+    // directory prefixes or its own leaf name matches the denylist.  This
+    // handles both `foo/.env` (leaf matches) and `.env/secret` (prefix
+    // matches, so the directory and everything inside it is hidden).
+    let mut names: Vec<String> = Vec::new();
+    for component in wire_path.split('/') {
+        names.push(component.to_ascii_lowercase());
+        if denylist_matches_name(&names) {
+            return true;
+        }
+    }
+    false
+}
+
+fn denylist_matches_name(names: &[String]) -> bool {
+    let Some(leaf) = names.last() else {
+        return false;
+    };
+    // A single-component list has no parent; `len() - 2` would underflow on it.
+    let parent = names.get(names.len().wrapping_sub(2));
+    for pattern in WORKSPACE_SECRET_DENYLIST {
+        if leaf == *pattern {
+            // Exact name match: `.env`, `id_rsa`, `credentials`, …
+            return true;
+        }
+        if let Some(extension) = pattern.strip_prefix("*.") {
+            // `*.env`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.keystore`, `*.jks`
+            if leaf.ends_with(&format!(".{extension}")) {
+                return true;
+            }
+        }
+        if let Some(stem) = pattern.strip_suffix(".*") {
+            // `credentials.*` — stem `credentials` optionally followed by a dot
+            if leaf == stem || leaf.starts_with(&format!("{stem}.")) {
+                return true;
+            }
+        }
+        if let Some(prefix) = pattern.strip_suffix('_') {
+            // `id_*` — any name of the form `id` + underscore + suffix
+            if leaf == &format!("{prefix}_") || leaf.starts_with(&format!("{prefix}_")) {
+                return true;
+            }
+        }
+        if parent.is_some_and(|p| p == pattern) {
+            // A denylisted parent directory hides its children
+            return true;
+        }
+    }
+    false
+}
+
 fn exceeds_watch_budget(root: &Path) -> bool {
     let mut queue = std::collections::VecDeque::from([root.to_path_buf()]);
     let mut seen = 0usize;
@@ -1087,10 +1172,11 @@ fn list_directory_blocking(
         if contains_git_component(relative) {
             continue;
         }
-        if path_to_wire(relative)
-            .ok()
-            .is_some_and(|path| is_internal_temp_wire_path(&path))
-        {
+        let path = path_to_wire(relative)?;
+        if is_sensitive_workspace_path(&path) {
+            continue;
+        }
+        if is_internal_temp_wire_path(&path) {
             continue;
         }
         if entries.len() == MAX_DIRECTORY_ENTRIES {
@@ -1249,6 +1335,9 @@ fn search_workspace_blocking(
         if is_internal_temp_wire_path(&path) {
             continue;
         }
+        if is_sensitive_workspace_path(&path) {
+            continue;
+        }
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(score) = workspace_search_score(&name, &path, &query_lower) else {
             continue;
@@ -1298,6 +1387,11 @@ fn read_image_blocking(
     relative: &WorkspaceRelativePath,
     request: &ensembyte_proto::ReadWorkspaceImageRequest,
 ) -> Result<ensembyte_proto::WorkspaceImageChunk, WorkspaceFilesError> {
+    if is_sensitive_workspace_path(&relative.wire_path()) {
+        return Err(WorkspaceFilesError::Authorization(
+            "path is not readable".into(),
+        ));
+    }
     use base64::Engine as _;
     use std::io::Read;
     use ensembyte_proto::{MAX_WORKSPACE_IMAGE_BYTES, WORKSPACE_IMAGE_CHUNK_BYTES};
@@ -1476,6 +1570,11 @@ fn read_file_blocking(
     relative: &WorkspaceRelativePath,
     cancel: &AtomicBool,
 ) -> Result<WorkspaceFileText, WorkspaceFilesError> {
+    if is_sensitive_workspace_path(&relative.wire_path()) {
+        return Err(WorkspaceFilesError::Authorization(
+            "path is not readable".into(),
+        ));
+    }
     let path = root.join(relative.as_path());
     let wire_path = relative.wire_path();
     let metadata = match checked_file_metadata(root, relative) {
@@ -1780,6 +1879,11 @@ fn write_file_blocking(
     bytes: &[u8],
     cancel: &AtomicBool,
 ) -> Result<WriteWorkspaceFileOutcome, WorkspaceFilesError> {
+    if is_sensitive_workspace_path(&relative.wire_path()) {
+        return Err(WorkspaceFilesError::Authorization(
+            "path is not writable".into(),
+        ));
+    }
     let target = root.join(relative.as_path());
     let (metadata, current_bytes) = match current_write_revision(root, relative) {
         Ok(revision) => revision,
@@ -2014,6 +2118,11 @@ fn checked_directory(
     root: &Path,
     directory: &WorkspaceRelativePath,
 ) -> Result<PathBuf, WorkspaceFilesError> {
+    if is_sensitive_workspace_path(&directory.wire_path()) {
+        return Err(WorkspaceFilesError::Authorization(
+            "directory is not accessible".into(),
+        ));
+    }
     let canonical_root =
         std::fs::canonicalize(root).map_err(|error| WorkspaceFilesError::Io(error.to_string()))?;
     let mut current = root.to_path_buf();

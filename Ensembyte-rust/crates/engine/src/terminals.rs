@@ -93,6 +93,12 @@ impl LiveTerminal {
 
 struct TerminalsInner {
     sessions: Mutex<HashMap<String, Arc<Mutex<LiveTerminal>>>>,
+    /// How long an EXITED session's inert replay buffer is kept before the
+    /// reaper sweeps it. Fixed at construction; the reaper captures it once, so
+    /// the retention predicate is stable for the process's lifetime.
+    exit_ttl: Duration,
+    /// Reaper tick cadence. Also fixed at construction.
+    reaper_interval: Duration,
 }
 
 impl Drop for TerminalsInner {
@@ -154,9 +160,19 @@ fn selected_shell() -> String {
 impl Terminals {
     /// Requires a tokio runtime (spawns the exited-session reaper).
     pub fn new() -> Self {
+        Self::new_with_intervals(EXITED_TTL, REAPER_INTERVAL)
+    }
+
+    /// [`Terminals::new`] with explicit reaper timing — a test hook so the
+    /// exited-session sweep is exercisable without waiting out the production
+    /// [`EXITED_TTL`] / [`REAPER_INTERVAL`].
+    #[doc(hidden)]
+    pub fn new_with_intervals(exit_ttl: Duration, reaper_interval: Duration) -> Self {
         let terminals = Self {
             inner: Arc::new(TerminalsInner {
                 sessions: Mutex::new(HashMap::new()),
+                exit_ttl,
+                reaper_interval,
             }),
         };
         tokio::spawn(reaper_task(Arc::downgrade(&terminals.inner)));
@@ -628,17 +644,33 @@ async fn pump_output(
 /// Live shells never expire on idleness — a detached session is the user's running
 /// process. Only EXITED sessions are swept after [`EXITED_TTL`]: they're inert
 /// replay buffers held so a returning viewer can show the tail + exit status.
-async fn reaper_task(inner: Weak<TerminalsInner>) {
-    let mut tick = tokio::time::interval(REAPER_INTERVAL);
+fn session_survives(
+    exited: bool,
+    last_active_at: &std::time::Instant,
+    exit_ttl: Duration,
+    now: std::time::Instant,
+) -> bool {
+    !exited || now.duration_since(*last_active_at) <= exit_ttl
+}
+
+async fn reaper_task(weak: Weak<TerminalsInner>) {
+    // Capture the (immutable, per-instance) intervals up front: the reaper
+    // tick cadence and the exit TTL are construction-time choices, not something
+    // that can shift out from under a running loop.
+    let (exit_ttl, reaper_interval) = weak.upgrade().map_or((EXITED_TTL, REAPER_INTERVAL), |inner| {
+        (inner.exit_ttl, inner.reaper_interval)
+    });
+    let mut tick = tokio::time::interval(reaper_interval);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     tick.tick().await; // consume the immediate first tick
     loop {
         tick.tick().await;
-        let Some(inner) = inner.upgrade() else { break };
+        let Some(inner) = weak.upgrade() else { break };
+        let now = std::time::Instant::now();
         let mut sessions = lock(&inner.sessions);
         sessions.retain(|_, session| {
             let session = lock(session);
-            !(session.exited && session.last_active_at.elapsed() > EXITED_TTL)
+            session_survives(session.exited, &session.last_active_at, exit_ttl, now)
         });
     }
 }
@@ -1193,5 +1225,104 @@ mod initial_command_tests {
                 .is_err()
         );
         assert!(!terminals.any_open());
+    }
+}
+
+#[cfg(all(test, unix))]
+mod reaper_ttl_tests {
+    use super::{lock, session_survives, Terminals};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+
+    /// The exited-session sweep must actually fire: an EXITED session whose
+    /// idle replay buffer outlives the exit TTL is reaped, while a live
+    /// session and a still-fresh exited one are both kept. Runs the real
+    /// reaper loop through a real PTY so the TTL is observed end to end, with
+    /// the production [`super::EXITED_TTL`] shortened to a few seconds.
+    #[tokio::test]
+    async fn reaper_sweeps_only_exited_sessions_past_the_ttl() {
+        let root = tempfile::tempdir().unwrap();
+        // A handful of seconds instead of 30 minutes; a fast reaper tick.
+        let terminals =
+            Terminals::new_with_intervals(Duration::from_secs(2), Duration::from_millis(50));
+
+        let exited = terminals
+            .open_session(
+                root.path().to_str().unwrap(),
+                80,
+                24,
+                Some("/bin/sh"),
+                &HashMap::new(),
+                Some("exit 3"),
+            )
+            .unwrap();
+        let live = terminals
+            .open_session(
+                root.path().to_str().unwrap(),
+                80,
+                24,
+                Some("/bin/sh"),
+                &HashMap::new(),
+                None,
+            )
+            .unwrap();
+
+        // Wait for the exited session's shell to actually exit, so the reaper
+        // has something to sweep rather than a still-running process.
+        let mut rx = terminals.subscribe(&exited.id, None).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while let Some(event) = rx.recv().await {
+                if matches!(event, ensembyte_proto::TerminalEvent::Exit { .. }) {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
+
+        // Right after exit it is still fresh — the reaper keeps it.
+        let exited_session = terminals.session(&exited.id).unwrap();
+        let fresh = lock(&exited_session).last_active_at;
+        assert!(session_survives(
+            true,
+            &fresh,
+            Duration::from_secs(2),
+            Instant::now(),
+        ));
+
+        // Give the real reaper task time to run its first sweep and find the
+        // session still inside the TTL, then wait past the TTL and confirm it
+        // was swept (not the live session, not a close/drop, just the timer).
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        assert!(
+            terminals.session(&exited.id).is_err(),
+            "an exited session past its TTL must be reaped by the timer"
+        );
+        assert!(
+            terminals.session(&live.id).is_ok(),
+            "a live shell must never be swept by the exit TTL"
+        );
+        terminals.close(&live.id).unwrap();
+        assert!(
+            !terminals.any_open(),
+            "the live shell closes explicitly; the exited one is already gone"
+        );
+    }
+
+    /// The pure retention predicate: only an EXITED session whose last-activity
+    /// stamp is older than the TTL is dropped; everything else survives.
+    #[test]
+    fn retention_predicate_keeps_live_and_fresh_exited() {
+        let ttl = Duration::from_secs(2);
+        let now = Instant::now();
+        // Live sessions always survive, no matter how old their stamp is.
+        assert!(session_survives(false, &now, ttl, now));
+        assert!(session_survives(false, &now, ttl, now + ttl * 3));
+        // Exited within the TTL survive (the sweep condition is strictly
+        // `elapsed > ttl`, so the boundary itself still holds the session).
+        assert!(session_survives(true, &now, ttl, now + ttl - Duration::from_millis(1)));
+        assert!(session_survives(true, &now, ttl, now + ttl));
+        // Exited past the TTL are swept.
+        assert!(!session_survives(true, &now, ttl, now + ttl + Duration::from_millis(1)));
     }
 }

@@ -5,7 +5,7 @@
 Ensembyte is an umbrella project for a native coding-agent client. The two apps that live under it do the same job — give you a window onto the CLI-based coding agents (Claude Code, Codex, Cursor, and others) that you already pay for — but they pick different stacks so you can pick the one that matches your platform.
 
 - **Ensembyte for macOS** — a native Swift / SwiftUI app exclusively for **macOS 26+** (Apple silicon). Lives in `Ensembyte-swift/`. Releases produce `.dmg` installer packages.
-- **Ensembyte Desktop** — a native Rust / GPUI app exclusively for **Windows and Linux**. Lives in `Ensembyte-rust/`. Releases produce Windows installers (`.exe` / `.zip`) and Linux packages (`.tar.gz` / `.AppImage` / `.deb`).
+- **Ensembyte Desktop** — a native Rust / GPUI app that targets **macOS, Windows, and Linux** from one codebase. Lives in `Ensembyte-rust/`. Releases ship Windows installers (`.exe` / `.zip`) and Linux packages (`.tar.gz` / `.AppImage` / `.deb`); **macOS packaging is configured but not yet executed**, so no macOS build of the Rust app is published.
 
 Ensembyte is the umbrella that owns the brand, the website, and the cross-project documentation. Author: Soumya Chakraborty.
 
@@ -13,7 +13,7 @@ Both apps share the same product concepts:
 
 - A persistent **project, thread, and worktree** surface.
 - A **provider adapter** layer that shells out to the CLI tools you already have installed and signed in, on your own subscriptions. Neither app embeds a model.
-- **Hydra** multi-head orchestration in Ensembyte for macOS, where a single chat fans out into parallel agent worktrees that are merged back as one result.
+- **Hydra** multi-head orchestration in Ensembyte for macOS (Swift only; the Rust port is in progress), where a single chat fans out into parallel agent worktrees that are merged back as one result.
 - A **Model Context Protocol (MCP)** integration layer with a catalog of preconfigured servers, stdio/HTTP/SSE transports, and an OAuth flow.
 - **Local-first state** with crash-safe writes, versioned migrations, and a theme system.
 - **Provider-aware credit and plan-limit tracking** so you can see quota state inline.

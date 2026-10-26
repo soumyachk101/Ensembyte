@@ -285,3 +285,82 @@ async fn deleted_checkout_is_evicted_after_grace() {
     );
     core.shutdown().await;
 }
+
+/// Crash/restart recovery: the only durable state is the workspace chat rows
+/// and the on-disk tree — entries, checksums, and identity memos all live in
+/// the service's memory. A service built after the crash must re-hydrate the
+/// entry from scratch, and because the checksum is a pure `sha256` over
+/// `branch ‖ head ‖ patch ‖ files ‖ truncated` (no memory-resident state in
+/// it), it must publish the *identical* checksum for an untouched tree. The
+/// same idle re-capture must be idempotent at the service level: a repair
+/// over an unchanged tree re-publishes nothing, leaving `updated_at` alone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restart_rehydrates_entry_with_identical_checksum() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_dir = tmp.path().join("repo");
+    init_dirty_repo(&repo_dir).await;
+
+    let core = assemble(&tmp.path().join("data"));
+    core.workspace
+        .create_space(
+            "space-1",
+            &core.device_id,
+            &repo_dir.to_string_lossy(),
+            None,
+            true,
+        )
+        .expect("space row");
+    core.workspace
+        .create_chat("chat-1", Some("space-1"), None, None, None)
+        .expect("chat row");
+    wait_chat_state(&core, "chat-1", true).await;
+
+    // Long grace: this test never exercises eviction, only re-hydration.
+    const LONG_GRACE: Duration = Duration::from_secs(3_600);
+
+    // Pre-crash service: re-hydrate the entry and capture once.
+    let crashed = CheckoutDiffSync::start_with_orphan_grace(
+        core.repos.clone(),
+        core.workspace.clone(),
+        &core.device_id,
+        None,
+        LONG_GRACE,
+    );
+    crashed.reconcile_now().await;
+    let before = wait_for_diff(&crashed).await;
+
+    // The crash: in-memory entries and checksum state are gone.
+    crashed.shutdown().await;
+
+    // Restart: the fresh service re-resolves the same chat row into the same
+    // checkout, re-captures, and must publish the identical checksum.
+    let restarted = CheckoutDiffSync::start_with_orphan_grace(
+        core.repos.clone(),
+        core.workspace.clone(),
+        &core.device_id,
+        None,
+        LONG_GRACE,
+    );
+    restarted.reconcile_now().await;
+    let after = wait_for_diff(&restarted).await;
+    assert_eq!(after.checkout_id, before.checkout_id);
+    assert_eq!(
+        after.checksum, before.checksum,
+        "the checksum must be a pure function of the tree, not of memory state"
+    );
+
+    // Idle idempotency: a repair over the untouched tree re-captures but
+    // publishes nothing new — same checksum, same publish timestamp.
+    restarted.repair_now().await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let idle = current_diffs(&restarted);
+    assert_eq!(idle.len(), 1);
+    assert_eq!(idle[0].checksum, after.checksum);
+    assert_eq!(
+        idle[0].updated_at, after.updated_at,
+        "an idle re-capture must not re-publish"
+    );
+
+    restarted.shutdown().await;
+    core.shutdown().await;
+}

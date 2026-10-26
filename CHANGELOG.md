@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.11] - 2026-10-26
+
+Ensembyte 1.1.11 introduces comprehensive security and IPC hardening, unconditional workspace secret filtering, diff synchronization repair throttling, native Swift unit testing infrastructure (`EnsembyteCoreTests`), and automated CI cargo-deny policy enforcement.
+
+### Security & Engine Updates (`Ensembyte-rust/`)
+- **Workspace Secret Denylist & Path Protection**: Added unconditional path filtering for `.env`, `.env.*`, `*.pem`, `id_*`, `credentials`, `*.key`, `*.p12`, and keystores across reads, writes, mutations, directory listings, and searches.
+- **Diff Sync Secret Leak Prevention**: Untracked patch captures in the engine now strictly filter denylisted secret files, ensuring secrets and credentials are never captured or broadcast across synced peers.
+- **Diff Sync Repair Throttling**: Throttled full-tree git diff re-captures with a 60-second minimum interval (`REPAIR_MIN_INTERVAL`) and genuine filesystem watch event triggers, eliminating unnecessary CPU and disk I/O on quiet checkouts.
+- **PTY Session Reaper TTL**: Exited terminal shells and inactive replay buffers are reliably reaped following TTL expiration to free system resources.
+- **CI Cargo Deny Audit**: Added `cargo-deny` checks to CI workflows for automated advisory and license verification; pruned experimental `crates/mobile` from default workspace targets.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Native Unit Test Suite (`EnsembyteCoreTests`)**: Added full unit test target and test cases covering core framing, thread continuation, JSON representation, and ISO8601 formatting.
+- **StdioFramer Memory Leak Prevention**: Reset internal framing buffer and state on oversized frame errors (`failTooLarge`) to prevent unbounded memory retention.
+- **Deep-Dive Audit & MCP Plan**: Added comprehensive codebase audit roadmap (`docs/deep-dive-improvement-plan.md`) and cross-client user MCP architecture plan (`Ensembyte-rust/docs/mcp-plan.md`).
+
 ## [1.1.10] - 2026-10-23
 
 Ensembyte 1.1.10 brings resilient Hydra head spawning across all LLM providers, explicit user spawn intent detection, and a built-in `/hydra` slash command with direct task dispatch.

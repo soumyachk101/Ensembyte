@@ -33,8 +33,8 @@ extension ThreadContinuation {
 
     /// How much of the forwarded chat's first real request is kept whatever else is dropped.
     static let firstRequestLimit = 4_000
-
-    private static let truncationMarker =
+    /// The marker standing in for what was left out; internal so tests can look for it.
+    static let truncationMarker =
         "… [parts of the forwarded conversation were omitted here to keep the context within its size limit] …"
 
     static func capture(sourceID: UUID, title: String, document: ThreadDocument) -> ThreadContinuation {

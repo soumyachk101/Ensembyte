@@ -251,6 +251,12 @@ fn source(
             "Path must use canonical workspace-relative spelling".into(),
         ));
     }
+    if is_sensitive_workspace_path(path) {
+        return Err((
+            Reason::InvalidPath,
+            "path is not mutable".into(),
+        ));
+    }
     let parent = WorkspaceRelativePath(relative.as_path().parent().unwrap_or(Path::new("")).into());
     checked_directory(root, &parent).map_err(domain_error)?;
     let metadata = std::fs::symlink_metadata(root.join(relative.as_path())).map_err(io_error)?;

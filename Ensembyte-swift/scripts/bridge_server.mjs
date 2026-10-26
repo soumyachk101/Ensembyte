@@ -78,7 +78,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'ok',
-      version: '1.1.10',
+      version: '1.1.11',
       threadCount: sampleThreads.length,
       paired: true,
       connectedClients: wss.clients.size

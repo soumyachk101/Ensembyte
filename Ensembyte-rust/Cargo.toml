@@ -1,5 +1,8 @@
 [workspace]
 resolver = "2"
+exclude = [
+    "crates/mobile",
+]
 members = [
     "crates/voice",
     "crates/theme",
@@ -14,7 +17,6 @@ members = [
     "crates/ui",
     "crates/syntax",
     "crates/markdown",
-    "crates/mobile",
     "crates/client",
     "crates/mcp",
     "crates/text",
@@ -22,7 +24,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.1.9"
+version = "1.1.11"
 edition = "2024"
 license = "MIT"
 authors = ["Soumya Chakraborty <soumya.chk101@gmail.com>"]

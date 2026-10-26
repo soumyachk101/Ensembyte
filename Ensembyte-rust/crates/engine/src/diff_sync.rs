@@ -37,7 +37,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -61,6 +61,14 @@ pub const MAX_DIFF_SOURCE_BYTES: usize = 2 * 1024 * 1024;
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(500);
 /// Slow repair pass: re-reconcile + re-sync every checkout.
 const REPAIR_INTERVAL: Duration = Duration::from_secs(120);
+/// Minimum time the tree may sit idle before another full re-capture is worth
+/// the cost of a whole `git diff`. Must exceed [`REPAIR_INTERVAL`] for the
+/// repair tick to ever *skip*: a tick that fires only `REPAIR_INTERVAL` after
+/// the last capture is not yet "stale enough". When the tree is quiet (no
+/// watcher events since the last repair) the expensive kick-all is deferred
+/// up to this interval instead of every tick; a single watch event bypasses
+/// it, so a dropped/coalesced watcher event is still caught on the next tick.
+const REPAIR_MIN_INTERVAL: Duration = Duration::from_secs(240);
 /// Max subdirectories a checkout may have before we skip its live recursive
 /// watch (one OS watch per dir; past this the watcher thread's own bookkeeping
 /// costs more than instant diffs are worth). A normal source tree is well
@@ -171,6 +179,21 @@ struct DiffSyncInner {
     statuses_tx: watch::Sender<Vec<ensembyte_proto::CheckoutGitStatus>>,
     /// chat_id → turn-start tree (see [`TurnSnapshot`]).
     turn_trees: Mutex<HashMap<String, TurnSnapshot>>,
+    /// When the repair tick last *ran* its expensive kick-all (full re-capture
+    /// of every checkout). A quiet tree captured within [`REPAIR_MIN_INTERVAL`]
+    /// skips the re-capture instead of re-running a whole `git diff` every tick
+    /// — the redundant case this throttle exists to remove. Stamped only when
+    /// a repair actually runs; a skipped tick does NOT refresh it, so the real
+    /// capture cadence on an idle tree is capped at [`REPAIR_MIN_INTERVAL`].
+    last_repair: Mutex<Option<Instant>>,
+    /// When any filesystem watcher last observed a real checkout change. Shared
+    /// with every watcher callback (`Arc`): a watch event AFTER the last repair
+    /// means the tree moved, so the next tick must run even inside
+    /// [`REPAIR_MIN_INTERVAL`] — this is what keeps the throttle from holding
+    /// back a legitimately dirty tree. Only genuine `notify` events stamp it;
+    /// the synthetic kicks (initial snapshot, repair kick-all, discard) do not,
+    /// or the throttle would defeat itself.
+    last_watch: Arc<Mutex<Option<Instant>>>,
     /// The tasks hold `Weak` refs, but an in-flight iteration holds an
     /// upgraded Arc — the token cuts it so no sidecar HTTP outlives shutdown.
     cancel: CancellationToken,
@@ -225,6 +248,8 @@ impl CheckoutDiffSync {
                 diffs_tx,
                 statuses_tx: watch::channel(Vec::new()).0,
                 turn_trees: Mutex::new(HashMap::new()),
+                last_repair: Mutex::new(None),
+                last_watch: Arc::new(Mutex::new(None)),
                 cancel: CancellationToken::new(),
                 supervisor: Mutex::new(None),
             }),
@@ -588,11 +613,12 @@ fn add_entry(inner: &Arc<DiffSyncInner>, identity: CheckoutIdentity, chats: Vec<
     // occurring before attachment are covered by the initial sync; one extra
     // kick after attachment closes the capture→attach gap.
     let weak = Arc::downgrade(&entry);
+    let last_watch = Arc::clone(&inner.last_watch);
     tokio::task::spawn_blocking(move || {
         let Some(entry) = weak.upgrade() else {
             return; // entry removed before watchers were ready
         };
-        let watchers = build_watchers(&entry.identity, &kick_tx);
+        let watchers = build_watchers(&entry.identity, &kick_tx, &last_watch);
         *lock(&entry.watchers) = watchers;
         let _ = kick_tx.send(());
     });
@@ -602,16 +628,24 @@ fn add_entry(inner: &Arc<DiffSyncInner>, identity: CheckoutIdentity, chats: Vec<
 /// dir — HEAD/index churn and file edits both land here. Failures are fine:
 /// the initial + repair sync still keep the snapshot correct. Blocking — call
 /// from the blocking pool.
+///
+/// `last_watch` is stamped by every genuine event, not just its kick: the
+/// repair tick uses it to decide whether a tree moved since the last capture,
+/// and a kick that did not stamp it would leave a dirty tree parked on the
+/// next repair interval.
 fn build_watchers(
     identity: &CheckoutIdentity,
     kick_tx: &mpsc::UnboundedSender<()>,
+    last_watch: &Arc<Mutex<Option<Instant>>>,
 ) -> Vec<notify::RecommendedWatcher> {
     let mut watchers = Vec::new();
     for target in watch_targets(identity) {
         let tx = kick_tx.clone();
+        let stamp = Arc::clone(last_watch);
         let watcher =
             notify::recommended_watcher(move |event: Result<notify::Event, notify::Error>| {
                 if event.as_ref().is_ok_and(is_checkout_change) {
+                    *lock(&stamp) = Some(Instant::now());
                     let _ = tx.send(());
                 }
             });
@@ -812,8 +846,11 @@ async fn diff_sync_task(
                 let chats = chats_rx.borrow().clone();
                 // Fresh: revalidate every memoized identity against git.
                 reconcile(&inner, chats, true).await;
-                for entry in lock(&inner.entries).values() {
-                    let _ = entry.kick_tx.send(());
+                if repair_captures_due(&inner) {
+                    for entry in lock(&inner.entries).values() {
+                        let _ = entry.kick_tx.send(());
+                    }
+                    *lock(&inner.last_repair) = Some(Instant::now());
                 }
             }
         }
@@ -823,6 +860,35 @@ async fn diff_sync_task(
 // ---------------------------------------------------------------------------
 // Diff capture (exposed for tests)
 // ---------------------------------------------------------------------------
+
+/// A repair tick re-captures every checkout unless the last real capture was
+/// recent enough AND the tree has been quiet since it. The cheap
+/// fresh-identity revalidation still runs on every tick — only the expensive
+/// kick-all re-capture is deferred, and a single genuine watch event forces
+/// the next capture, so a dropped or coalesced watcher event still gets
+/// picked up on the following tick. Skipped ticks do not refresh
+/// [`DiffSyncInner::last_repair`]; on an idle tree captures cap at
+/// [`REPAIR_MIN_INTERVAL`], on an active tree they stay watch-driven.
+fn repair_captures_due(inner: &Arc<DiffSyncInner>) -> bool {
+    let last_watch = *lock(&inner.last_watch);
+    let last_repair = *lock(&inner.last_repair);
+    repair_due(last_repair, last_watch)
+}
+
+/// Pure half of [`repair_captures_due`], isolated so the timing rule is
+/// testable without a live sync service.
+fn repair_due(last_repair: Option<Instant>, last_watch: Option<Instant>) -> bool {
+    match (last_repair, last_watch) {
+        // Never captured (boot) — always run.
+        (None, _) => true,
+        // The tree moved since the last capture — run regardless of how soon
+        // that capture was.
+        (Some(repaired_at), Some(watch_at)) if watch_at > repaired_at => true,
+        // Quiet since the last capture: due only once the minimum
+        // re-capture interval has elapsed; otherwise skip this tick.
+        (Some(repaired_at), _) => repaired_at.elapsed() >= REPAIR_MIN_INTERVAL,
+    }
+}
 
 struct Capture {
     stdout: Vec<u8>,
@@ -1290,7 +1356,10 @@ pub async fn capture_diff_against(
             i += 1; // skip the origin-path field
         }
         if code == "??" {
-            untracked.push(path.trim_start().to_string());
+            // Never include secret/denylisted files in the untracked patch
+            if !crate::workspace_files::is_sensitive_workspace_path(path.trim_start()) {
+                untracked.push(path.trim_start().to_string());
+            }
         }
     }
     untracked.sort();
@@ -1889,7 +1958,8 @@ mod watch_budget_tests {
         let root = std::fs::canonicalize(tmp.path()).unwrap();
         std::fs::write(root.join("a.txt"), "one\n").unwrap();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let _watchers = super::build_watchers(&identity(&root, &root.join(".git")), &tx);
+        let last_watch = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let _watchers = super::build_watchers(&identity(&root, &root.join(".git")), &tx, &last_watch);
         // Let registration settle and drop anything it raised.
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         while rx.try_recv().is_ok() {}
@@ -2028,5 +2098,70 @@ mod watch_budget_tests {
         // A self-referential symlink cycle must not send the walk into a spin.
         std::os::unix::fs::symlink(root.join("real"), root.join("real/inner/loop")).unwrap();
         assert!(!exceeds_watch_budget(root)); // terminates, under budget
+    }
+}
+
+#[cfg(test)]
+mod repair_throttle_tests {
+    use super::{repair_due, REPAIR_MIN_INTERVAL};
+    use std::time::{Duration, Instant};
+
+    /// A brand-new service has never captured: the first repair must always
+    /// run, regardless of any watch state.
+    #[test]
+    fn first_repair_always_runs() {
+        assert!(repair_due(None, None));
+        let now = Instant::now();
+        // Even a watch event already logged can't suppress the first capture.
+        assert!(repair_due(None, Some(now)));
+    }
+
+    /// A quiet tree captured moments ago is skipped: the whole re-capture is
+    /// the expensive path the throttle exists to remove.
+    #[test]
+    fn quiet_tree_captured_recently_is_skipped() {
+        let now = Instant::now();
+        let repaired = now - Duration::from_secs(30);
+        // No watch events at all.
+        assert!(!repair_due(Some(repaired), None));
+        // A watch event *before* the capture is also quiet (nothing moved
+        // since the capture ran).
+        assert!(!repair_due(Some(repaired), Some(repaired - Duration::from_secs(5))));
+    }
+
+    /// A genuine watch event *after* the last capture means the tree moved:
+    /// the next tick must run even deep inside the minimum interval, so a
+    /// dropped or coalesced watcher event is never held back needlessly.
+    #[test]
+    fn watch_event_after_capture_forces_capture() {
+        let now = Instant::now();
+        let repaired = now - Duration::from_secs(30);
+        let moved = repaired + Duration::from_secs(5); // after the capture
+        assert!(repair_due(Some(repaired), Some(moved)));
+    }
+
+    /// A quiet tree that has not been re-captured within the minimum interval
+    /// must be captured again on the next tick, even without any watch events.
+    #[test]
+    fn quiet_tree_past_min_interval_is_captured() {
+        let now = Instant::now();
+        let repaired = now - REPAIR_MIN_INTERVAL - Duration::from_millis(1);
+        assert!(repair_due(Some(repaired), None));
+    }
+
+    /// The minimum interval itself is the boundary: at exactly
+    /// [`REPAIR_MIN_INTERVAL`] elapsed the capture is due (the rule uses
+    /// `>=`), just under it the tick is skipped.
+    #[test]
+    fn min_interval_boundary_is_inclusive() {
+        let now = Instant::now();
+        assert!(repair_due(
+            Some(now - REPAIR_MIN_INTERVAL),
+            None
+        ));
+        assert!(!repair_due(
+            Some(now - (REPAIR_MIN_INTERVAL - Duration::from_millis(1))),
+            None
+        ));
     }
 }
