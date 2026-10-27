@@ -351,7 +351,7 @@ It is built upon incredible open-source foundations:
 | Terminal Emulation | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza | MIT |
 | GPUI Toolkit | [GPUI / Zed](https://github.com/zed-industries/zed) by Zed Industries | GPL / Apache 2.0 |
 | CRDT Sync | [Loro](https://github.com/loro-dev/loro) by Loro Dev | MIT / Apache 2.0 |
-| Pulse Indicators | Ported from [Zeron](https://github.com/zeronsh/zeron) by Wing | MIT |
+| Pulse Indicators | Ported by Wing | MIT |
 | Icons | [Lucide](https://lucide.dev) | ISC |
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for complete attributions.
@@ -376,7 +376,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 
-**Latest documented version:** v1.1.11. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
+**Latest documented version:** v1.1.12. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
 
 ---
 

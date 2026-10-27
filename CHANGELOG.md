@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.12] - 2026-10-27
+
+Ensembyte 1.1.12 introduces non-interrupting composer follow-up queueing and session launch queue restoration in Ensembyte-swift for macOS, alongside interactive Pull Request review workspaces, native two-way Voice Mode with 3D fluid Thinking Orbs, LaTeX math typesetting, and Mermaid diagram caching in Ensembyte-rust.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Composer Follow-up Queueing**: Pressing Return while the lead agent is actively running now queues follow-up prompts into the execution pipeline without interrupting the turn. Stopping the agent remains dedicated to the Stop button and `Esc` key.
+- **Queue Launch Recovery**: Follow-up prompt queues restored from disk at application startup automatically flush and begin execution on an idle lead agent, even across interrupted or aborted previous sessions.
+- **Queue Fault Tolerance**: Handled error-recovery edges so queued follow-up prompts continue draining cleanly after non-interrupted failed turns rather than stalling in the queue.
+- **Opt-in Hydra Queue Defaults**: Refined `hydraQueueHeads` default configuration (`false`) for direct and predictable turn execution.
+- **Attribution & Documentation Cleanup**: Cleaned up upstream attribution, license notices, and comments across 3D Orb, Voice Controller, Stream Veil, and Settings.
+
+### Cross-Platform & Engine Updates (`Ensembyte-rust/`)
+- **Interactive Pull Request Workspace (`crates/ui`)**: Added full GitHub Pull Request inspection surface with side-by-side split diffs, code review commenting, PR destination switching, draft status detection, and shell handoff flows.
+- **Native Two-Way Voice Mode & Stage (`crates/voice`, `crates/voice-media`, `crates/voice-session`)**: Low-latency voice interaction pipeline with WebRTC SDP audio streaming, live transcript captioning, and voice stage visualizer.
+- **GPU-Accelerated Thinking Shader Orb (`crates/orb`, `crates/ui/src/orb`)**: 3D fluid multi-gradient shader orb reacting dynamically to speaking, listening, and model reasoning phases in GPUI.
+- **LaTeX Math Rendering Engine (`crates/zatex`, `ui/src/markdown/math.rs`)**: High-performance mathematical equation parsing and KaTeX-compatible rendering in markdown chat turns.
+- **Mermaid Diagram Acceleration & Caching (`ui/src/markdown/mermaid_cache.rs`)**: Persistent caching layer for fast rendering of Mermaid flowcharts, sequence diagrams, and state diagrams.
+- **Worktree Management & Cloud/Billing Settings**: Native Git worktree isolation controls, session branching, and WorkOS cloud sync account management views.
+- **Notification Subsystem (`crates/notify`) & System Sound Cues**: Cross-platform desktop notifications and bundled audio cues (`voice-start.wav`, `voice-end.wav`).
+
 ## [1.1.11] - 2026-10-26
 
 Ensembyte 1.1.11 introduces comprehensive security and IPC hardening, unconditional workspace secret filtering, diff synchronization repair throttling, native Swift unit testing infrastructure (`EnsembyteCoreTests`), and automated CI cargo-deny policy enforcement.

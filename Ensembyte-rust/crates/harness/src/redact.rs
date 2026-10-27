@@ -285,7 +285,7 @@ struct LabelParts<'a> {
 
 fn parse_label(word: &str) -> Option<LabelParts<'_>> {
     let body = word
-        .trim_start_matches(['"', '\'', '`', '{', '[', '(', ',', '-']);
+        .trim_start_matches(|c: char| matches!(c, '"' | '\'' | '`' | '{' | '[' | '(' | ',' | '-'));
     let quote = word[..word.len() - body.len()]
         .chars()
         .last()

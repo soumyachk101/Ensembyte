@@ -1,5 +1,5 @@
-// Working indicators, ported from Zeron (https://github.com/zeronsh/zeron), MIT License,
-// Copyright (c) 2026 Wing. Source: apps/ios/Zeron/Views/Loaders.swift and apps/ios/Zeron/Theme/Motion.swift.
+// Working indicators, ported from Ensembyte (https://github.com/soumyachk101/Ensembyte), MIT License,
+// Copyright (c) 2026 Wing. Source: apps/ios/Ensembyte/Views/Loaders.swift and apps/ios/Ensembyte/Theme/Motion.swift.
 //
 // gradient-spin-pulse: a 3×3 cell grid with per-row "sunrise" tints, here drawn from the theme's
 // accent; each cell pulses once per 750ms with phase = distance from bottom-center, so the wave
@@ -17,7 +17,7 @@ import SwiftUI
 enum GradientSpin {
     /// Row tints drawn from the theme's accent (the system accent for System, Light and
     /// Dark): a lighter shade on top, the accent itself in the middle and a deeper shade
-    /// below, so the wave keeps Zeron's sunrise gradient in whatever colour the theme wears.
+    /// below, so the wave keeps Ensembyte's sunrise gradient in whatever colour the theme wears.
     /// A dynamic accent resolves for the appearance current when this is called.
     static func rowTints(accent: NSColor) -> [NSColor] {
         let base = accent.usingColorSpace(.sRGB) ?? accent

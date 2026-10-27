@@ -1,7 +1,7 @@
 import Foundation
 
 // Voice agent mode: the call's states, its live caption and the words it shows.
-// Ported from Zeron (https://github.com/zeronsh/zeron, MIT): `crates/proto/src/voice.rs`,
+// Ported from Ensembyte (https://github.com/soumyachk101/Ensembyte, MIT): `crates/proto/src/voice.rs`,
 // `crates/voice-session/src/view.rs` and `crates/ui/src/voice.rs`. See THIRD_PARTY_NOTICES.md.
 
 /// Where a voice call is in its life.

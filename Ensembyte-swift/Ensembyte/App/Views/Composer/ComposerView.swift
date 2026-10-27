@@ -438,10 +438,10 @@ struct ComposerView: View {
         historyIndex = nil
         suggestions = SuggestionState()
         if runtime.isRunning {
-            // Return while the turn runs stops it and sends right away. With heads at
-            // work it queues instead (a head takes it, or it waits for the lead): the
-            // heads run inside the lead's session, and a stop would kill them.
-            runtime.interruptAndSend()
+            // Return while the turn runs queues the draft as a follow-up; the lead keeps
+            // working and the prompt runs in order once it finishes. Stopping is the Stop
+            // button / Esc's job.
+            runtime.queueDraftWhileRunning()
         } else {
             runtime.send()
         }

@@ -15,7 +15,7 @@ cargo run --release --locked -p ensembyte-ui --example browser-fixture \
 Linux requires an X11 desktop session, `xdotool`, and ImageMagick. These screenshots
 are not included in the app's embedded assets or distribution bundle.
 
-The committed macOS images were captured by [CI run 34308828299](https://github.com/zeronsh/comet/actions/runs/34308828299)
+The committed macOS images were captured by [CI run 34308828299](https://github.com/soumyachk101/Ensembyte/actions/runs/34308828299)
 at source commit `d5c08649`. Its native fixture completion marker and all checks
 passed. The hosted Mac has a 1024px desktop, so the fixture uses Orbit's existing
 collapsed-left-sidebar layout. The Linux captures use a 1320px window with both

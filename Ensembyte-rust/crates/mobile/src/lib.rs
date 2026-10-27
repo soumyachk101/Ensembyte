@@ -15,3 +15,9 @@ pub mod wallpaper;
 pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_owned()
 }
+
+pub mod caption;
+pub mod orb;
+pub mod terminal;
+pub mod visual;
+

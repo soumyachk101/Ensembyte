@@ -286,26 +286,297 @@ async fn deleted_checkout_is_evicted_after_grace() {
     core.shutdown().await;
 }
 
-/// Crash/restart recovery: the only durable state is the workspace chat rows
-/// and the on-disk tree — entries, checksums, and identity memos all live in
-/// the service's memory. A service built after the crash must re-hydrate the
-/// entry from scratch, and because the checksum is a pure `sha256` over
-/// `branch ‖ head ‖ patch ‖ files ‖ truncated` (no memory-resident state in
-/// it), it must publish the *identical* checksum for an untouched tree. The
-/// same idle re-capture must be idempotent at the service level: a repair
-/// over an unchanged tree re-publishes nothing, leaving `updated_at` alone.
+/// Block until the chat watch shows `chat_id` with the given archived flag.
+async fn wait_chat_archived(core: &EngineCore, chat_id: &str, archived: bool) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let settled = core
+            .workspace
+            .watch_chats()
+            .borrow()
+            .iter()
+            .any(|c| c.id == chat_id && c.archived == archived);
+        if settled {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "chat archive state settled before timeout"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// Poll until the checkout under `root` is tracked with at least one live
+/// fs watch (watches attach on the blocking pool after the entry is added).
+async fn wait_watched(sync: &CheckoutDiffSync, root: &Path) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        if sync
+            .tracked_checkouts()
+            .iter()
+            .any(|(tracked, watches)| tracked == root && *watches > 0)
+        {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "checkout watched before timeout"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// Archived chats cost nothing: no entry, no watch, no capture. Unarchiving
+/// tracks the checkout again, and re-archiving drops it at once — archiving is
+/// a deliberate state change, not a row flap, so it skips the orphan grace.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn restart_rehydrates_entry_with_identical_checksum() {
+async fn archived_chats_get_no_entry_and_archiving_drops_it() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let repo_dir = tmp.path().join("repo");
-    init_dirty_repo(&repo_dir).await;
+    let live_dir = tmp.path().join("live");
+    let archived_dir = tmp.path().join("archived");
+    init_dirty_repo(&live_dir).await;
+    init_dirty_repo(&archived_dir).await;
+    let live_root = std::fs::canonicalize(&live_dir).unwrap();
+    let archived_root = std::fs::canonicalize(&archived_dir).unwrap();
 
     let core = assemble(&tmp.path().join("data"));
+    // A grace far beyond the test: any removal observed here is the
+    // archive fast path, not the orphan timeout.
+    let sync = CheckoutDiffSync::start_with_orphan_grace(
+        core.repos.clone(),
+        core.workspace.clone(),
+        &core.device_id,
+        None,
+        Duration::from_secs(3600),
+    );
+    for (space, dir) in [("space-live", &live_dir), ("space-arch", &archived_dir)] {
+        core.workspace
+            .create_space(space, &core.device_id, &dir.to_string_lossy(), None, true)
+            .expect("space row");
+    }
+    core.workspace
+        .create_chat("chat-live", Some("space-live"), None, None, None)
+        .expect("live chat");
+    core.workspace
+        .create_chat("chat-arch", Some("space-arch"), None, None, None)
+        .expect("archived chat");
+    core.workspace
+        .set_chat_archived("chat-arch", true)
+        .expect("archive");
+    wait_chat_state(&core, "chat-live", true).await;
+    wait_chat_archived(&core, "chat-arch", true).await;
+
+    sync.repair_now().await;
+    wait_watched(&sync, &live_root).await;
+    let tracked: Vec<_> = sync
+        .tracked_checkouts()
+        .into_iter()
+        .map(|(root, _)| root)
+        .collect();
+    assert_eq!(
+        tracked,
+        vec![live_root.clone()],
+        "archived chat's checkout is not tracked"
+    );
+    wait_for_diff(&sync).await;
+    assert!(
+        current_diffs(&sync)
+            .iter()
+            .all(|diff| Path::new(&diff.cwd) == live_root),
+        "no capture is published for an archived chat's checkout"
+    );
+
+    // Unarchive: the checkout is tracked and watched again.
+    core.workspace
+        .set_chat_archived("chat-arch", false)
+        .expect("unarchive");
+    wait_chat_archived(&core, "chat-arch", false).await;
+    sync.reconcile_now().await;
+    wait_watched(&sync, &archived_root).await;
+
+    // Re-archive: the entry (watches, published diff) goes on this pass.
+    core.workspace
+        .set_chat_archived("chat-arch", true)
+        .expect("re-archive");
+    wait_chat_archived(&core, "chat-arch", true).await;
+    sync.reconcile_now().await;
+    let tracked: Vec<_> = sync
+        .tracked_checkouts()
+        .into_iter()
+        .map(|(root, _)| root)
+        .collect();
+    assert_eq!(
+        tracked,
+        vec![live_root.clone()],
+        "archiving drops the entry at once"
+    );
+    assert!(
+        current_diffs(&sync)
+            .iter()
+            .all(|diff| Path::new(&diff.cwd) == live_root),
+        "archiving drops the checkout's published diff"
+    );
+    core.shutdown().await;
+}
+
+fn chat_row(core: &EngineCore, chat_id: &str) -> ensembyte_proto::Chat {
+    core.workspace
+        .watch_chats()
+        .borrow()
+        .iter()
+        .find(|c| c.id == chat_id)
+        .cloned()
+        .expect("chat row")
+}
+
+/// Poll until `check` holds or panic with `what`.
+async fn eventually(what: &str, mut check: impl FnMut() -> bool) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    while !check() {
+        assert!(tokio::time::Instant::now() < deadline, "{what}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// An archived chat someone has open (an engine-held interest guard — one
+/// per transcript stream) keeps full functionality: its checkout is tracked
+/// and watched, the live diff is published, and its `checkoutId` is stamped
+/// even though it was archived before it ever was a checkout. Once the last
+/// viewer leaves and the linger lapses, the checkout is released again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn open_archived_chat_is_tracked_until_interest_lapses() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().join("folder");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let core = assemble(&tmp.path().join("data"));
+    let sync = CheckoutDiffSync::start_with_timings(
+        core.repos.clone(),
+        core.workspace.clone(),
+        &core.device_id,
+        None,
+        Duration::from_secs(3600),
+        Duration::from_millis(300),
+    );
     core.workspace
         .create_space(
             "space-1",
             &core.device_id,
-            &repo_dir.to_string_lossy(),
+            &dir.to_string_lossy(),
+            None,
+            true,
+        )
+        .expect("space row");
+    core.workspace
+        .create_chat("chat-1", Some("space-1"), None, None, None)
+        .expect("chat row");
+    core.workspace
+        .set_chat_archived("chat-1", true)
+        .expect("archive");
+    wait_chat_archived(&core, "chat-1", true).await;
+    // Only now does the folder become a checkout: the archived chat has never
+    // been grouped, so nothing has stamped its checkoutId.
+    init_dirty_repo(&dir).await;
+    let root = std::fs::canonicalize(&dir).unwrap();
+    sync.repair_now().await;
+    assert!(
+        sync.tracked_checkouts().is_empty(),
+        "archived and unopened: free"
+    );
+    assert_eq!(chat_row(&core, "chat-1").checkout_id, None);
+
+    let interest = sync.retain_chat("chat-1");
+    wait_watched(&sync, &root).await;
+    let diff = wait_for_diff(&sync).await;
+    assert_eq!(
+        Path::new(&diff.cwd),
+        root,
+        "the open chat's live diff is published"
+    );
+    eventually("checkoutId stamped for the open archived chat", || {
+        chat_row(&core, "chat-1").checkout_id.as_deref() == Some(diff.checkout_id.as_str())
+    })
+    .await;
+
+    // Edits while open still flow through the live watch.
+    std::fs::write(dir.join("a.txt"), "changed while open\n").unwrap();
+    eventually("live diff follows edits", || {
+        current_diffs(&sync)
+            .first()
+            .is_some_and(|d| d.checksum != diff.checksum)
+    })
+    .await;
+
+    drop(interest);
+    eventually("released once the linger lapses", || {
+        sync.tracked_checkouts().is_empty() && current_diffs(&sync).is_empty()
+    })
+    .await;
+    core.shutdown().await;
+}
+
+/// Discard needs no entry: an archived chat's checkout (nobody watching) is
+/// discarded directly, still guarded by the snapshot checksum.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn discard_works_for_an_untracked_checkout() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().join("repo");
+    init_dirty_repo(&dir).await;
+    let core = assemble(&tmp.path().join("data"));
+    let sync = CheckoutDiffSync::start_with_orphan_grace(
+        core.repos.clone(),
+        core.workspace.clone(),
+        &core.device_id,
+        None,
+        Duration::from_secs(3600),
+    );
+    let identity = core.repos.checkout_identity(&dir).await.expect("identity");
+    assert!(sync.tracked_checkouts().is_empty());
+
+    let stale = sync
+        .discard_working_tree(&identity, "not-the-checksum")
+        .await;
+    assert!(stale.is_err(), "a stale checksum is refused");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("a.txt")).unwrap(),
+        "one\ntwo\nedited\n"
+    );
+
+    let snapshot = ensembyte_engine::capture_diff(&core.repos, &identity.root)
+        .await
+        .expect("capture");
+    sync.discard_working_tree(&identity, &snapshot.checksum)
+        .await
+        .expect("discard without an entry");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("a.txt")).unwrap(),
+        "one\ntwo\n"
+    );
+    core.shutdown().await;
+}
+
+/// While a checkout's chats are gone (orphan grace pending), neither repair
+/// kicks nor fs churn re-capture it; if the chats come back, the skipped work
+/// is caught up at once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn orphaned_entry_skips_captures_and_catches_up_on_return() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().join("repo");
+    init_dirty_repo(&dir).await;
+    let core = assemble(&tmp.path().join("data"));
+    let sync = CheckoutDiffSync::start_with_orphan_grace(
+        core.repos.clone(),
+        core.workspace.clone(),
+        &core.device_id,
+        None,
+        Duration::from_secs(3600),
+    );
+    core.workspace
+        .create_space(
+            "space-1",
+            &core.device_id,
+            &dir.to_string_lossy(),
             None,
             true,
         )
@@ -314,53 +585,33 @@ async fn restart_rehydrates_entry_with_identical_checksum() {
         .create_chat("chat-1", Some("space-1"), None, None, None)
         .expect("chat row");
     wait_chat_state(&core, "chat-1", true).await;
+    sync.reconcile_now().await;
+    let root = std::fs::canonicalize(&dir).unwrap();
+    wait_watched(&sync, &root).await;
+    let before = wait_for_diff(&sync).await;
 
-    // Long grace: this test never exercises eviction, only re-hydration.
-    const LONG_GRACE: Duration = Duration::from_secs(3_600);
-
-    // Pre-crash service: re-hydrate the entry and capture once.
-    let crashed = CheckoutDiffSync::start_with_orphan_grace(
-        core.repos.clone(),
-        core.workspace.clone(),
-        &core.device_id,
-        None,
-        LONG_GRACE,
-    );
-    crashed.reconcile_now().await;
-    let before = wait_for_diff(&crashed).await;
-
-    // The crash: in-memory entries and checksum state are gone.
-    crashed.shutdown().await;
-
-    // Restart: the fresh service re-resolves the same chat row into the same
-    // checkout, re-captures, and must publish the identical checksum.
-    let restarted = CheckoutDiffSync::start_with_orphan_grace(
-        core.repos.clone(),
-        core.workspace.clone(),
-        &core.device_id,
-        None,
-        LONG_GRACE,
-    );
-    restarted.reconcile_now().await;
-    let after = wait_for_diff(&restarted).await;
-    assert_eq!(after.checkout_id, before.checkout_id);
+    core.workspace.delete_chat("chat-1").expect("delete chat");
+    wait_chat_state(&core, "chat-1", false).await;
+    sync.reconcile_now().await; // marks orphaned
+    std::fs::write(dir.join("a.txt"), "edited while orphaned\n").unwrap();
+    sync.sync_all(); // a repair tick's kick
+    tokio::time::sleep(Duration::from_secs(3)).await;
     assert_eq!(
-        after.checksum, before.checksum,
-        "the checksum must be a pure function of the tree, not of memory state"
+        current_diffs(&sync)[0].checksum,
+        before.checksum,
+        "no capture for a chat-less checkout"
     );
 
-    // Idle idempotency: a repair over the untouched tree re-captures but
-    // publishes nothing new — same checksum, same publish timestamp.
-    restarted.repair_now().await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    let idle = current_diffs(&restarted);
-    assert_eq!(idle.len(), 1);
-    assert_eq!(idle[0].checksum, after.checksum);
-    assert_eq!(
-        idle[0].updated_at, after.updated_at,
-        "an idle re-capture must not re-publish"
-    );
-
-    restarted.shutdown().await;
+    core.workspace
+        .create_chat("chat-1", Some("space-1"), None, None, None)
+        .expect("chat row again");
+    wait_chat_state(&core, "chat-1", true).await;
+    sync.reconcile_now().await;
+    eventually("skipped capture caught up on return", || {
+        current_diffs(&sync)
+            .first()
+            .is_some_and(|d| d.checksum != before.checksum)
+    })
+    .await;
     core.shutdown().await;
 }

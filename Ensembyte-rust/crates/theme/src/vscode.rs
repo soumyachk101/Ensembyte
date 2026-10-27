@@ -48,7 +48,7 @@ pub struct ImportReport {
     pub fallbacks: Vec<String>,
     pub dropped: Vec<String>,
     pub warnings: Vec<String>,
-    /// Deterministic repairs made after mapping so the compiled Orbit roles
+    /// Deterministic repairs made after mapping so the compiled Ensembyte roles
     /// remain usable without erasing the source theme's syntax identity.
     #[serde(default)]
     pub adjustments: Vec<ImportAdjustment>,
@@ -625,7 +625,7 @@ fn convert(theme: NormalizedTheme, options: ImportOptions) -> Result<ImportResul
     };
     let mut output = registry
         .variant(base_id)
-        .expect("Orbit base theme exists")
+        .expect("Ensembyte base theme exists")
         .clone();
     let fallback_background = output.colors.background;
     output.id = options.id.clone();
@@ -645,7 +645,7 @@ fn convert(theme: NormalizedTheme, options: ImportOptions) -> Result<ImportResul
         ..ImportReport::default()
     };
     report.fallbacks.push(
-        "surface treatment inferred as opaque because VS Code palettes target solid workbench backgrounds; the user's Orbit surface preference can override it"
+        "surface treatment inferred as opaque because VS Code palettes target solid workbench backgrounds; the user's Ensembyte surface preference can override it"
             .into(),
     );
     macro_rules! apply {
@@ -659,7 +659,7 @@ fn convert(theme: NormalizedTheme, options: ImportOptions) -> Result<ImportResul
                 });
             } else {
                 report.fallbacks.push(format!(
-                    "{} retained the Orbit {} fallback",
+                    "{} retained the Ensembyte {} fallback",
                     $role,
                     if options.appearance.is_dark() {
                         "dark"
@@ -838,7 +838,7 @@ fn convert(theme: NormalizedTheme, options: ImportOptions) -> Result<ImportResul
     } else {
         report
             .fallbacks
-            .push("accent.* retained the Orbit fallback; curate a native accent".into());
+            .push("accent.* retained the Ensembyte fallback; curate a native accent".into());
     }
 
     apply!(

@@ -1,4 +1,4 @@
-//! Orbit-owned styling and highlighting adapters for `gpui-base`.
+//! Ensembyte-owned styling and highlighting adapters for `gpui-base`.
 
 use std::{ops::Range, rc::Rc, sync::Arc};
 
@@ -12,11 +12,11 @@ use super::editor::FileEditorState;
 use crate::theme::{SyntaxPalette, Theme};
 
 #[derive(Clone)]
-struct OrbitHighlightStyleResolver {
+struct EnsembyteHighlightStyleResolver {
     palette: SyntaxPalette,
 }
 
-impl HighlightStyleResolver for OrbitHighlightStyleResolver {
+impl HighlightStyleResolver for EnsembyteHighlightStyleResolver {
     fn style(&self, name: &str) -> Option<HighlightStyle> {
         kind_for_name(name).map(|kind| HighlightStyle {
             color: Some(self.palette.color(kind)),
@@ -26,21 +26,27 @@ impl HighlightStyleResolver for OrbitHighlightStyleResolver {
 }
 
 #[derive(Clone)]
-pub(super) struct OrbitInputHighlighter {
+pub(super) struct EnsembyteInputHighlighter {
     language: SharedString,
     spans: Vec<(Range<usize>, HighlightKind)>,
+    /// The text `spans` were computed for, until the first edit proves the
+    /// editor still holds it. `gpui-base` rebuilds highlighters from the
+    /// installed factory after replacing the whole text, before that text's
+    /// own highlight arrives.
+    unverified_source: Option<Arc<str>>,
 }
 
-impl OrbitInputHighlighter {
+impl EnsembyteInputHighlighter {
     fn new(source: &str, document: &HighlightedDocument) -> Self {
         Self {
             language: format!("{:?}", document.language).into(),
             spans: absolute_spans(source, document),
+            unverified_source: Some(source.into()),
         }
     }
 }
 
-impl InputHighlighter for OrbitInputHighlighter {
+impl InputHighlighter for EnsembyteInputHighlighter {
     fn language(&self) -> SharedString {
         self.language.clone()
     }
@@ -48,7 +54,7 @@ impl InputHighlighter for OrbitInputHighlighter {
     fn update(
         &mut self,
         edit: Option<InputEdit>,
-        _text: &Rope,
+        text: &Rope,
         _folding: bool,
         _window: &mut Window,
         _cx: &mut Context<FileEditorState>,
@@ -56,6 +62,18 @@ impl InputHighlighter for OrbitInputHighlighter {
         let Some(edit) = edit else {
             return;
         };
+        if let Some(source) = self.unverified_source.take() {
+            let text = text.to_string();
+            if !source_matches_edited_text(&source, &edit, &text) {
+                tracing::debug!(
+                    language = %self.language,
+                    source_len = source.len(),
+                    text_len = text.len(),
+                    "discarding syntax highlight computed for a different text"
+                );
+                self.spans.clear();
+            }
+        }
         let removed = edit.old_end_byte.saturating_sub(edit.start_byte);
         let inserted = edit.new_end_byte.saturating_sub(edit.start_byte);
         self.spans.retain_mut(|(range, _)| {
@@ -75,6 +93,12 @@ impl InputHighlighter for OrbitInputHighlighter {
                 return true;
             }
             false
+        });
+        #[cfg(test)]
+        probe::record(probe::Event::Updated {
+            edit: edit.start_byte..edit.old_end_byte,
+            new_end: edit.new_end_byte,
+            spans: self.spans.iter().map(|(range, _)| range.clone()).collect(),
         });
     }
 
@@ -111,6 +135,11 @@ impl InputHighlighter for OrbitInputHighlighter {
         if cursor < range.end {
             runs.push((cursor..range.end, HighlightStyle::default()));
         }
+        #[cfg(test)]
+        probe::record(probe::Event::Styles {
+            request: range.clone(),
+            runs: runs.clone(),
+        });
         runs
     }
 
@@ -127,7 +156,7 @@ pub(super) fn editor_style(theme: &Theme) -> InputEditorStyle {
         border: theme.border,
         selection: theme.accent.opacity(0.22),
         caret: theme.caret,
-        highlight_styles: Arc::new(OrbitHighlightStyleResolver {
+        highlight_styles: Arc::new(EnsembyteHighlightStyleResolver {
             palette: theme.syntax.clone(),
         }),
         editor_active_line: Some(crate::theme::wash(0.025)),
@@ -149,7 +178,11 @@ pub(super) fn install_highlighter(
     editor.update(cx, |state, cx| {
         state.set_highlighter_factory(
             Rc::new(move |_| {
-                Some(Box::new(OrbitInputHighlighter::new(&source, &document)) as Box<_>)
+                #[cfg(test)]
+                probe::record(probe::Event::FactoryBuilt {
+                    source: source.clone(),
+                });
+                Some(Box::new(EnsembyteInputHighlighter::new(&source, &document)) as Box<_>)
             }),
             cx,
         );
@@ -158,6 +191,61 @@ pub(super) fn install_highlighter(
 
 fn highlight_source_matches_editor(highlight_source: &str, editor_source: &str) -> bool {
     highlight_source == editor_source
+}
+
+/// Whether applying `edit` to `source` yields `text`.
+fn source_matches_edited_text(source: &str, edit: &InputEdit, text: &str) -> bool {
+    let (Some(prefix), Some(suffix)) = (
+        source.get(..edit.start_byte),
+        source.get(edit.old_end_byte..),
+    ) else {
+        return false;
+    };
+    let inserted = edit.new_end_byte.saturating_sub(edit.start_byte);
+    text.len() == prefix.len() + inserted + suffix.len()
+        && text.starts_with(prefix)
+        && text.ends_with(suffix)
+}
+
+/// Test-only record of what this adapter hands to `gpui-base`, in call order.
+///
+/// `gpui-base` keeps the highlighter instance and the style runs it requests
+/// during prepaint private, so lifecycle tests read them here and compare them
+/// with the text the editor is about to shape.
+#[cfg(test)]
+pub(super) mod probe {
+    use std::{cell::RefCell, ops::Range};
+
+    use gpui::HighlightStyle;
+
+    #[derive(Clone, Debug)]
+    pub(crate) enum Event {
+        /// The installed factory built a highlighter from its captured source.
+        FactoryBuilt { source: String },
+        /// `update` applied an edit; `spans` are the ranges kept afterwards.
+        Updated {
+            edit: Range<usize>,
+            new_end: usize,
+            spans: Vec<Range<usize>>,
+        },
+        /// `styles` answered a prepaint request.
+        Styles {
+            request: Range<usize>,
+            runs: Vec<(Range<usize>, HighlightStyle)>,
+        },
+    }
+
+    thread_local! {
+        static EVENTS: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
+    }
+
+    pub(crate) fn record(event: Event) {
+        EVENTS.with(|events| events.borrow_mut().push(event));
+    }
+
+    pub(crate) fn take() -> Vec<Event> {
+        EVENTS.with(|events| std::mem::take(&mut *events.borrow_mut()))
+    }
 }
 
 fn absolute_spans(
@@ -268,6 +356,7 @@ fn kind_for_name(name: &str) -> Option<HighlightKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_base::input::Point;
     use ensembyte_syntax::{HighlightSpan, LanguageId};
 
     fn highlighted(source: &str, spans: Vec<HighlightSpan>) -> HighlightedDocument {
@@ -305,8 +394,8 @@ mod tests {
                 },
             ],
         );
-        let highlighter = OrbitInputHighlighter::new(source, &document);
-        let resolver = OrbitHighlightStyleResolver {
+        let highlighter = EnsembyteInputHighlighter::new(source, &document);
+        let resolver = EnsembyteHighlightStyleResolver {
             palette: Theme::dark().syntax,
         };
         let runs = highlighter.styles(&(0..source.len()), &resolver);
@@ -325,8 +414,8 @@ mod tests {
                 kind: HighlightKind::Variable,
             }],
         );
-        let highlighter = OrbitInputHighlighter::new(stale_source, &stale_document);
-        let resolver = OrbitHighlightStyleResolver {
+        let highlighter = EnsembyteInputHighlighter::new(stale_source, &stale_document);
+        let resolver = EnsembyteHighlightStyleResolver {
             palette: Theme::dark().syntax,
         };
         let updated_text = "é";
@@ -337,6 +426,40 @@ mod tests {
             !updated_text.is_char_boundary(range.start) || !updated_text.is_char_boundary(range.end)
         }));
         assert!(!highlight_source_matches_editor(stale_source, updated_text));
+    }
+
+    fn edit(start: usize, old_end: usize, new_end: usize) -> InputEdit {
+        InputEdit {
+            start_byte: start,
+            old_end_byte: old_end,
+            new_end_byte: new_end,
+            start_position: Point::new(0, 0),
+            old_end_position: Point::new(0, 0),
+            new_end_position: Point::new(0, 0),
+        }
+    }
+
+    #[test]
+    fn highlight_source_is_verified_against_the_edited_text() {
+        let source = r#"{"": 1}"#;
+        assert!(source_matches_edited_text(source, &edit(0, 0, 0), source));
+        assert!(source_matches_edited_text(
+            source,
+            &edit(5, 6, 7),
+            r#"{"": 42}"#
+        ));
+        assert!(source_matches_edited_text(source, &edit(0, 7, 6), "\" →\""));
+        assert!(!source_matches_edited_text(
+            source,
+            &edit(0, 0, 0),
+            "\" →\""
+        ));
+        assert!(!source_matches_edited_text(
+            source,
+            &edit(0, 0, 0),
+            r#"{"": 2}"#
+        ));
+        assert!(!source_matches_edited_text("→", &edit(1, 1, 1), "→"));
     }
 
     #[test]

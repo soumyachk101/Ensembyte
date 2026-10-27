@@ -5,7 +5,7 @@ import SwiftUI
 // the call's composer. A call follows no chat selection, so neither surface lives inside
 // the conversation column: the user moves between threads while the orchestrator listens.
 //
-// Ported from Zeron (https://github.com/zeronsh/zeron, MIT), `crates/ui/src/shell/voice_stage.rs`:
+// Ported from Ensembyte (https://github.com/soumyachk101/Ensembyte, MIT), `crates/ui/src/shell/voice_stage.rs`:
 // the same layout, sizes, copy and motion. See THIRD_PARTY_NOTICES.md.
 
 enum VoiceStageMetrics {

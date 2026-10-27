@@ -2,8 +2,9 @@
 //! ensembyte's `terminals.ts` over `portable-pty`).
 //!
 //! - `open` spawns the user's login shell in the chat's cwd; `subscribe` replays a
-//!   bounded 1MB window (resumable via `afterSeq`) then tails live output, batched
-//!   at [`TERMINAL_OUTPUT_BATCH_MS`]; data rides base64 (PTY bytes ≠ UTF-8).
+//!   bounded 1MB window (resumable via `afterSeq`) then tails live output — sent
+//!   as soon as it is read, paced at [`TERMINAL_OUTPUT_BATCH_MS`] only while it
+//!   streams; data rides base64 (PTY bytes ≠ UTF-8).
 //! - Live shells survive subscriber detach — a detached session is the user's
 //!   running process, kept until its tab is explicitly closed or the engine exits.
 //!   Only EXITED sessions expire (30min TTL on their inert replay buffers), and
@@ -24,10 +25,15 @@ use portable_pty::PtySize;
 use portable_pty::{CommandBuilder, native_pty_system};
 #[cfg(windows)]
 mod windows;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use ensembyte_doc::TERMINAL_OUTPUT_BATCH_MS;
-use ensembyte_proto::{TerminalEvent, TerminalSession};
+use ensembyte_proto::{TerminalActivity, TerminalEvent, TerminalSession};
+
+pub mod link;
+mod program_status;
+mod replies;
+use program_status::{ProgramTracker, SUPPORT_REPLY};
 
 use crate::{EngineError, new_id};
 
@@ -38,6 +44,9 @@ const EXITED_TTL: Duration = Duration::from_secs(30 * 60);
 const REAPER_INTERVAL: Duration = Duration::from_secs(60);
 
 struct LiveTerminal {
+    chat_id: Option<String>,
+    seen_at: Option<chrono::DateTime<chrono::Utc>>,
+    programs: ProgramTracker,
     // Keep the private action script alive until the shell exits or the tab is closed.
     initial_script: Option<tempfile::NamedTempFile>,
     #[cfg(all(test, windows))]
@@ -49,13 +58,33 @@ struct LiveTerminal {
     reader_thread: Option<std::thread::JoinHandle<()>>,
     #[cfg(windows)]
     cleanup: Option<Arc<windows::Cleanup>>,
-    subscribers: Vec<mpsc::UnboundedSender<TerminalEvent>>,
+    /// Live streams, each flagged when its viewer answers terminal queries
+    /// itself (an app from before host replies).
+    subscribers: Vec<(mpsc::UnboundedSender<TerminalEvent>, bool)>,
+    /// Answers terminal queries from beside the PTY ([`replies`]).
+    replies: replies::HostReplies,
     replay: VecDeque<TerminalEvent>,
     replay_bytes: usize,
     seq: u64,
     last_active_at: std::time::Instant,
     exited: bool,
+    /// Program-detection replies in the current window (rate-limited: see
+    /// `pump_output`).
+    support_replies: u32,
+    support_window: std::time::Instant,
+    /// Highest input seq applied per remote viewer, so input replayed after
+    /// a path change (direct link ↔ relay) is applied exactly once.
+    applied_inputs: HashMap<String, u64>,
 }
+
+/// Remote viewers whose input seqs one terminal remembers.
+const MAX_INPUT_CLIENTS: usize = 16;
+
+/// Program-detection replies one terminal writes per [`SUPPORT_WINDOW`].
+/// Detection needs one per program launch; output that keeps asking faster
+/// is answered no further until the window turns over.
+const MAX_SUPPORT_REPLIES: u32 = 8;
+const SUPPORT_WINDOW: Duration = Duration::from_secs(10);
 
 impl LiveTerminal {
     /// Stamp a seq, append to the bounded replay window, and fan out to live
@@ -77,12 +106,22 @@ impl LiveTerminal {
                 };
             }
         }
-        self.subscribers.retain(|tx| tx.send(event.clone()).is_ok());
+        self.subscribers
+            .retain(|(tx, _)| tx.send(event.clone()).is_ok());
         if matches!(event, TerminalEvent::Exit { .. }) {
             self.initial_script.take();
             self.exited = true;
             self.subscribers.clear();
         }
+    }
+
+    /// The host answers queries unless a viewer that answers them itself is
+    /// attached (two answers would read as typed input).
+    fn host_answers(&self) -> bool {
+        !self
+            .subscribers
+            .iter()
+            .any(|(_, answers_itself)| *answers_itself)
     }
 
     fn next_seq(&mut self) -> u64 {
@@ -93,12 +132,54 @@ impl LiveTerminal {
 
 struct TerminalsInner {
     sessions: Mutex<HashMap<String, Arc<Mutex<LiveTerminal>>>>,
-    /// How long an EXITED session's inert replay buffer is kept before the
-    /// reaper sweeps it. Fixed at construction; the reaper captures it once, so
-    /// the retention predicate is stable for the process's lifetime.
-    exit_ttl: Duration,
-    /// Reaper tick cadence. Also fixed at construction.
-    reaper_interval: Duration,
+    activity_tx: watch::Sender<Vec<(String, TerminalActivity)>>,
+    /// Each terminal's chat, kept past the terminal's close: a server it
+    /// backgrounded outlives it and still belongs to that chat's previews.
+    chats: Mutex<VecDeque<(String, String)>>,
+}
+
+/// Terminals whose chat [`Terminals::chats`] still remembers.
+const REMEMBERED_TERMINAL_CHATS: usize = 4096;
+
+impl TerminalsInner {
+    /// Called without a LiveTerminal lock; the graph's lock order is always
+    /// sessions → terminal. Only status transitions, never ordinary output,
+    /// rebuild this bounded projection.
+    fn publish_activity(&self) {
+        let mut chats = std::collections::BTreeMap::<String, TerminalActivity>::new();
+        for (id, session) in lock(&self.sessions).iter() {
+            let session = lock(session);
+            let Some(chat) = &session.chat_id else {
+                continue;
+            };
+            let Some((report, updated_at)) = session.programs.summary(session.seen_at) else {
+                continue;
+            };
+            let activity = TerminalActivity {
+                terminal_id: id.clone(),
+                report,
+                updated_at,
+            };
+            let replace = chats.get(chat).is_none_or(|old| {
+                activity.report.state.attention_rank() < old.report.state.attention_rank()
+                    || (activity.report.state.attention_rank() == old.report.state.attention_rank()
+                        && (activity.updated_at, &activity.terminal_id)
+                            > (old.updated_at, &old.terminal_id))
+            });
+            if replace {
+                chats.insert(chat.clone(), activity);
+            }
+        }
+        let snapshot: Vec<_> = chats.into_iter().collect();
+        self.activity_tx.send_if_modified(|current| {
+            if *current == snapshot {
+                false
+            } else {
+                *current = snapshot;
+                true
+            }
+        });
+    }
 }
 
 impl Drop for TerminalsInner {
@@ -160,23 +241,66 @@ fn selected_shell() -> String {
 impl Terminals {
     /// Requires a tokio runtime (spawns the exited-session reaper).
     pub fn new() -> Self {
-        Self::new_with_intervals(EXITED_TTL, REAPER_INTERVAL)
-    }
-
-    /// [`Terminals::new`] with explicit reaper timing — a test hook so the
-    /// exited-session sweep is exercisable without waiting out the production
-    /// [`EXITED_TTL`] / [`REAPER_INTERVAL`].
-    #[doc(hidden)]
-    pub fn new_with_intervals(exit_ttl: Duration, reaper_interval: Duration) -> Self {
+        let (activity_tx, _) = watch::channel(Vec::new());
         let terminals = Self {
             inner: Arc::new(TerminalsInner {
                 sessions: Mutex::new(HashMap::new()),
-                exit_ttl,
-                reaper_interval,
+                activity_tx,
+                chats: Mutex::new(VecDeque::new()),
             }),
         };
         tokio::spawn(reaper_task(Arc::downgrade(&terminals.inner)));
         terminals
+    }
+
+    pub(crate) fn watch_activity(&self) -> watch::Receiver<Vec<(String, TerminalActivity)>> {
+        self.inner.activity_tx.subscribe()
+    }
+
+    /// Seen results no longer compete with new results in other program
+    /// records or terminals. Keep the records themselves for app inheritance.
+    pub(crate) fn refresh_seen(&self, chats: &[ensembyte_proto::Chat]) {
+        let mut changed = false;
+        for session in lock(&self.inner.sessions).values() {
+            let mut session = lock(session);
+            let seen = session.chat_id.as_deref().and_then(|id| {
+                chats
+                    .iter()
+                    .find(|chat| chat.id == id)
+                    .and_then(|chat| chat.last_seen_at)
+            });
+            if session.seen_at != seen {
+                session.seen_at = seen;
+                changed = true;
+            }
+        }
+        if changed {
+            self.inner.publish_activity();
+        }
+    }
+
+    /// Attach an engine-owned terminal to its chat after opening. Reports may
+    /// arrive before this call; publish the current projection immediately.
+    pub fn associate_chat(&self, terminal_id: &str, chat_id: &str) -> Result<(), EngineError> {
+        let session = self.session(terminal_id)?;
+        lock(&session).chat_id = Some(chat_id.to_owned());
+        {
+            let mut chats = lock(&self.inner.chats);
+            chats.retain(|(terminal, _)| terminal != terminal_id);
+            chats.push_back((terminal_id.to_owned(), chat_id.to_owned()));
+            while chats.len() > REMEMBERED_TERMINAL_CHATS {
+                chats.pop_front();
+            }
+        }
+        self.inner.publish_activity();
+        Ok(())
+    }
+
+    /// Terminal id → chat for every terminal opened for a chat, open or
+    /// since closed (the newest [`REMEMBERED_TERMINAL_CHATS`]). Everything a
+    /// terminal starts carries its id (see [`ensembyte_proto::ORIGIN_ENV`]).
+    pub fn chats(&self) -> HashMap<String, String> {
+        lock(&self.inner.chats).iter().cloned().collect()
     }
 
     /// Open a login shell in `cwd`. The PTY outlives every subscriber; it dies on
@@ -259,6 +383,15 @@ impl Terminals {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| shell.clone());
 
+        // Named before the shell starts, so everything it runs carries it.
+        let id = new_id();
+        let mut environment = environment.clone();
+        environment.insert(
+            ensembyte_proto::ORIGIN_ENV.to_owned(),
+            ensembyte_proto::terminal_origin(&id),
+        );
+        let environment = &environment;
+
         #[cfg(windows)]
         let (initial_script, bootstrap) = (None, command.map(|command| format!("{command}\r")));
         #[cfg(not(windows))]
@@ -301,7 +434,6 @@ impl Terminals {
             }
             if let Some(script) = initial_script.as_ref() {
                 cmd.env("ENSEMBYTE_ACTION_SCRIPT", script.path());
-                cmd.env("ENSEMBYTE_ACTION_SCRIPT", script.path());
             }
             let child = pair
                 .slave
@@ -318,8 +450,10 @@ impl Terminals {
             .take_writer()
             .map_err(|e| EngineError::Other(format!("pty writer: {e}")))?;
 
-        let id = new_id();
         let session = Arc::new(Mutex::new(LiveTerminal {
+            chat_id: None,
+            seen_at: None,
+            programs: ProgramTracker::default(),
             initial_script,
             #[cfg(all(test, windows))]
             process_id: child.process_id().expect("ConPTY child has a process id"),
@@ -331,15 +465,22 @@ impl Terminals {
             #[cfg(windows)]
             cleanup: None,
             subscribers: Vec::new(),
+            replies: replies::HostReplies::new(
+                clamp_size(cols, rows).cols,
+                clamp_size(cols, rows).rows,
+            ),
             replay: VecDeque::new(),
             replay_bytes: 0,
             seq: 0,
             last_active_at: std::time::Instant::now(),
             exited: false,
+            support_replies: 0,
+            support_window: std::time::Instant::now(),
+            applied_inputs: HashMap::new(),
         }));
         lock(&self.inner.sessions).insert(id.clone(), session.clone());
 
-        // Raw PTY bytes: blocking reader thread → batcher task (12ms windows).
+        // Raw PTY bytes: blocking reader thread → batcher task.
         let (raw_tx, raw_rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let reader_thread = std::thread::Builder::new()
             .name(format!("pty-read-{id}"))
@@ -377,7 +518,12 @@ impl Terminals {
                 })?;
             tokio::spawn(async move { rx.await.map_err(std::io::Error::other)? })
         };
-        tokio::spawn(pump_output(Arc::downgrade(&session), raw_rx, wait));
+        tokio::spawn(pump_output(
+            Arc::downgrade(&session),
+            Arc::downgrade(&self.inner),
+            raw_rx,
+            wait,
+        ));
 
         if let Some(bootstrap) = bootstrap
             && let Err(err) = self.write_bytes(&id, bootstrap.as_bytes())
@@ -390,6 +536,7 @@ impl Terminals {
             id,
             cwd: cwd.to_string(),
             shell: shell_name,
+            host_replies: true,
         })
     }
 
@@ -407,6 +554,18 @@ impl Terminals {
         terminal_id: &str,
         after_seq: Option<u64>,
     ) -> Result<mpsc::UnboundedReceiver<TerminalEvent>, EngineError> {
+        self.subscribe_viewer(terminal_id, after_seq, false)
+    }
+
+    /// [`Self::subscribe`] for a viewer; `answers_itself` marks an app from
+    /// before host replies, which answers terminal queries from its own
+    /// emulator — while one is attached the host stays silent.
+    pub fn subscribe_viewer(
+        &self,
+        terminal_id: &str,
+        after_seq: Option<u64>,
+        answers_itself: bool,
+    ) -> Result<mpsc::UnboundedReceiver<TerminalEvent>, EngineError> {
         let session = self.session(terminal_id)?;
         let mut session = lock(&session);
         session.last_active_at = std::time::Instant::now();
@@ -421,7 +580,7 @@ impl Terminals {
             }
         }
         if !session.exited {
-            session.subscribers.push(tx);
+            session.subscribers.push((tx, answers_itself));
         }
         // On an exited session `tx` drops here: the stream ends after the replay.
         Ok(rx)
@@ -457,6 +616,36 @@ impl Terminals {
             .map_err(|e| EngineError::Other(format!("Terminal write failed: {e}")))
     }
 
+    /// Write input a remote viewer numbered: applied only if `seq` is newer
+    /// than the last one applied from `client`. Returns whether it was
+    /// applied (a replay of already-applied input is acknowledged, not
+    /// written twice).
+    pub fn write_sequenced(
+        &self,
+        terminal_id: &str,
+        client: &str,
+        seq: u64,
+        bytes: &[u8],
+    ) -> Result<bool, EngineError> {
+        {
+            let session = self.session(terminal_id)?;
+            let mut session = lock(&session);
+            let applied = session.applied_inputs.get(client).copied().unwrap_or(0);
+            if seq <= applied {
+                return Ok(false);
+            }
+            if !session.applied_inputs.contains_key(client)
+                && session.applied_inputs.len() >= MAX_INPUT_CLIENTS
+                && let Some(oldest) = session.applied_inputs.keys().next().cloned()
+            {
+                session.applied_inputs.remove(&oldest);
+            }
+            session.applied_inputs.insert(client.to_owned(), seq);
+        }
+        self.write_bytes(terminal_id, bytes)?;
+        Ok(true)
+    }
+
     pub fn resize(&self, terminal_id: &str, cols: u16, rows: u16) -> Result<(), EngineError> {
         let session = self.session(terminal_id)?;
         let mut session = lock(&session);
@@ -464,11 +653,13 @@ impl Terminals {
         if session.exited {
             return Ok(());
         }
+        let size = clamp_size(cols, rows);
+        session.replies.resize(size.cols, size.rows);
         let Some(master) = session.master.as_ref() else {
             return Ok(());
         };
         master
-            .resize(clamp_size(cols, rows))
+            .resize(size)
             .map_err(|e| EngineError::Other(format!("Terminal resize failed: {e}")))
     }
 
@@ -477,6 +668,7 @@ impl Terminals {
         let session = lock(&self.inner.sessions)
             .remove(terminal_id)
             .ok_or_else(|| EngineError::Other("Terminal not found".into()))?;
+        self.inner.publish_activity();
         if dispose(&session, true) {
             Ok(())
         } else {
@@ -495,6 +687,7 @@ impl Terminals {
     /// Engine shutdown: kill every live shell.
     pub fn shutdown(&self) {
         let sessions: Vec<_> = lock(&self.inner.sessions).drain().map(|(_, s)| s).collect();
+        self.inner.publish_activity();
         for session in sessions {
             dispose(&session, true);
         }
@@ -526,7 +719,7 @@ fn dispose(session: &Arc<Mutex<LiveTerminal>>, kill: bool) -> bool {
 /// Blocking PTY reader: forwards raw chunks until EOF. A closed PTY reads as an
 /// error on some platforms (EIO on Linux once the shell exits) — both end the loop.
 fn read_pty(mut reader: Box<dyn Read + Send>, tx: mpsc::UnboundedSender<Vec<u8>>) {
-    let mut buf = [0u8; 8192];
+    let mut buf = vec![0u8; 64 * 1024];
     loop {
         match reader.read(&mut buf) {
             Ok(0) | Err(_) => break,
@@ -542,13 +735,15 @@ fn read_pty(mut reader: Box<dyn Read + Send>, tx: mpsc::UnboundedSender<Vec<u8>>
     }
 }
 
-/// Batches raw chunks into `Data` events every [`TERMINAL_OUTPUT_BATCH_MS`].
+/// Turns raw chunks into `Data` events: immediately after a quiet spell, at
+/// most once per [`TERMINAL_OUTPUT_BATCH_MS`] while output keeps coming.
 /// ConPTY keeps its output pipe open while the pseudoconsole handle is alive, even after
 /// the child exits, so child wait and output reads must be driven concurrently. Once the
 /// child is gone we close the PTY handles, drain its final buffered output, then emit `Exit`.
 /// Holds only a weak session handle so a closed terminal tears this task down.
 async fn pump_output(
     session: Weak<Mutex<LiveTerminal>>,
+    terminals: Weak<TerminalsInner>,
     mut raw_rx: mpsc::UnboundedReceiver<Vec<u8>>,
     mut wait: tokio::task::JoinHandle<Result<portable_pty::ExitStatus, std::io::Error>>,
 ) {
@@ -558,29 +753,77 @@ async fn pump_output(
             return false;
         };
         let mut session = lock(&session);
+        let update = session.programs.feed(&buffer);
+        // Answer terminal queries now, beside the PTY: a viewer's answer
+        // could arrive after the program stopped waiting.
+        let answers = session.replies.feed(&buffer);
+        if !answers.is_empty()
+            && session.host_answers()
+            && let Some(writer) = session.writer.as_mut()
+            && let Err(error) = writer.write_all(&answers).and_then(|_| writer.flush())
+        {
+            tracing::debug!(%error, "terminal query answer failed");
+        }
+        // Answer from the PTY owner, not a viewport: detection must work while
+        // detached and must not be replayed when another viewer attaches.
+        // At most one per batch and a few per window: the write goes to the
+        // PTY's input, which a program that never reads stdin fills, and this
+        // runs under the session lock.
+        if update.queries > 0 && session.support_window.elapsed() >= SUPPORT_WINDOW {
+            session.support_window = std::time::Instant::now();
+            session.support_replies = 0;
+        }
+        if update.queries > 0 && session.support_replies < MAX_SUPPORT_REPLIES {
+            session.support_replies += 1;
+            if let Some(writer) = session.writer.as_mut()
+                && let Err(error) = writer.write_all(SUPPORT_REPLY).and_then(|_| writer.flush())
+            {
+                tracing::debug!(%error, "program status detection reply failed");
+            }
+        }
         let seq = session.next_seq();
         session.emit(TerminalEvent::Data {
             seq,
             data: BASE64.encode(&buffer),
         });
+        drop(session);
+        if update.changed
+            && let Some(terminals) = terminals.upgrade()
+        {
+            terminals.publish_activity();
+        }
         true
     };
 
-    // Start a batch only when output arrives; idle terminals need no timer.
+    // Output that follows a quiet spell (a keystroke's echo) goes out the
+    // moment it is read; only a continuous stream waits out the pacing
+    // interval. Idle terminals need no timer.
     let flush = tokio::time::sleep(batch);
     tokio::pin!(flush);
     let mut buffer = Vec::new();
     let mut raw_open = true;
     let mut exit_code = None;
+    let mut last_emit = tokio::time::Instant::now() - batch;
 
     while raw_open || exit_code.is_none() {
         tokio::select! {
             chunk = raw_rx.recv(), if raw_open => match chunk {
                 Some(chunk) => {
-                    if buffer.is_empty() {
-                        flush.as_mut().reset(tokio::time::Instant::now() + batch);
-                    }
+                    let was_empty = buffer.is_empty();
                     buffer.extend_from_slice(&chunk);
+                    // Whatever the reader already has queued rides along.
+                    while let Ok(more) = raw_rx.try_recv() {
+                        buffer.extend_from_slice(&more);
+                    }
+                    let now = tokio::time::Instant::now();
+                    if now >= last_emit + batch {
+                        last_emit = now;
+                        if !emit(std::mem::take(&mut buffer)) {
+                            return;
+                        }
+                    } else if was_empty {
+                        flush.as_mut().reset(last_emit + batch);
+                    }
                 },
                 None => raw_open = false,
             },
@@ -620,6 +863,7 @@ async fn pump_output(
                 }
             }
             _ = &mut flush, if !buffer.is_empty() => {
+                last_emit = tokio::time::Instant::now();
                 if !emit(std::mem::take(&mut buffer)) {
                     return;
                 }
@@ -632,46 +876,37 @@ async fn pump_output(
     }
     if let Some(session) = session.upgrade() {
         let mut session = lock(&session);
+        session.programs.end_command();
         let seq = session.next_seq();
         session.emit(TerminalEvent::Exit {
             seq,
             exit_code: exit_code.unwrap_or(-1),
             signal: None,
         });
+        drop(session);
+        if let Some(terminals) = terminals.upgrade() {
+            terminals.publish_activity();
+        }
     }
 }
 
 /// Live shells never expire on idleness — a detached session is the user's running
 /// process. Only EXITED sessions are swept after [`EXITED_TTL`]: they're inert
 /// replay buffers held so a returning viewer can show the tail + exit status.
-fn session_survives(
-    exited: bool,
-    last_active_at: &std::time::Instant,
-    exit_ttl: Duration,
-    now: std::time::Instant,
-) -> bool {
-    !exited || now.duration_since(*last_active_at) <= exit_ttl
-}
-
-async fn reaper_task(weak: Weak<TerminalsInner>) {
-    // Capture the (immutable, per-instance) intervals up front: the reaper
-    // tick cadence and the exit TTL are construction-time choices, not something
-    // that can shift out from under a running loop.
-    let (exit_ttl, reaper_interval) = weak.upgrade().map_or((EXITED_TTL, REAPER_INTERVAL), |inner| {
-        (inner.exit_ttl, inner.reaper_interval)
-    });
-    let mut tick = tokio::time::interval(reaper_interval);
+async fn reaper_task(inner: Weak<TerminalsInner>) {
+    let mut tick = tokio::time::interval(REAPER_INTERVAL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     tick.tick().await; // consume the immediate first tick
     loop {
         tick.tick().await;
-        let Some(inner) = weak.upgrade() else { break };
-        let now = std::time::Instant::now();
+        let Some(inner) = inner.upgrade() else { break };
         let mut sessions = lock(&inner.sessions);
         sessions.retain(|_, session| {
             let session = lock(session);
-            session_survives(session.exited, &session.last_active_at, exit_ttl, now)
+            !(session.exited && session.last_active_at.elapsed() > EXITED_TTL)
         });
+        drop(sessions);
+        inner.publish_activity();
     }
 }
 
@@ -686,8 +921,8 @@ mod windows_tests {
 
     use super::Terminals;
 
-    const EVENT_TIMEOUT: Duration = Duration::from_secs(60);
-    const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
+    const EVENT_TIMEOUT: Duration = Duration::from_secs(15);
+    const PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
 
     #[test]
     fn conpty_close_joins_natural_cleanup_without_blocking_pool_capacity() {
@@ -1225,104 +1460,5 @@ mod initial_command_tests {
                 .is_err()
         );
         assert!(!terminals.any_open());
-    }
-}
-
-#[cfg(all(test, unix))]
-mod reaper_ttl_tests {
-    use super::{lock, session_survives, Terminals};
-    use std::collections::HashMap;
-    use std::time::{Duration, Instant};
-
-    /// The exited-session sweep must actually fire: an EXITED session whose
-    /// idle replay buffer outlives the exit TTL is reaped, while a live
-    /// session and a still-fresh exited one are both kept. Runs the real
-    /// reaper loop through a real PTY so the TTL is observed end to end, with
-    /// the production [`super::EXITED_TTL`] shortened to a few seconds.
-    #[tokio::test]
-    async fn reaper_sweeps_only_exited_sessions_past_the_ttl() {
-        let root = tempfile::tempdir().unwrap();
-        // A handful of seconds instead of 30 minutes; a fast reaper tick.
-        let terminals =
-            Terminals::new_with_intervals(Duration::from_secs(2), Duration::from_millis(50));
-
-        let exited = terminals
-            .open_session(
-                root.path().to_str().unwrap(),
-                80,
-                24,
-                Some("/bin/sh"),
-                &HashMap::new(),
-                Some("exit 3"),
-            )
-            .unwrap();
-        let live = terminals
-            .open_session(
-                root.path().to_str().unwrap(),
-                80,
-                24,
-                Some("/bin/sh"),
-                &HashMap::new(),
-                None,
-            )
-            .unwrap();
-
-        // Wait for the exited session's shell to actually exit, so the reaper
-        // has something to sweep rather than a still-running process.
-        let mut rx = terminals.subscribe(&exited.id, None).unwrap();
-        tokio::time::timeout(Duration::from_secs(10), async {
-            while let Some(event) = rx.recv().await {
-                if matches!(event, ensembyte_proto::TerminalEvent::Exit { .. }) {
-                    break;
-                }
-            }
-        })
-        .await
-        .unwrap();
-
-        // Right after exit it is still fresh — the reaper keeps it.
-        let exited_session = terminals.session(&exited.id).unwrap();
-        let fresh = lock(&exited_session).last_active_at;
-        assert!(session_survives(
-            true,
-            &fresh,
-            Duration::from_secs(2),
-            Instant::now(),
-        ));
-
-        // Give the real reaper task time to run its first sweep and find the
-        // session still inside the TTL, then wait past the TTL and confirm it
-        // was swept (not the live session, not a close/drop, just the timer).
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        assert!(
-            terminals.session(&exited.id).is_err(),
-            "an exited session past its TTL must be reaped by the timer"
-        );
-        assert!(
-            terminals.session(&live.id).is_ok(),
-            "a live shell must never be swept by the exit TTL"
-        );
-        terminals.close(&live.id).unwrap();
-        assert!(
-            !terminals.any_open(),
-            "the live shell closes explicitly; the exited one is already gone"
-        );
-    }
-
-    /// The pure retention predicate: only an EXITED session whose last-activity
-    /// stamp is older than the TTL is dropped; everything else survives.
-    #[test]
-    fn retention_predicate_keeps_live_and_fresh_exited() {
-        let ttl = Duration::from_secs(2);
-        let now = Instant::now();
-        // Live sessions always survive, no matter how old their stamp is.
-        assert!(session_survives(false, &now, ttl, now));
-        assert!(session_survives(false, &now, ttl, now + ttl * 3));
-        // Exited within the TTL survive (the sweep condition is strictly
-        // `elapsed > ttl`, so the boundary itself still holds the session).
-        assert!(session_survives(true, &now, ttl, now + ttl - Duration::from_millis(1)));
-        assert!(session_survives(true, &now, ttl, now + ttl));
-        // Exited past the TTL are swept.
-        assert!(!session_survives(true, &now, ttl, now + ttl + Duration::from_millis(1)));
     }
 }

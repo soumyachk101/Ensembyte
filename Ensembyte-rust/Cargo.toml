@@ -1,11 +1,22 @@
 [workspace]
 resolver = "2"
+default-members = [
+    "apps/ensembyte",
+]
 exclude = [
+
     "crates/mobile",
 ]
 members = [
     "crates/voice",
+    "crates/voice-media",
+    "crates/voice-session",
+    "crates/orb",
+    "crates/veil",
+    "crates/term",
+    "crates/term-link",
     "crates/theme",
+    "crates/audio",
     "crates/proto",
     "crates/preview",
     "crates/doc",
@@ -15,16 +26,20 @@ members = [
     "crates/rpc",
     "crates/update",
     "crates/ui",
+    "crates/notify",
     "crates/syntax",
     "crates/markdown",
     "crates/client",
     "crates/mcp",
     "crates/text",
+    "crates/visual",
+    "crates/visual-gpu",
+    "crates/zatex",
     "apps/ensembyte",
 ]
 
 [workspace.package]
-version = "1.1.11"
+version = "1.1.12"
 edition = "2024"
 license = "MIT"
 authors = ["Soumya Chakraborty <soumya.chk101@gmail.com>"]
@@ -37,6 +52,13 @@ publish = false
 
 [workspace.dependencies]
 ensembyte-voice = { path = "crates/voice" }
+ensembyte-voice-media = { path = "crates/voice-media" }
+ensembyte-voice-session = { path = "crates/voice-session" }
+ensembyte-orb = { path = "crates/orb" }
+ensembyte-veil = { path = "crates/veil" }
+ensembyte-term = { path = "crates/term" }
+ensembyte-term-link = { path = "crates/term-link" }
+ensembyte-audio = { path = "crates/audio" }
 ensembyte-proto = { path = "crates/proto" }
 ensembyte-preview = { path = "crates/preview" }
 ensembyte-doc = { path = "crates/doc" }
@@ -46,6 +68,7 @@ ensembyte-engine = { path = "crates/engine" }
 ensembyte-rpc = { path = "crates/rpc" }
 ensembyte-update = { path = "crates/update" }
 ensembyte-ui = { path = "crates/ui" }
+ensembyte-notify = { path = "crates/notify" }
 ensembyte-syntax = { path = "crates/syntax" }
 ensembyte-markdown = { path = "crates/markdown" }
 ensembyte-mobile = { path = "crates/mobile" }
@@ -53,6 +76,10 @@ ensembyte-client = { path = "crates/client" }
 ensembyte-theme = { path = "crates/theme" }
 ensembyte-mcp = { path = "crates/mcp" }
 ensembyte-text = { path = "crates/text" }
+ensembyte-visual = { path = "crates/visual" }
+ensembyte-visual-gpu = { path = "crates/visual-gpu" }
+zatex = { path = "crates/zatex" }
+fff-search = "=0.11.0"
 
 # CRDT
 loro = "1.13"
@@ -61,7 +88,7 @@ loro = "1.13"
 # frames, cross-checked by its js_snapshots tests).
 loro-protocol = "0.3"
 
-# gpui — zeronsh/zui, extracted from wingleeio/zed e2ddcc6 with identical
+# gpui — zui, extracted from wingleeio/zed e2ddcc6 with identical
 # crate sources; adds bounded blur passes and shared Gaussian weights.
 # Removes GPL tracing crates and composites deferred GPUI content above native macOS views.
 # Preserved fork history: upstream f14fea9 + commits on

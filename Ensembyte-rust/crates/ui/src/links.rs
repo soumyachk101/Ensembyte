@@ -52,7 +52,7 @@ pub fn ensembyte_conversation_link(chat_id: &str, workspace: &str) -> String {
 pub fn parse_ensembyte_conversation_link(url: &str) -> Result<ConversationDeepLink, &'static str> {
     let rest = url
         .strip_prefix("ensembyte://open/chat/")
-        .ok_or("not an Ensembyte conversation link")?;
+        .ok_or("not a Ensembyte conversation link")?;
     let (chat_id, query) = rest.split_once('?').ok_or("missing workspace locator")?;
     if chat_id.is_empty() || chat_id.contains('/') {
         return Err("invalid conversation id");
@@ -140,6 +140,7 @@ mod tests {
             created_at: chrono::DateTime::UNIX_EPOCH,
             harness_session_id: Some("thread/one".into()),
             harness_session_cwd: None,
+            harness_session_harness: None,
             parent_chat_id: None,
             space_id: None,
             last_seen_at: None,

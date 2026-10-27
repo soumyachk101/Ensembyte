@@ -72,7 +72,7 @@ for every run of the reusable probe.
   closed-window, pending-request, and already-running checks. This avoids recursively
   locking window state from native callbacks.
 
-The renderer change is [zui PR #2](https://github.com/zeronsh/zui/pull/2), pinned at
+The renderer change is [zui PR #2](https://github.com/ensembytesh/zui/pull/2), pinned at
 `8a32c0e26a17b9fab3aa9c2dbb79ed2d28ab2dfe`. Layout, text, blur, shaders, drawable
 count, animation timing, scroll behavior, and streaming cadence are unchanged.
 

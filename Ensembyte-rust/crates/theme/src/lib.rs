@@ -1,4 +1,4 @@
-//! Orbit's source-neutral theme domain model.
+//! Ensembyte's source-neutral theme domain model.
 //!
 //! Runtime code consumes complete [`ThemeVariant`] values. Import formats such
 //! as VS Code are deliberately isolated in [`vscode`], so a component never
@@ -276,7 +276,7 @@ pub struct ColorParseError;
 #[serde(rename_all = "camelCase")]
 pub enum AccentPreset {
     #[default]
-    Orbit,
+    Ensembyte,
     Orange,
     Amber,
     Green,
@@ -287,7 +287,7 @@ pub enum AccentPreset {
 
 impl AccentPreset {
     pub const ALL: [Self; 7] = [
-        Self::Orbit,
+        Self::Ensembyte,
         Self::Orange,
         Self::Amber,
         Self::Green,
@@ -298,7 +298,7 @@ impl AccentPreset {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Orbit => "Ensembyte",
+            Self::Ensembyte => "Ensembyte",
             Self::Orange => "Orange",
             Self::Amber => "Amber",
             Self::Green => "Green",
@@ -310,7 +310,7 @@ impl AccentPreset {
 
     pub fn color(self, appearance: Appearance) -> Color {
         let (dark, light) = match self {
-            Self::Orbit => ("#8b7cf6", "#5b43e8"),
+            Self::Ensembyte => ("#8b7cf6", "#5b43e8"),
             Self::Orange => ("#fb923c", "#c2410c"),
             Self::Amber => ("#fbbf24", "#a16207"),
             Self::Green => ("#4ade80", "#15803d"),
@@ -559,7 +559,7 @@ impl ThemeRegistry {
                     "ensembyte-light"
                 })
             })
-            .expect("the built-in registry always contains both Orbit variants")
+            .expect("the built-in registry always contains both Ensembyte variants")
     }
 
     pub fn validate(&self) -> Vec<ValidationIssue> {

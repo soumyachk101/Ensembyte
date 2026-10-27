@@ -380,7 +380,7 @@ pub(super) fn open(
     // Quotes cannot occur in a Windows file name; reject instead of interpreting.
     anyhow::ensure!(!shell.contains('"'), "invalid shell executable name");
     // Retain portable-pty's registry-refreshed Windows environment, including
-    // PATH updates made after Orbit started.
+    // PATH updates made after Ensembyte started.
     let builder = CommandBuilder::new(shell);
     let executable = resolve_shell(shell, builder.get_env("PATH"))?;
     let executable = wide(executable.as_os_str())?;

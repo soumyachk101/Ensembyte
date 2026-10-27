@@ -352,7 +352,6 @@ pub(crate) fn map_update(update: &Value) -> Vec<AgentEvent> {
         .and_then(Value::as_str)
         .unwrap_or("");
     match kind {
-
         "agent_message_chunk" => chunk_text(update)
             .map(|text| vec![AgentEvent::TextDelta { text }])
             .unwrap_or_default(),

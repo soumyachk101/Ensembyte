@@ -48,10 +48,10 @@ use ensembyte_theme::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AccentColor {
-    /// The exact upstream Orbit indigo.
+    /// The exact upstream Ensembyte indigo.
     #[default]
     #[serde(alias = "violet", alias = "indigo", alias = "red", alias = "purple")]
-    Orbit,
+    Ensembyte,
     Orange,
     Amber,
     Green,
@@ -63,7 +63,7 @@ pub enum AccentColor {
 
 impl AccentColor {
     pub const ALL: [Self; 7] = [
-        Self::Orbit,
+        Self::Ensembyte,
         Self::Orange,
         Self::Amber,
         Self::Green,
@@ -74,7 +74,7 @@ impl AccentColor {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Orbit => "Ensembyte",
+            Self::Ensembyte => "Ensembyte",
             Self::Orange => "Orange",
             Self::Amber => "Amber",
             Self::Green => "Green",
@@ -89,10 +89,10 @@ impl AccentColor {
         // used to gamut-clip OKLCH into sRGB and then mutate HSL lightness,
         // producing different chroma and apparent hues across light/dark.
         let (primary, strong) = match (self, appearance) {
-            (Self::Orbit, Appearance::Dark) => {
+            (Self::Ensembyte, Appearance::Dark) => {
                 (oklch(0.673, 0.182, 276.935), oklch(0.585, 0.233, 277.117))
             }
-            (Self::Orbit, Appearance::Light) => {
+            (Self::Ensembyte, Appearance::Light) => {
                 (oklch(0.511, 0.262, 276.966), oklch(0.511, 0.262, 276.966))
             }
             (Self::Orange, Appearance::Dark) => (oklch(0.75, 0.18, 55.0), oklch(0.54, 0.19, 55.0)),
@@ -133,7 +133,7 @@ impl AccentColor {
 impl From<AccentColor> for AccentPreset {
     fn from(value: AccentColor) -> Self {
         match value {
-            AccentColor::Orbit => Self::Orbit,
+            AccentColor::Ensembyte => Self::Ensembyte,
             AccentColor::Orange => Self::Orange,
             AccentColor::Amber => Self::Amber,
             AccentColor::Green => Self::Green,
@@ -147,7 +147,7 @@ impl From<AccentColor> for AccentPreset {
 impl From<AccentPreset> for AccentColor {
     fn from(value: AccentPreset) -> Self {
         match value {
-            AccentPreset::Orbit => Self::Orbit,
+            AccentPreset::Ensembyte => Self::Ensembyte,
             AccentPreset::Orange => Self::Orange,
             AccentPreset::Amber => Self::Amber,
             AccentPreset::Green => Self::Green,
@@ -848,7 +848,7 @@ impl Theme {
     /// The selected theme's shell tint painted over the blurred window
     /// background (macOS glass). Keeping the hue theme-owned matters when a
     /// user forces frost onto a palette authored for an opaque workbench: a
-    /// fixed Orbit grey would erase that palette's identity.
+    /// fixed Ensembyte grey would erase that palette's identity.
     pub fn glass(&self) -> Hsla {
         if self.surface_treatment == SurfaceTreatment::Opaque {
             return self.surface;
@@ -869,7 +869,7 @@ impl Theme {
         self.contrast_checked_tint_alpha(self.surface, base, self.adverse_backdrop())
     }
 
-    /// Increase tint coverage only as far as needed for Orbit's shared text
+    /// Increase tint coverage only as far as needed for Ensembyte's shared text
     /// roles. This is used for both window glass and in-app frosted surfaces,
     /// whose blurred content can otherwise invalidate an imported palette's
     /// original solid-background assumptions.
@@ -929,7 +929,7 @@ impl Theme {
 
     /// Theme-owned hover wash for chrome that sits on glass (sidebar rows,
     /// tabs, titlebar buttons). The importer maps this role from the source
-    /// theme, so forcing frost does not reintroduce Orbit's neutral hover.
+    /// theme, so forcing frost does not reintroduce Ensembyte's neutral hover.
     pub fn glass_hover(&self) -> Hsla {
         self.element_hover
     }
@@ -1384,7 +1384,7 @@ impl Theme {
             .variant(variant_id)
             .filter(|variant| model_appearance(variant.appearance) == appearance)
             .or_else(|| registry.variant(fallback_id))
-            .expect("the built-in registry contains both Orbit appearances");
+            .expect("the built-in registry contains both Ensembyte appearances");
         if let Some(color) = wallpaper_color {
             let mut variant = variant.clone();
             crate::settings::wallpaper_colors::tint_variant(&mut variant, color);
@@ -1412,7 +1412,7 @@ impl Theme {
     ) -> Self {
         let appearance = model_appearance(variant.appearance);
         let accent_color = match accent_selection {
-            AccentSelection::ThemeDefault => AccentColor::Orbit,
+            AccentSelection::ThemeDefault => AccentColor::Ensembyte,
             AccentSelection::Preset(preset) => preset.into(),
         };
         let mut theme = Self::for_preferences(appearance, accent_color);
@@ -2090,7 +2090,7 @@ mod tests {
     fn ensembyte_accent_is_the_exact_upstream_default() {
         let dark = Theme::dark();
         let light = Theme::light();
-        assert_eq!(dark.accent_color, AccentColor::Orbit);
+        assert_eq!(dark.accent_color, AccentColor::Ensembyte);
         assert_eq!(dark.accent, oklch(0.673, 0.182, 276.935));
         assert_eq!(dark.accent_strong, oklch(0.585, 0.233, 277.117));
         assert_eq!(dark.code_text, dark.accent);
@@ -2165,7 +2165,7 @@ mod tests {
         for old_default in ["violet", "indigo", "red", "purple"] {
             assert_eq!(
                 serde_json::from_str::<AccentColor>(&format!(r#""{old_default}""#)).unwrap(),
-                AccentColor::Orbit
+                AccentColor::Ensembyte
             );
         }
         assert_eq!(
@@ -2372,7 +2372,7 @@ mod tests {
                 assert_eq!(theme.success, baseline.success);
                 assert_eq!(theme.diff_add, baseline.diff_add);
                 assert_eq!(theme.diff_del, baseline.diff_del);
-                if accent != AccentColor::Orbit {
+                if accent != AccentColor::Ensembyte {
                     assert_ne!(theme.code_text, baseline.code_text);
                     assert_ne!(theme.busy, baseline.busy);
                     assert_ne!(theme.selection, baseline.selection);

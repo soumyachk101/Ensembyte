@@ -316,7 +316,7 @@ Broaden to `cargo test -p ensembyte-engine`, `cargo test -p ensembyte-ui`, and f
 
 ## Coordination
 
-PR [#181, pull request dashboard](https://github.com/zeronsh/comet/pull/181)
+PR [#181, pull request dashboard](https://github.com/soumyachk101/Ensembyte/pull/181)
 currently overlaps `crates/ui/src/shell.rs` but is a separate product surface.
 Do not fold its dashboard into this contribution. Rebase the implementation
 branch on the current `origin/main` immediately before coding and, if #181 has

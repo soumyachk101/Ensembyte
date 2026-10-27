@@ -1145,8 +1145,8 @@ private struct AboutSettingsPage: View {
                         CreditLink(title: "Releases", url: URL(string: "https://github.com/soumyachk101/Ensembyte/releases")!)
                     }
                     ChromeRowDivider()
-                    ChromeRow(title: "Working indicators", detail: "Ported from Zeron by Wing, MIT License.") {
-                        CreditLink(title: "zeronsh/zeron", url: URL(string: "https://github.com/zeronsh/zeron")!)
+                    ChromeRow(title: "Working indicators", detail: "Ported by Wing, MIT License.") {
+                        CreditLink(title: "soumyachk101/Ensembyte", url: URL(string: "https://github.com/soumyachk101/Ensembyte")!)
                     }
                     ChromeRowDivider()
                     ChromeRow(title: "Terminal", detail: "SwiftTerm by Miguel de Icaza, MIT License.") {

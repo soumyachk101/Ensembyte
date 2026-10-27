@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn strip_follows_the_flow_on_self_updating_installs() {
         let mac_app = InstallKind::MacApp {
-            bundle: PathBuf::from("/Applications/Orbit.app"),
+            bundle: PathBuf::from("/Applications/Ensembyte.app"),
         };
         assert_eq!(
             strip_for(&mac_app, false, &Flow::Idle, "0.2.86"),
@@ -471,7 +471,7 @@ mod tests {
         );
         let ready = Flow::Ready {
             version: "0.2.86".into(),
-            staged: PathBuf::from("/tmp/Orbit.app"),
+            staged: PathBuf::from("/tmp/Ensembyte.app"),
         };
         assert_eq!(
             strip_for(&mac_app, false, &ready, "0.2.86").1,
@@ -527,7 +527,7 @@ mod tests {
     #[test]
     fn windows_installs_drive_the_desktop_flow() {
         let installed = InstallKind::WindowsPortable {
-            directory: PathBuf::from(r"C:\Users\u\AppData\Local\Programs\Orbit"),
+            directory: PathBuf::from(r"C:\Users\u\AppData\Local\Programs\Ensembyte"),
         };
         assert_eq!(
             strip_for(&installed, false, &Flow::Idle, "0.2.86"),

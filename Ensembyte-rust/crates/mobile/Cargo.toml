@@ -32,3 +32,13 @@ serde_json.workspace = true
 similar.workspace = true
 ensembyte-syntax.workspace = true
 thiserror.workspace = true
+zatex = { workspace = true, features = ["bundled"] }
+ensembyte-voice-session.workspace = true
+ensembyte-orb.workspace = true
+ensembyte-veil.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
+ensembyte-visual.workspace = true
+ensembyte-visual-gpu.workspace = true
+ensembyte-term.workspace = true

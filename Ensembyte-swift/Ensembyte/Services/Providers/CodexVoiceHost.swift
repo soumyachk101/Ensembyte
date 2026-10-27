@@ -6,7 +6,7 @@ import OSLog
 /// request. Audio, echo cancellation, interruption and encrypted media stay inside that
 /// native process; only SDP signalling, controls and level meters cross the pipe.
 ///
-/// Ported from Zeron (https://github.com/zeronsh/zeron, MIT), `crates/voice-media/src/lib.rs`,
+/// Ported from Ensembyte (https://github.com/soumyachk101/Ensembyte, MIT), `crates/voice-media/src/lib.rs`,
 /// whose protocol and runtime environment are adapted from OpenAI Codex
 /// (`codex-rs/realtime-webrtc`, Apache-2.0). See THIRD_PARTY_NOTICES.md. Ensembyte never
 /// ships this runtime: it runs the helper of the user's own Codex installation.

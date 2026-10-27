@@ -6,7 +6,9 @@
 //! come from [`motion::staggered_phase`], so all cells stay phase-locked.
 //! Cells animate inside fixed-size slots — opacity and inner size
 //! are paint-local and never move surrounding layout. Reduced motion snaps every
-//! cell to its rest state automatically (gpui `reduce_motion`).
+//! cell to its rest state automatically (gpui `reduce_motion`). Activity grids
+//! retain a gentle brightness pulse with system reduced motion; explicit On
+//! and background pause keep them still.
 
 use gpui::{
     AnyElement, App, AppContext, Context, Entity, EntityId, IntoElement, ParentElement,
@@ -22,7 +24,7 @@ pub use ensembyte_proto::motion::{
     MARK_CELLS, MARK_SPREAD, MATRIX_SIDE, ENSEMBYTE_CELLS, mark_cell_stagger,
 };
 
-/// The animated ensembyte mark (ensembyte-loader.tsx `OrbitLoader`): the full logo
+/// The animated ensembyte mark (ensembyte-loader.tsx `EnsembyteLoader`): the full logo
 /// pixel grid with a light wave sweeping tail→head. Each cell rests dim
 /// (opacity 0.08, scale 0.9) and flares to full as the crest passes; per-cell
 /// stagger follows the flight axis. `height_px` sets the mark's height (width
@@ -121,7 +123,7 @@ pub fn gradient_spinner(
 ) -> impl IntoElement {
     let center = (MATRIX_SIDE as f32 - 1.0) / 2.0;
     let max = MATRIX_SIDE as f32 - 1.0 + center;
-    let delta = motion::pulse_delta_slow(&GRADIENT_SPIN, view, cx);
+    let pulse = motion::activity_pulse_slow(view, cx);
     div()
         .flex()
         .flex_col()
@@ -141,7 +143,7 @@ pub fn gradient_spinner(
                         .size(px(cell_px))
                         .rounded(px(cell_px / 2.0))
                         .bg(tint)
-                        .opacity(motion::gspin_opacity(delta + phase, GSPIN_DIM))
+                        .opacity(pulse.opacity(phase, GSPIN_DIM))
                 }))
         }))
 }
@@ -246,7 +248,7 @@ fn mini_spinner_cells(
     /// (0,0) → (0,1) → (1,1) → (2,1) → (2,0) → (1,0).
     const RING: [[usize; COLS]; ROWS] = [[0, 1], [5, 2], [4, 3]];
     const RING_LEN: f32 = (COLS * ROWS) as f32;
-    let delta = motion::pulse_delta(&GRADIENT_SPIN, view, cx);
+    let pulse = motion::activity_pulse(view, cx);
     div()
         .flex()
         .flex_col()
@@ -263,9 +265,186 @@ fn mini_spinner_cells(
                         .size(px(cell_px))
                         .rounded(px(cell_px / 2.0))
                         .bg(tint)
-                        .opacity(motion::gspin_opacity(delta + phase, GSPIN_DIM))
+                        .opacity(pulse.opacity(phase, GSPIN_DIM))
                 }))
         }))
+}
+
+/// A rounded fill that breathes on the ensembyte pulse clock between `floor` and
+/// `peak` opacity, filling whatever positioned box it is placed in. Like [`pulse_dot`] it repaints from its own cached
+/// view, so the surrounding chrome stays still.
+pub fn pulse_glow(
+    key: impl Into<SharedString>,
+    radius: f32,
+    tint: gpui::Hsla,
+    floor: f32,
+    peak: f32,
+) -> impl IntoElement {
+    PulseGlow {
+        key: key.into(),
+        style: GlowStyle {
+            radius,
+            tint,
+            floor,
+            peak,
+        },
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct GlowStyle {
+    radius: f32,
+    tint: gpui::Hsla,
+    floor: f32,
+    peak: f32,
+}
+
+#[derive(IntoElement)]
+struct PulseGlow {
+    key: SharedString,
+    style: GlowStyle,
+}
+
+impl RenderOnce for PulseGlow {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let style = self.style;
+        let view = window.with_global_id(self.key.into(), |id, window| {
+            window.with_element_state(id, |previous: Option<Entity<PulseGlowView>>, _| {
+                let view = previous.unwrap_or_else(|| cx.new(|_| PulseGlowView { style }));
+                view.update(cx, |view, cx| {
+                    if view.style != style {
+                        view.style = style;
+                        cx.notify();
+                    }
+                });
+                (view.clone(), view)
+            })
+        });
+        view.cached(gpui::StyleRefinement::default().size_full())
+    }
+}
+
+struct PulseGlowView {
+    style: GlowStyle,
+}
+
+impl Render for PulseGlowView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let GlowStyle {
+            radius,
+            tint,
+            floor,
+            peak,
+        } = self.style;
+        let delta = motion::pulse_delta_slow(&ENSEMBYTE_PULSE, cx.entity_id(), cx);
+        // pulse_opacity spans 0.08..1; renormalise to 0..1 before mapping.
+        let wave = (motion::pulse_opacity(delta) - 0.08) / 0.92;
+        div()
+            .size_full()
+            .rounded(px(radius))
+            .bg(tint)
+            .opacity(motion::lerp(floor, peak, wave))
+    }
+}
+
+/// Dashes around a [`ring_spinner`].
+const SPIN_DASHES: usize = 12;
+/// One full turn of a [`ring_spinner`].
+const SPIN_PERIOD: std::time::Duration = std::time::Duration::from_millis(900);
+
+/// The loading spinner for everything that isn't a session at work (those
+/// keep [`mini_glyph_spinner`] and [`gradient_spinner`]): a ring of short
+/// dashes, brightest at the head and fading round to a gap at the tail,
+/// turning clockwise. Only the dashes paint, so it sits on glass, washes and
+/// images alike. It repaints from its own cached view, so the chrome around
+/// it stays still; with reduced motion it rests.
+pub fn ring_spinner(
+    key: impl Into<SharedString>,
+    diameter: f32,
+    tint: gpui::Hsla,
+) -> impl IntoElement {
+    RingSpinner {
+        key: key.into(),
+        diameter,
+        tint,
+    }
+}
+
+#[derive(IntoElement)]
+struct RingSpinner {
+    key: SharedString,
+    diameter: f32,
+    tint: gpui::Hsla,
+}
+
+impl RenderOnce for RingSpinner {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let (diameter, tint) = (self.diameter, self.tint);
+        let view = window.with_global_id(self.key.into(), |id, window| {
+            window.with_element_state(id, |previous: Option<Entity<RingSpinnerView>>, _| {
+                let view =
+                    previous.unwrap_or_else(|| cx.new(|_| RingSpinnerView { diameter, tint }));
+                view.update(cx, |view, cx| {
+                    if view.diameter != diameter || view.tint != tint {
+                        view.diameter = diameter;
+                        view.tint = tint;
+                        cx.notify();
+                    }
+                });
+                (view.clone(), view)
+            })
+        });
+        view.cached(gpui::StyleRefinement::default().size(px(diameter)))
+    }
+}
+
+struct RingSpinnerView {
+    diameter: f32,
+    tint: gpui::Hsla,
+}
+
+impl Render for RingSpinnerView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let phase = motion::spin_phase(cx.entity_id(), SPIN_PERIOD, cx).unwrap_or(0.0);
+        let (diameter, tint) = (self.diameter, self.tint);
+        div().size(px(diameter)).child(
+            canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    let stroke = (diameter * 0.11).max(1.5);
+                    let center = bounds.center();
+                    let radius = diameter / 2.0 - stroke;
+                    let slot = std::f32::consts::TAU / SPIN_DASHES as f32;
+                    // The head leads at 12 o'clock plus the turn; each dash
+                    // behind it is dimmer, the last few nearly gone.
+                    let head = -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * phase;
+                    for age in 0..SPIN_DASHES {
+                        let opacity = (1.0 - age as f32 / SPIN_DASHES as f32).powf(1.6);
+                        if opacity < 0.04 {
+                            continue;
+                        }
+                        let start = head - slot * age as f32 - slot * 0.62;
+                        let end = head - slot * age as f32;
+                        let at = |theta: f32| {
+                            point(
+                                center.x + px(radius * theta.cos()),
+                                center.y + px(radius * theta.sin()),
+                            )
+                        };
+                        let mut builder = PathBuilder::stroke(px(stroke));
+                        builder.move_to(at(start));
+                        for step in 1..=4 {
+                            builder.line_to(at(start + (end - start) * step as f32 / 4.0));
+                        }
+                        if let Ok(path) = builder.build() {
+                            window.paint_path(path, tint.opacity(opacity));
+                        }
+                    }
+                },
+            )
+            .size_full(),
+        )
+    }
 }
 
 /// Stroke width of [`upload_progress_ring`].
@@ -281,8 +460,54 @@ const RING_SEGMENTS: f32 = 64.0;
 /// polylines. Fixed white-on-wash palette: the caller dims the image behind
 /// it, which reads in both themes.
 pub fn upload_progress_ring(percent: u8, diameter: f32) -> AnyElement {
+    let ring = progress_arc(
+        percent,
+        diameter,
+        gpui::hsla(0.0, 0.0, 1.0, 0.22),
+        gpui::hsla(0.0, 0.0, 1.0, 0.95),
+    );
+    div()
+        .relative()
+        .size(px(diameter))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(ring)
+        .child(
+            div()
+                .text_size(px(9.0))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(gpui::hsla(0.0, 0.0, 1.0, 0.95))
+                .child(SharedString::from(format!("{percent}%"))),
+        )
+        .into_any_element()
+}
+
+/// [`upload_progress_ring`] without the percent, in the caller's colors: for
+/// a spot too small to label, such as a sent chip's icon well.
+pub fn upload_progress_arc(
+    percent: u8,
+    diameter: f32,
+    track: gpui::Hsla,
+    arc: gpui::Hsla,
+) -> AnyElement {
+    div()
+        .relative()
+        .size(px(diameter))
+        .child(progress_arc(percent, diameter, track, arc))
+        .into_any_element()
+}
+
+/// A faint full track plus an arc growing clockwise from 12 o'clock, filling
+/// its parent.
+fn progress_arc(
+    percent: u8,
+    diameter: f32,
+    track: gpui::Hsla,
+    arc: gpui::Hsla,
+) -> gpui::Canvas<()> {
     let frac = f32::from(percent.min(100)) / 100.0;
-    let ring = canvas(
+    canvas(
         |_, _, _| (),
         move |bounds, _, window, _| {
             let center = bounds.center();
@@ -310,27 +535,12 @@ pub fn upload_progress_ring(percent: u8, diameter: f32) -> AnyElement {
                     window.paint_path(path, color);
                 }
             };
-            paint_arc(1.0, gpui::hsla(0.0, 0.0, 1.0, 0.22));
-            paint_arc(frac, gpui::hsla(0.0, 0.0, 1.0, 0.95));
+            paint_arc(1.0, track);
+            paint_arc(frac, arc);
         },
     )
     .absolute()
-    .inset_0();
-    div()
-        .relative()
-        .size(px(diameter))
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(ring)
-        .child(
-            div()
-                .text_size(px(9.0))
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(gpui::hsla(0.0, 0.0, 1.0, 0.95))
-                .child(SharedString::from(format!("{percent}%"))),
-        )
-        .into_any_element()
+    .inset_0()
 }
 
 /// Full-window boot splash: the app's dot loader (the same [`gradient_spinner`]
@@ -403,161 +613,4 @@ mod tests {
             );
         }
     }
-}
-
-/// An animated, glowing AI reasoning shader orb with dynamic multi-color rotation
-/// (cyan, violet, fuchsia, blue) and breathing pulse effect while thinking,
-/// settling to a calm gradient orb when done.
-pub fn thinking_shader_orb(
-    size_px: f32,
-    is_thinking: bool,
-    view: EntityId,
-    cx: &mut App,
-) -> impl IntoElement {
-    let delta = if is_thinking {
-        motion::pulse_delta(&motion::THINKING_ORB_SPIN, view, cx)
-    } else {
-        0.0
-    };
-
-    let diameter = size_px.max(8.0);
-    let radius = diameter / 2.0;
-
-    div()
-        .relative()
-        .size(px(diameter))
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            canvas(
-                move |_, _, _| (),
-                move |bounds, _, window, _| {
-                    let center = bounds.center();
-                    if is_thinking {
-                        // Breathing pulse scale factor: 0.90..1.08
-                        let breathe = 0.92 + 0.14 * (delta * std::f32::consts::TAU * 2.0).sin().abs();
-                        let active_radius = radius * breathe;
-                        let rotation_offset = delta * std::f32::consts::TAU;
-
-                        // 4 vibrant chromatic color stops:
-                        // 0: Cyan   (0.22, 0.74, 0.97) -> hsl(198, 93%, 60%)
-                        // 1: Violet (0.55, 0.36, 0.96) -> hsl(259, 89%, 66%)
-                        // 2: Fuchsia(0.91, 0.30, 0.65) -> hsl(326, 85%, 61%)
-                        // 3: Blue   (0.23, 0.51, 0.96) -> hsl(217, 92%, 60%)
-                        const STOPS: [(f32, f32, f32); 4] = [
-                            (198.0 / 360.0, 0.93, 0.60),
-                            (259.0 / 360.0, 0.89, 0.66),
-                            (326.0 / 360.0, 0.85, 0.61),
-                            (217.0 / 360.0, 0.92, 0.60),
-                        ];
-
-                        // Draw outer soft chromatic halo (16 angular wedges)
-                        let glow_radius = active_radius * 1.35;
-                        const WEDGES: usize = 16;
-                        for i in 0..WEDGES {
-                            let f0 = i as f32 / WEDGES as f32;
-                            let f1 = (i + 1) as f32 / WEDGES as f32;
-                            let theta0 = rotation_offset + f0 * std::f32::consts::TAU;
-                            let theta1 = rotation_offset + f1 * std::f32::consts::TAU;
-
-                            let stop_idx = (f0 * 4.0) as usize % 4;
-                            let next_stop = (stop_idx + 1) % 4;
-                            let local_f = (f0 * 4.0).fract();
-                            let h = STOPS[stop_idx].0 + (STOPS[next_stop].0 - STOPS[stop_idx].0) * local_f;
-                            let s = STOPS[stop_idx].1 + (STOPS[next_stop].1 - STOPS[stop_idx].1) * local_f;
-                            let l = STOPS[stop_idx].2 + (STOPS[next_stop].2 - STOPS[stop_idx].2) * local_f;
-
-                            // Outer glow wedge
-                            let mut glow_path = PathBuilder::fill();
-                            glow_path.move_to(center);
-                            glow_path.line_to(point(
-                                center.x + px(glow_radius * theta0.cos()),
-                                center.y + px(glow_radius * theta0.sin()),
-                            ));
-                            glow_path.line_to(point(
-                                center.x + px(glow_radius * theta1.cos()),
-                                center.y + px(glow_radius * theta1.sin()),
-                            ));
-                            glow_path.close();
-                            if let Ok(p) = glow_path.build() {
-                                window.paint_path(p, gpui::hsla(h, s, l, 0.28));
-                            }
-
-                            // Inner sharp wedge
-                            let mut inner_path = PathBuilder::fill();
-                            inner_path.move_to(center);
-                            inner_path.line_to(point(
-                                center.x + px(active_radius * theta0.cos()),
-                                center.y + px(active_radius * theta0.sin()),
-                            ));
-                            inner_path.line_to(point(
-                                center.x + px(active_radius * theta1.cos()),
-                                center.y + px(active_radius * theta1.sin()),
-                            ));
-                            inner_path.close();
-                            if let Ok(p) = inner_path.build() {
-                                window.paint_path(p, gpui::hsla(h, s, l, 0.92));
-                            }
-                        }
-
-                        // Center glowing core highlight
-                        let mut core = PathBuilder::fill();
-                        let core_radius = active_radius * 0.45;
-                        for i in 0..16 {
-                            let a = std::f32::consts::TAU * i as f32 / 16.0;
-                            let pt = point(center.x + px(core_radius * a.cos()), center.y + px(core_radius * a.sin()));
-                            if i == 0 { core.move_to(pt); } else { core.line_to(pt); }
-                        }
-                        core.close();
-                        if let Ok(p) = core.build() {
-                            window.paint_path(p, gpui::hsla(0.0, 0.0, 1.0, 0.35));
-                        }
-
-                        // Fine perimeter rim
-                        let mut rim = PathBuilder::stroke(px(0.6));
-                        for i in 0..=24 {
-                            let a = std::f32::consts::TAU * i as f32 / 24.0;
-                            let pt = point(center.x + px(active_radius * a.cos()), center.y + px(active_radius * a.sin()));
-                            if i == 0 { rim.move_to(pt); } else { rim.line_to(pt); }
-                        }
-                        if let Ok(p) = rim.build() {
-                            window.paint_path(p, gpui::hsla(0.0, 0.0, 1.0, 0.40));
-                        }
-                    } else {
-                        // Settled: calm violet & cyan gradient disc
-                        const WEDGES: usize = 16;
-                        for i in 0..WEDGES {
-                            let f0 = i as f32 / WEDGES as f32;
-                            let f1 = (i + 1) as f32 / WEDGES as f32;
-                            let theta0 = f0 * std::f32::consts::TAU;
-                            let theta1 = f1 * std::f32::consts::TAU;
-                            // Blend between violet (259°) and cyan (198°)
-                            let h = 259.0 / 360.0 - (61.0 / 360.0) * f0;
-                            let mut path = PathBuilder::fill();
-                            path.move_to(center);
-                            path.line_to(point(center.x + px(radius * theta0.cos()), center.y + px(radius * theta0.sin())));
-                            path.line_to(point(center.x + px(radius * theta1.cos()), center.y + px(radius * theta1.sin())));
-                            path.close();
-                            if let Ok(p) = path.build() {
-                                window.paint_path(p, gpui::hsla(h, 0.85, 0.65, 0.85));
-                            }
-                        }
-
-                        // Delicate settled rim
-                        let mut rim = PathBuilder::stroke(px(0.5));
-                        for i in 0..=24 {
-                            let a = std::f32::consts::TAU * i as f32 / 24.0;
-                            let pt = point(center.x + px(radius * a.cos()), center.y + px(radius * a.sin()));
-                            if i == 0 { rim.move_to(pt); } else { rim.line_to(pt); }
-                        }
-                        if let Ok(p) = rim.build() {
-                            window.paint_path(p, gpui::hsla(0.0, 0.0, 1.0, 0.25));
-                        }
-                    }
-                },
-            )
-            .absolute()
-            .inset_0(),
-        )
 }

@@ -14,7 +14,6 @@ use windows_sys::Win32::System::Threading::{
 };
 
 const CONFIG: &str = "ensembyte-update.json";
-const LEGACY_CONFIG: &str = "orbit-update.json"; // legacy (pre-rename)
 /// The running image, moved aside during a swap. A running executable can be
 /// renamed but not deleted, so the file survives until the process exits and
 /// is removed by the relaunched instance (or the next update attempt).
@@ -22,6 +21,10 @@ const BACKUP: &str = "ensembyte.exe.old";
 /// Deterministic name for the copy that becomes the next installation; a
 /// crash between the two renames leaves at most this file behind.
 const INCOMING: &str = ".ensembyte-update-incoming.exe";
+/// The installed version, written by each update: the app's background
+/// engine (`ensembyte.exe engine`) compares it with its own to restart into the
+/// new image once idle.
+const VERSION_FILE: &str = "ensembyte-version";
 /// The installer's uninstall entry (`AppId` in `dist/windows/ensembyte.iss`, plus
 /// Inno Setup's `_is1` suffix). Settings → Apps reads `DisplayVersion` here.
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{AD5DEC34-E254-467B-8F24-8127EBAF4DA6}_is1";
@@ -32,8 +35,8 @@ struct Config {
 }
 
 pub(super) fn is_managed(exe: &Path) -> bool {
-    exe.file_name().is_some_and(|name| name == "ensembyte.exe" || name == "orbit.exe" /* legacy dir name (pre-rename) */)
-        && exe.parent().is_some_and(|dir| dir.join(CONFIG).is_file() || dir.join(LEGACY_CONFIG).is_file())
+    exe.file_name().is_some_and(|name| name == "ensembyte.exe")
+        && exe.parent().is_some_and(|dir| dir.join(CONFIG).is_file())
 }
 
 pub(super) fn release_url() -> anyhow::Result<Option<String>> {
@@ -41,12 +44,7 @@ pub(super) fn release_url() -> anyhow::Result<Option<String>> {
     if !is_managed(&exe) {
         return Ok(None);
     }
-    let config_path = if exe.with_file_name(CONFIG).is_file() {
-        exe.with_file_name(CONFIG)
-    } else {
-        exe.with_file_name(LEGACY_CONFIG)
-    };
-    let config: Config = serde_json::from_slice(&std::fs::read(config_path)?)
+    let config: Config = serde_json::from_slice(&std::fs::read(exe.with_file_name(CONFIG))?)
         .context("reading Windows update configuration")?;
     super::validate_release_override(&config.releases_url).map(Some)
 }
@@ -98,11 +96,10 @@ pub async fn stage(
     )
     .await
     .context("staged executable version check timed out")??;
-    let reported = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     ensure!(
         output.status.success()
-            && (reported == format!("ensembyte {}", manifest.version)
-                || reported == format!("ensembyte {}" /* was orbit */, manifest.version)),
+            && String::from_utf8_lossy(&output.stdout).trim()
+                == format!("ensembyte {}", manifest.version),
         "staged executable has the wrong version or cannot run"
     );
     let _ = temporary.keep();
@@ -143,11 +140,7 @@ fn verify_digest(path: &Path, expected: &str) -> anyhow::Result<()> {
 /// and [`Self::recover_from_backup`] cover the leftovers of a hard crash
 /// between the two renames.
 pub fn apply(staged: &Path, directory: &Path, relaunch: bool) -> anyhow::Result<()> {
-    let installed = if directory.join("ensembyte.exe").exists() {
-        directory.join("ensembyte.exe")
-    } else {
-        directory.join("ensembyte.exe") /* was orbit */
-    };
+    let installed = directory.join("ensembyte.exe");
     ensure!(
         std::env::current_exe()?.canonicalize()? == installed.canonicalize()?,
         "update must run from its installation"
@@ -157,6 +150,7 @@ pub fn apply(staged: &Path, directory: &Path, relaunch: bool) -> anyhow::Result<
     swap_into_place(staged, &installed)?;
     if let Ok(version) = std::fs::read_to_string(staged.with_file_name("version")) {
         refresh_installer_version(version.trim());
+        let _ = std::fs::write(directory.join(VERSION_FILE), version.trim());
     }
     if relaunch {
         std::process::Command::new(&installed)
@@ -231,6 +225,14 @@ fn swap_into_place(staged: &Path, installed: &Path) -> anyhow::Result<()> {
         return Err(err).context("installing the updated executable");
     }
     Ok(())
+}
+
+/// The version the last update installed in `directory`, if one recorded it.
+pub(super) fn installed_version(directory: &Path) -> Option<String> {
+    std::fs::read_to_string(directory.join(VERSION_FILE))
+        .ok()
+        .map(|version| version.trim().to_owned())
+        .filter(|version| !version.is_empty())
 }
 
 /// Called by the newly installed desktop before it opens the engine profile.

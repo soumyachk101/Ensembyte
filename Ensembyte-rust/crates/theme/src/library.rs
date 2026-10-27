@@ -34,7 +34,7 @@ pub enum CustomThemeSource {
     LinkedPackage {
         path: PathBuf,
     },
-    /// A native resolved-family file created by Orbit for direct editing.
+    /// A native resolved-family file created by Ensembyte for direct editing.
     EditableFile {
         path: PathBuf,
     },

@@ -66,7 +66,7 @@ terminates processes detached inside that job (including `start` children).
 Frosted window chrome uses native Acrylic and requires Windows **Settings >
 Personalization > Colors > Transparency effects**. Content cards and popovers
 remain opaque because in-app backdrop blur is not supported. The pinned
-[Zui DirectX fix](https://github.com/zeronsh/zui/pull/7) supplies the renderer
+[Zui DirectX fix](https://github.com/ensembytesh/zui/pull/7) supplies the renderer
 layout and edge-fade corrections.
 
 ## Verification

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use ensembyte_engine::{EngineCore, HarnessRegistry};
 use ensembyte_harness::{Harness, HarnessError, RunControls, mock::MockHarness};
-use ensembyte_mcp::{Origin, Tools, Orbit};
+use ensembyte_mcp::{Origin, Tools, Ensembyte};
 use ensembyte_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SteeringMode,
 };
@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     core.workspace
         .create_chat("smoke-origin", Some("smoke-project"), None, None, None)?;
     core.workspace.rename_chat("smoke-origin", "Coordinator")?;
-    let tools = Tools::new(Arc::new(Orbit::with_client(
+    let tools = Tools::new(Arc::new(Ensembyte::with_client(
         ensembyte_rpc::memory_client(core.rpc_service()),
         Origin {
             chat_id: Some("smoke-origin".into()),

@@ -8,8 +8,23 @@
 # crates/harness/tests/claude.rs.
 
 read -r first || exit 1
+# A run opens with an `initialize` control request (the SDK handshake); the
+# real CLI answers it before the first user line. (Command discovery sends
+# its own initialize as the only line — matched by its scenario below.)
+initialized=false
+while :; do
+  case "$first" in
+    *'"request_id":"ensembyte_initialize"'*)
+      case "$first" in *'"perTaskStopAffordance":true'*) initialized=true ;; esac
+      printf '%s\n' '{"type":"control_response","response":{"subtype":"success","request_id":"ensembyte_initialize","response":{}}}'
+      read -r first || exit 1
+      ;;
+    *) break ;;
+  esac
+done
 
 emit() { printf '%s\n' "$1"; }
+uuid_of() { printf '%s\n' "$1" | sed 's/.*"uuid":"\([^"]*\)".*/\1/'; }
 
 case "$first" in
 
@@ -127,6 +142,184 @@ case "$first" in
   emit '{"type":"result","subtype":"success","result":"steered","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-steer"}'
   ;;
 
+*scenario:lifecycle-now-steer*)
+  # CLI 2.1.286, captured live: every uuid-tagged user line gets
+  # `command_lifecycle` frames. A `now` steer aborts the streaming turn
+  # (result, terminal_reason aborted_streaming), the first command is
+  # cancelled and the steer's own turn starts. That turn then runs a tool
+  # for longer than any quiet-time heuristic: no Done may land before the
+  # steered turn's own result.
+  fid=$(uuid_of "$first")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"queued\"}"
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"started\"}"
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":["Bash"],"cwd":"/tmp","session_id":"sess-lc"}'
+  emit "$first"
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"essay"}}}'
+  read -r steer || exit 1
+  case "$steer" in *'"priority":"now"'*) ;; *) exit 9 ;; esac
+  sid=$(uuid_of "$steer")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"queued\"}"
+  emit '{"type":"result","subtype":"success","is_error":false,"terminal_reason":"aborted_streaming","result":"essay","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-lc"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"cancelled\"}"
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"started\"}"
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":["Bash"],"cwd":"/tmp","session_id":"sess-lc"}'
+  emit "$steer"
+  emit '{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","id":"tool-sleep","name":"Bash","input":{"command":"sleep 8"}}]}}'
+  sleep "${FAKE_CLAUDE_TOOL_SECS:-6}"
+  emit '{"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"tool-sleep","is_error":false}]}}'
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"DONE"}}}'
+  emit '{"type":"result","subtype":"success","is_error":false,"terminal_reason":"completed","result":"DONE","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-lc"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"completed\"}"
+  ;;
+
+*scenario:lifecycle-queued-behind-end*)
+  # A message that reaches the CLI as its turn is finishing waits for that
+  # turn's result, then starts its own turn: the first result is a
+  # boundary, and the run's only Done is the queued message's.
+  fid=$(uuid_of "$first")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"started\"}"
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-q"}'
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"first answer"}}}'
+  read -r steer || exit 1
+  sid=$(uuid_of "$steer")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"queued\"}"
+  emit '{"type":"result","subtype":"success","is_error":false,"terminal_reason":"completed","result":"first answer","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-q"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"completed\"}"
+  sleep 1
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"started\"}"
+  emit "$steer"
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"second answer"}}}'
+  emit '{"type":"result","subtype":"success","is_error":false,"terminal_reason":"completed","result":"second answer","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-q"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"completed\"}"
+  ;;
+
+*scenario:stop-held*)
+  # "Send now" while a turn's result is held for a queued steer: the CLI is
+  # slow to answer the stop, had already begun the steer's turn, and that
+  # turn's aborted result lands after the stop — before the replacement.
+  fid=$(uuid_of "$first")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"started\"}"
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-sh"}'
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"first answer"}}}'
+  read -r steer || exit 1
+  sid=$(uuid_of "$steer")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"queued\"}"
+  emit '{"type":"result","subtype":"success","is_error":false,"result":"first answer","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-sh"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"completed\"}"
+  read -r stop || exit 1
+  case "$stop" in *'"subtype":"interrupt"'*) ;; *) exit 8 ;; esac
+  rid=$(printf '%s\n' "$stop" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  sleep 0.5
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"started\"}"
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$rid\",\"response\":{\"still_queued\":[]}}}"
+  emit '{"type":"result","subtype":"error_during_execution","errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-sh"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"cancelled\"}"
+  read -r next || exit 1
+  nid=$(uuid_of "$next")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$nid\",\"state\":\"started\"}"
+  emit "$next"
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"replacement"}}}'
+  sleep 0.3
+  emit '{"type":"result","subtype":"success","is_error":false,"result":"replacement","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-sh"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$nid\",\"state\":\"completed\"}"
+  cat >/dev/null
+  ;;
+
+*scenario:stop-unconfirmed-replacement*)
+  # A CLI that confirms nothing (no command_lifecycle, no replays): a turn is
+  # stopped, and the replacement answers within the stop's settle window.
+  # Its result is its own end, not the stopped turn reporting late.
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-su"}'
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"working"}}}'
+  read -r stop || exit 1
+  case "$stop" in *'"subtype":"interrupt"'*) ;; *) exit 8 ;; esac
+  rid=$(printf '%s\n' "$stop" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$rid\",\"response\":{\"still_queued\":[]}}}"
+  emit '{"type":"result","subtype":"error_during_execution","errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-su"}'
+  read -r next || exit 1
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"new reply"}}}'
+  emit '{"type":"result","subtype":"success","is_error":false,"result":"new reply","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-su"}'
+  cat >/dev/null
+  ;;
+
+*scenario:stop-late-duplicate*)
+  # The stopped turn reports a second, delayed result after its stop has
+  # settled, with no new prompt and no new content.
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-ld"}'
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"working"}}}'
+  read -r stop || exit 1
+  case "$stop" in *'"subtype":"interrupt"'*) ;; *) exit 8 ;; esac
+  rid=$(printf '%s\n' "$stop" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$rid\",\"response\":{\"still_queued\":[]}}}"
+  emit '{"type":"result","subtype":"error_during_execution","errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-ld"}'
+  sleep 0.5
+  emit '{"type":"result","subtype":"error_during_execution","errors":["late duplicate"],"usage":{"input_tokens":7,"output_tokens":7},"session_id":"sess-ld"}'
+  cat >/dev/null
+  ;;
+
+*scenario:lifecycle-queued-cancelled*)
+  # A queued message cancelled before any turn takes it up: the result held
+  # for it was the turn's real end, released at once — no quiet timer.
+  fid=$(uuid_of "$first")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"started\"}"
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-qc"}'
+  read -r steer || exit 1
+  sid=$(uuid_of "$steer")
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"queued\"}"
+  emit '{"type":"result","subtype":"success","is_error":false,"result":"only","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-qc"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"completed\"}"
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$sid\",\"state\":\"cancelled\"}"
+  exec sleep 30
+  ;;
+
+*scenario:reconfigure*)
+  # A follow-up sent with another model and effort: the live process
+  # adopts them (`set_model`, then `apply_flag_settings`) before the prompt
+  # — the CLI reads stdin in order. Live-verified on 2.1.286.
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-rc"}'
+  emit '{"type":"result","subtype":"success","result":"first","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-rc"}'
+  read -r model || exit 1
+  case "$model" in *'"subtype":"set_model"'*) ;; *) exit 11 ;; esac
+  case "$model" in *'"model":"claude-haiku-4-5"'*) ;; *) exit 11 ;; esac
+  read -r flags || exit 1
+  case "$flags" in *'"subtype":"apply_flag_settings"'*) ;; *) exit 12 ;; esac
+  case "$flags" in *'"effortLevel":"high"'*) ;; *) exit 13 ;; esac
+  case "$flags" in *'"fastMode":null'*) ;; *) exit 14 ;; esac
+  read -r prompt || exit 1
+  case "$prompt" in *'"type":"user"'*) ;; *) exit 15 ;; esac
+  case "$prompt" in *'switched'*) ;; *) exit 15 ;; esac
+  emit '{"type":"system","subtype":"init","model":"claude-haiku-4-5","tools":[],"cwd":"/tmp","session_id":"sess-rc"}'
+  emit "$prompt"
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"on haiku"}}}'
+  emit '{"type":"result","subtype":"success","result":"on haiku","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-rc"}'
+  # An unchanged configuration sends no control request at all.
+  read -r again || exit 1
+  case "$again" in *'"type":"user"'*) ;; *) exit 16 ;; esac
+  case "$again" in *'same again'*) ;; *) exit 16 ;; esac
+  emit "$again"
+  emit '{"type":"result","subtype":"success","result":"same","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-rc"}'
+  ;;
+
+*scenario:resume-killed-tasks*)
+  # Captured live on 2.1.286: `--resume` of a session whose background tasks
+  # died with its previous process. The CLI settles them with two empty
+  # `result` frames (num_turns 0) while the new prompt is still queued —
+  # they are not that prompt's end.
+  fid=$(uuid_of "$first")
+  emit '{"type":"system","subtype":"task_notification","task_id":"a-1","status":"stopped"}'
+  emit '{"type":"system","subtype":"task_notification","task_id":"b-1","status":"stopped"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"queued\"}"
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-rk"}'
+  emit '{"type":"result","subtype":"success","is_error":false,"num_turns":0,"result":"","errors":[],"usage":{"input_tokens":0,"output_tokens":0},"session_id":"sess-rk"}'
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-rk"}'
+  emit '{"type":"result","subtype":"success","is_error":false,"num_turns":0,"result":"","errors":[],"usage":{"input_tokens":0,"output_tokens":0},"session_id":"sess-rk"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"started\"}"
+  emit "$first"
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"PONG"}}}'
+  emit '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"terminal_reason":"completed","result":"PONG","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-rk"}'
+  emit "{\"type\":\"command_lifecycle\",\"command_uuid\":\"$fid\",\"state\":\"completed\"}"
+  ;;
+
 *scenario:superseded-steers*)
   # CLI 2.1.280 with rapid `now` steers: the second interrupts the turn the
   # first started before it is replayed; only the last steer is replayed.
@@ -152,6 +345,37 @@ case "$first" in
   exec sleep 30
   ;;
 
+*scenario:stop-in-place*)
+  # A turn stop is the `interrupt` control request with `cancel_queued`: the
+  # CLI ends the turn (an error_during_execution result carrying only its
+  # diagnostic) and keeps reading stdin. Background tasks survive because the
+  # run declared perTaskStopAffordance (live-verified 2.1.285).
+  [ "$initialized" = true ] || exit 7
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":["Bash"],"cwd":"/tmp","session_id":"sess-stop"}'
+  emit '{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"bg-1","task_type":"local_agent","description":"scout"}]}'
+  emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"working"}}}'
+  read -r stop || exit 1
+  case "$stop" in *'"subtype":"interrupt"'*) ;; *) exit 8 ;; esac
+  case "$stop" in *'"cancel_queued":true'*) ;; *) exit 8 ;; esac
+  rid=$(printf '%s\n' "$stop" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$rid\",\"response\":{\"still_queued\":[]}}}"
+  emit '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"parent_tool_use_id":null}'
+  emit '{"type":"result","subtype":"error_during_execution","errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-stop"}'
+  # Same process, next turn.
+  read -r next || exit 1
+  case "$next" in *'"type":"image"'*) img=yes ;; *) img=no ;; esac
+  emit "$next"
+  emit "{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"resumed:image=$img\"}}}"
+  emit '{"type":"system","subtype":"background_tasks_changed","tasks":[]}'
+  emit '{"type":"result","subtype":"success","result":"resumed","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-stop"}'
+  # A stop between turns: answered, and no result follows.
+  read -r idle_stop || exit 1
+  case "$idle_stop" in *'"subtype":"interrupt"'*) ;; *) exit 9 ;; esac
+  rid=$(printf '%s\n' "$idle_stop" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$rid\",\"response\":{\"still_queued\":[]}}}"
+  cat >/dev/null
+  ;;
+
 *scenario:interrupt*)
   emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-int"}'
   # Wedge without reading stdin — forces the SIGTERM escalation path.
@@ -172,6 +396,94 @@ case "$first" in
   emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$rid\",\"response\":{\"commands\":[{\"name\":\"review\",\"description\":\"Review a pull request\",\"argumentHint\":\"[pr number]\"},{\"name\":\"compact\",\"description\":\"Compact the conversation\",\"argumentHint\":\"\"},{\"name\":\"\",\"description\":\"nameless: dropped\"}],\"output_style\":\"default\"}}}"
   # Stay alive until the driver tears us down, like the real CLI would.
   exec sleep 30
+  ;;
+
+*scenario:resume-check*)
+  # `--resume` of a session the CLI has no conversation for: live 2.1.309
+  # answers with a result and no init, says so on stderr, and exits 1.
+  resumed=none
+  for arg in "$@"; do
+    case "$arg" in --resume=*) resumed="${arg#--resume=}" ;; esac
+  done
+  case "$resumed" in
+  stale-*)
+    echo "No conversation found with session ID: $resumed" >&2
+    emit "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true,\"num_turns\":0,\"session_id\":\"$resumed\",\"errors\":[\"No conversation found with session ID: $resumed\"]}"
+    exit 1
+    ;;
+  stderr-only-*)
+    echo "No conversation found with session ID: $resumed" >&2
+    exit 1
+    ;;
+  none) sid=sess-fresh ;;
+  *) sid=$resumed ;;
+  esac
+  emit "{\"type\":\"system\",\"subtype\":\"init\",\"model\":\"claude-fable-5\",\"tools\":[],\"cwd\":\"/tmp\",\"session_id\":\"$sid\"}"
+  emit "{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"resumed=$resumed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1},\"session_id\":\"$sid\"}"
+  ;;
+
+*scenario:crash-later-turn*)
+  # The first turn ends normally; the CLI dies during the second.
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-crash"}'
+  emit '{"type":"result","subtype":"success","result":"first","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-crash"}'
+  read -r next || exit 1
+  emit '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"working"}}}'
+  # stdout closes before the last stderr line is written.
+  exec 1>&-
+  sleep 0.05
+  echo "FATAL: heap out of memory" >&2
+  exit 3
+  ;;
+
+*scenario:unknown-control*)
+  # A control request this host does not serve must still be answered.
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-uc"}'
+  emit '{"type":"control_request","request_id":"cr-x","request":{"subtype":"hook_callback","callback_id":"h1"}}'
+  read -r reply || exit 1
+  result=unanswered
+  case "$reply" in
+  *'"request_id":"cr-x"'*) case "$reply" in *'"subtype":"error"'*) result=answered ;; esac ;;
+  esac
+  emit "{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"$result\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1},\"session_id\":\"sess-uc\"}"
+  ;;
+
+*scenario:set-model-fails*)
+  emit '{"type":"system","subtype":"init","model":"claude-sonnet-5-5","tools":[],"cwd":"/tmp","session_id":"sess-smf"}'
+  emit '{"type":"result","subtype":"success","result":"first","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-smf"}'
+  read -r model || exit 1
+  rid=$(printf '%s\n' "$model" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"error\",\"request_id\":\"$rid\",\"error\":\"Model not available\"}}"
+  read -r prompt || exit 1
+  emit "$prompt"
+  emit '{"type":"result","subtype":"success","result":"second","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-smf"}'
+  # The same configuration again: the failed switch is re-sent, and refused
+  # the same way.
+  read -r retry || exit 1
+  case "$retry" in *'"subtype":"set_model"'*) ;; *) exit 17 ;; esac
+  rid=$(printf '%s\n' "$retry" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
+  emit "{\"type\":\"control_response\",\"response\":{\"subtype\":\"error\",\"request_id\":\"$rid\",\"error\":\"Model not available\"}}"
+  # The rest of the configuration rides along before the prompt.
+  while read -r again; do
+    case "$again" in *'"type":"user"'*) break ;; esac
+  done
+  emit "$again"
+  emit '{"type":"result","subtype":"success","result":"third","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-smf"}'
+  ;;
+
+*scenario:grandchild*)
+  # An MCP server or tool the CLI started, still running when it exits.
+  sleep 300 </dev/null >/dev/null 2>&1 &
+  printf '%s' "$!" > "$ENSEMBYTE_TEST_PIDFILE"
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-gc"}'
+  emit '{"type":"result","subtype":"success","result":"done","usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-gc"}'
+  ;;
+
+*scenario:unreadable-result*)
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-ur"}'
+  emit '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"half \ud83d"}}}'
+  emit '{"type":"result","subtype":"success","result":"x","usage":{"input_tokens":"lots"},"session_id":"sess-ur"}'
+  # Stays up like the real CLI between turns: only the result ends the turn.
+  read -r _ || exit 0
   ;;
 
 *scenario:error*)

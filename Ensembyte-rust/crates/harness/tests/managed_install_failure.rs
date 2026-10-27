@@ -1,4 +1,4 @@
-//! The ensembyte upstream#95 condition, reproduced: npm dying silently with an
+//! The ensembyte/comet#95 condition, reproduced: npm dying silently with an
 //! errno-encoded exit (254 = ENOENT — npm/cli#4838) during the adapter
 //! fallback. The old `npx -y` path surfaced this as "harness protocol error:
 //! initialize: app-server exited before responding; Codex exited unexpectedly
@@ -38,10 +38,12 @@ async fn silent_npm_enoent_death_surfaces_decoded_error() {
     let harness = AcpHarness::grok();
     let (_steer_tx, steering) = mpsc::channel(1);
     let controls = RunControls {
+        realtime: None,
         execution_lease: None,
         request_input: Box::new(|_| tokio::sync::oneshot::channel().1),
         steering,
         interrupt: CancellationToken::new(),
+        turn: Default::default(),
     };
     let request = RunRequest {
         mcp: None,
@@ -56,6 +58,7 @@ async fn silent_npm_enoent_death_surfaces_decoded_error() {
         attachments: Vec::new(),
         worktree: None,
         resume: None,
+        env: Default::default(),
     };
 
     let err = match harness.run(request, controls).await {

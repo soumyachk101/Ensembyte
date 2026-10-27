@@ -12,7 +12,7 @@ use std::process::Command;
 
 use anyhow::{Context, bail};
 
-const LAUNCHD_LABEL: &str = "org.ensembyte.app";
+const LAUNCHD_LABEL: &str = "sh.ensembyte.app";
 /// Same unit name the curl|sh installer (`edge/src/install.sh`) writes, so
 /// `ensembyte daemon …` manages that installation rather than a competing copy.
 const SYSTEMD_UNIT: &str = "ensembyte.service";
@@ -22,16 +22,6 @@ const SYSTEMD_UNIT: &str = "ensembyte.service";
 /// default PATH won't find); the `ENSEMBYTE_*`/logging vars only when set.
 const CAPTURED_ENV: &[&str] = &[
     "PATH",
-    "ENSEMBYTE_DATA_DIR",
-    "ENSEMBYTE_EDGE_URL",
-    "ENSEMBYTE_EDGE_TOKEN",
-    "ENSEMBYTE_ORG_ID",
-    "ENSEMBYTE_WORKOS_CLIENT_ID",
-    "ENSEMBYTE_WORKOS_API_BASE",
-    "ENSEMBYTE_IPC_PORT",
-    "ENSEMBYTE_CALLBACK_PORT",
-    "ENSEMBYTE_HARNESS",
-    "ENSEMBYTE_DEVICE_NAME",
     "ENSEMBYTE_DATA_DIR",
     "ENSEMBYTE_EDGE_URL",
     "ENSEMBYTE_EDGE_TOKEN",
@@ -265,14 +255,7 @@ fn exec_path_for(exe: &Path, home: Option<&Path>) -> String {
     if installed {
         "%h/.ensembyte/app/current/ensembyte".to_string()
     } else {
-        let legacy_installed = home
-            .map(|home| home.join(".ensembyte/app"))
-            .is_some_and(|app_root| exe.starts_with(app_root));
-        if legacy_installed {
-            "%h/.ensembyte/app/current/ensembyte".to_string()
-        } else {
-            format!("{}", exe.display())
-        }
+        format!("{}", exe.display())
     }
 }
 
@@ -458,7 +441,7 @@ mod tests {
             &[("ENSEMBYTE_EDGE_URL".into(), "https://e?a=1&b=2".into())],
             Path::new("/Users/x/.ensembyte/daemon.log"),
         );
-        assert!(plist.contains("<key>Label</key><string>org.ensembyte.app</string>"));
+        assert!(plist.contains("<key>Label</key><string>sh.ensembyte.app</string>"));
         // XML-escaped exe path and env value.
         assert!(plist.contains("<string>/Users/x/ensembyte &amp; co/ensembyte</string>"));
         assert!(plist.contains("<string>https://e?a=1&amp;b=2</string>"));

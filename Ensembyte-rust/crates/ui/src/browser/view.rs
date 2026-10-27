@@ -1,8 +1,8 @@
 use super::{BrowserEvent, BrowserSurface};
 use crate::{icons, surface_chrome, theme::Theme};
 use gpui::{
-    AnyElement, Context, Focusable, IntoElement, KeyDownEvent, MouseButton, NavigationDirection,
-    Render, Window, div, prelude::*, px,
+    AnyElement, Context, Focusable, IntoElement, KeyDownEvent, MouseButton, Render, Window, div,
+    prelude::*, px,
 };
 
 fn button(
@@ -284,10 +284,16 @@ impl BrowserSurface {
         if self.page.url.is_none() && self.previews_task.is_some() {
             return self.preview_body(theme, cx);
         }
-        let external = !cfg!(any(target_os = "macos", target_os = "linux"));
+        let external = !cfg!(any(target_os = "macos", target_os = "linux", windows));
         let has_error = self.page.error.is_some();
+        #[cfg(target_os = "linux")]
+        let starting = self.native_startup.is_some();
+        #[cfg(not(target_os = "linux"))]
+        let starting = false;
         let title = if has_error {
             "Couldn’t load this page"
+        } else if starting {
+            "Starting browser…"
         } else if external && self.page.url.is_some() {
             "Opened in your browser"
         } else {
@@ -295,6 +301,8 @@ impl BrowserSurface {
         };
         let description = if let Some(error) = &self.page.error {
             error.clone()
+        } else if starting {
+            "You can keep working while your page opens.".into()
         } else if external {
             "Open a website or local app in your default browser. Embedded browsing is available on macOS and Linux.".into()
         } else {
@@ -433,7 +441,7 @@ impl BrowserSurface {
                     let right = (window.viewport_size().width - right_occlusion).max(mask.left());
                     mask.size.width = mask.size.width.min(right - mask.left());
                     let scale = window.scale_factor();
-                    let composition = None;
+                    let composition = window.native_composition();
                     let page = std::rc::Rc::downgrade(&host);
                     window.on_present(move || {
                         if let Some(page) = page.upgrade() {
@@ -531,6 +539,10 @@ impl BrowserSurface {
 impl Render for BrowserSurface {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::of(cx).clone();
+        #[cfg(target_os = "macos")]
+        let persistence_notice = self.context.data.persistence_notice();
+        #[cfg(not(target_os = "macos"))]
+        let persistence_notice: Option<&str> = None;
         let focused = self.address.focus_handle(cx).is_focused(window);
         let external = !cfg!(any(target_os = "macos", target_os = "linux", windows));
         let has_page = self.page.url.is_some();
@@ -786,9 +798,11 @@ impl Render for BrowserSurface {
             .on_action(cx.listener(|this, _: &super::Forward, _, _| this.history(true)))
             // Mouse side buttons drive the shell's route history everywhere
             // else; over the browser they are inert.
-            .on_mouse_down(MouseButton::Navigate(NavigationDirection::Back), |_, _, cx| cx.stop_propagation())
-            .on_mouse_down(MouseButton::Navigate(NavigationDirection::Forward), |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Navigate(gpui::NavigationDirection::Back), |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Navigate(gpui::NavigationDirection::Forward), |_, _, cx| cx.stop_propagation())
             .child(toolbar)
+            .when_some(persistence_notice, |el, message| el.child(div().px(px(12.0)).py(px(8.0))
+                .text_size(crate::typography::ui_rems(11.0)).text_color(theme.text_muted).child(message.to_owned())))
             .when_some(self.validation.clone(), |el, message| el.child(div().px(px(12.0)).py(px(8.0)).text_size(crate::typography::ui_rems(11.0)).text_color(theme.danger).child(message)))
             .when(remote_loopback, |el| el.child(div().px(px(12.0)).py(px(8.0)).border_b_1().border_color(theme.border)
                 .text_size(crate::typography::ui_rems(11.0)).text_color(theme.text_muted)

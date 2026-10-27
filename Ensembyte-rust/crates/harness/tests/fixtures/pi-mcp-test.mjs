@@ -6,7 +6,7 @@ if (process.argv[2] === 'server') {
     const msg = JSON.parse(line);
     let result;
     if (msg.method === 'initialize') result = {protocolVersion: '2024-11-05', capabilities: {tools:{}}, serverInfo: {name:'test',version:'1'}};
-    else if (msg.method === 'tools/list') result = {tools:['whoami','create_chat','create_chats','read_chat','send_message','wait_for_turn'].map(name => ({name,description:'Orbit delegation',inputSchema:{type:'object',properties:{mode:{type:'string'}}}}))};
+    else if (msg.method === 'tools/list') result = {tools:['whoami','create_chat','create_chats','read_chat','send_message','wait_for_turn'].map(name => ({name,description:'Ensembyte delegation',inputSchema:{type:'object',properties:{mode:{type:'string'}}}}))};
     else if (msg.method === 'tools/call') {
       if (msg.params.arguments.mode === 'hang') return;
       if (msg.params.arguments.mode === 'crash') process.exit(1);

@@ -12,7 +12,7 @@ import SystemConfiguration
 /// the native helper of the user's Codex installation (`CodexVoiceHost`); what the voice
 /// hands to Codex runs as turns of the chat, and the finished transcript lands in it too.
 ///
-/// Ported from Zeron (https://github.com/zeronsh/zeron, MIT): `crates/ui/src/voice.rs`,
+/// Ported from Ensembyte (https://github.com/soumyachk101/Ensembyte, MIT): `crates/ui/src/voice.rs`,
 /// `crates/voice-session` and `crates/harness/src/codex/realtime.rs`. See THIRD_PARTY_NOTICES.md.
 @MainActor
 @Observable
@@ -448,7 +448,7 @@ final class VoiceController {
     }
 }
 
-/// The call's start and end cues, Zeron's own sounds.
+/// The call's start and end cues, Ensembyte's own sounds.
 enum VoiceSound {
     @MainActor private static var sounds: [Bool: NSSound] = [:]
 

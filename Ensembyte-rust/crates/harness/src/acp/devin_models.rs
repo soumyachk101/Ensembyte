@@ -107,11 +107,11 @@ struct Member {
     fast: bool,
 }
 
-type CatalogCache = Mutex<Option<(Instant, Vec<Model>, Vec<Group>)>>;
-
 #[derive(Default)]
 pub(super) struct Catalog {
-    latest: CatalogCache,
+    // Only overlapping callers share a result. A later picker open always
+    // probes again, including after errors, login changes, or model rollouts.
+    latest: Mutex<Option<(Instant, Vec<Model>, Vec<Group>)>>,
 }
 
 impl Catalog {
@@ -265,7 +265,7 @@ fn parse_variant(family: &str, label: &str) -> (String, Option<ReasoningLevel>, 
 
 fn effort_word(word: &str, next: Option<&&str>) -> Option<(ReasoningLevel, bool)> {
     Some(match word {
-        // "No Thinking" is Devin's `none`; Orbit's lowest level stands in.
+        // "No Thinking" is Devin's `none`; Ensembyte's lowest level stands in.
         "No" if next == Some(&"Thinking") => (ReasoningLevel::Minimal, true),
         "None" | "Minimal" => (ReasoningLevel::Minimal, false),
         "Low" => (ReasoningLevel::Low, false),

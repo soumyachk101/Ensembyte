@@ -4,10 +4,22 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+default-run = "ensembyte"
+
+
+# Shared by both binaries; the UI is referenced only by `ensembyte`, so the
+# background engine links without it.
+[lib]
+name = "ensembyte_app"
+path = "src/lib.rs"
 
 [[bin]]
 name = "ensembyte"
 path = "src/main.rs"
+
+[[bin]]
+name = "ensembyte-engine"
+path = "src/bin/ensembyte-engine.rs"
 
 [dependencies]
 ensembyte-engine.workspace = true
@@ -15,6 +27,7 @@ ensembyte-rpc.workspace = true
 ensembyte-ui.workspace = true
 ensembyte-update.workspace = true
 ensembyte-mcp.workspace = true
+ensembyte-notify.workspace = true
 tokio.workspace = true
 clap.workspace = true
 anyhow.workspace = true

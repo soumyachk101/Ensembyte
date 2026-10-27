@@ -2,7 +2,7 @@
 //! binary anywhere, `run()` must npm-install the pinned adapter into
 //! `$ENSEMBYTE_ADAPTERS_DIR`, spawn it via node, and reach SessionStarted (the
 //! full initialize → session/new handshake) — the exact path that used to be
-//! `npx -y` at chat time (ensembyte upstream#95).
+//! `npx -y` at chat time (ensembyte/comet#95).
 //!
 //! Ignored: needs network and npm. Run with
 //! `cargo test -p ensembyte-harness --test managed_install -- --ignored`.
@@ -29,10 +29,12 @@ async fn managed_install_reaches_session_started() {
     let (_steer_tx, steering) = mpsc::channel(1);
     let interrupt = CancellationToken::new();
     let controls = RunControls {
+        realtime: None,
         execution_lease: None,
         request_input: Box::new(|_| tokio::sync::oneshot::channel().1),
         steering,
         interrupt: interrupt.clone(),
+        turn: Default::default(),
     };
     let request = RunRequest {
         mcp: None,
@@ -47,6 +49,7 @@ async fn managed_install_reaches_session_started() {
         attachments: Vec::new(),
         worktree: None,
         resume: None,
+        env: Default::default(),
     };
 
     let mut stream = tokio::time::timeout(

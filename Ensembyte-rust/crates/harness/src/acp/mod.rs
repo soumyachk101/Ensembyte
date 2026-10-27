@@ -24,6 +24,8 @@
 //!   others queue steers and deliver them as the next `session/prompt` at the
 //!   turn boundary. The session stays parked between turns while the
 //!   steering mailbox lives.
+//! - Turn stop ([`crate::TurnControl::stop_turn`]): `session/cancel` settles
+//!   the prompt `cancelled`; the agent and its session take the next prompt.
 //! - Interrupt: `session/cancel`, escalating SIGTERM → SIGKILL; the stream
 //!   always ends with `Done { status: Interrupted }`.
 
@@ -44,7 +46,6 @@ use futures::StreamExt;
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use serde_json::{Value, json};
-use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
 
 use ensembyte_proto::{
@@ -69,6 +70,19 @@ const DEFAULT_MODEL_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(10);
 // The one-file server unpacks on launch. A local cold probe took 1.903s, but
 // slower disks need substantially more headroom than the generic 10s budget.
 const ANTIGRAVITY_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(90);
+/// Bound on one session control call (model / config option switch).
+const CONTROL_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+/// `session/load`'s own budget, on top of the handshake's: it replays the
+/// whole transcript, which on a long chat takes far longer than the rest of
+/// setup. Past it the run errors and keeps the session for the next message:
+/// a slow load is no reason to give up the conversation's context.
+const SESSION_LOAD_TIMEOUT: Duration = Duration::from_secs(90);
+/// A stopped turn normally settles `cancelled` within moments. An agent still
+/// holding the prompt past this is wedged on the cancel (a tool that ignores
+/// it, a dead model stream): the turn is closed as stopped and the process
+/// retired, and the next message restores the session in a fresh one.
+const DEFAULT_STOP_TIMEOUT: Duration = Duration::from_secs(12);
+
 /// Per-agent configuration: which binary to spawn and what to tell the picker.
 struct AcpAgentSpec {
     id: HarnessId,
@@ -179,7 +193,7 @@ fn default_effort_values(
 }
 
 /// Devin's `thought_level` also offers `none` ("No Thinking"), which the
-/// catalog maps to Orbit's lowest level.
+/// catalog maps to Ensembyte's lowest level.
 fn devin_effort_values(
     reasoning: Option<ReasoningLevel>,
     model: Option<&str>,
@@ -200,6 +214,15 @@ fn grok_install_paths() -> Vec<PathBuf> {
     dirs.push(PathBuf::from("/opt/homebrew/bin/grok"));
     dirs.push(PathBuf::from("/usr/local/bin/grok"));
     dirs
+}
+
+/// Whether the agent exits promptly once its stdin closes, which Windows'
+/// teardown waits for (see [`crate::shutdown_child`]). Measured against the
+/// installed CLIs: Hermes keeps running after EOF, and Grok takes over 2s
+/// to go (on SIGTERM it takes a fifth of a second); Devin exits within a
+/// quarter second.
+fn exits_on_stdin_eof(id: HarnessId) -> bool {
+    !matches!(id, HarnessId::Grok | HarnessId::Hermes)
 }
 
 fn grok_spec() -> AcpAgentSpec {
@@ -414,7 +437,6 @@ fn hermes_spec() -> AcpAgentSpec {
         drops_unstarted_cancelled_prompt: false,
     }
 }
-
 
 /// google's builds as the acp registry lists them (`antigravity-acp`); `None`
 /// on platforms without one, where only an explicit override can launch.
@@ -1238,6 +1260,11 @@ pub struct AcpHarness {
     /// Bound on the initialize → session handshake; a hang past it errors the
     /// run instead of spinning "Working" forever.
     handshake_timeout: Duration,
+    /// How long a stopped turn may take to settle before the runtime is
+    /// retired (see [`DEFAULT_STOP_TIMEOUT`]).
+    stop_timeout: Duration,
+    /// `session/load`'s own budget (see [`SESSION_LOAD_TIMEOUT`]).
+    session_load_timeout: Duration,
     /// Bound on the initialize → session/new probe used to populate the model
     /// picker. OpenCode shares this with its real startup budget because both
     /// paths wait for the same plugin-heavy boot.
@@ -1247,7 +1274,7 @@ pub struct AcpHarness {
     /// Retain successful catalogs per credential/binary context through outages.
     models_cache: crate::catalog::Catalog,
     workspace_commands: crate::skills::CommandDiscovery,
-    devin_models: devin_models::Catalog,
+    devin_models: std::sync::Arc<devin_models::Catalog>,
 }
 
 impl AcpHarness {
@@ -1262,11 +1289,13 @@ impl AcpHarness {
             // (session/load replays from disk), so a hang past this is a
             // wedged agent, not a slow one.
             handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
+            stop_timeout: DEFAULT_STOP_TIMEOUT,
+            session_load_timeout: SESSION_LOAD_TIMEOUT,
             model_discovery_timeout: DEFAULT_MODEL_DISCOVERY_TIMEOUT,
             commands: tokio::sync::OnceCell::new(),
             models_cache: crate::catalog::Catalog::default(),
             workspace_commands: crate::skills::CommandDiscovery::default(),
-            devin_models: devin_models::Catalog::default(),
+            devin_models: Default::default(),
         }
     }
 
@@ -1295,8 +1324,9 @@ impl AcpHarness {
     /// sign-in stored.
     pub async fn sign_out(&self) -> Result<(), HarnessError> {
         let home = std::env::var("HOME").ok();
-        let (_scratch, mut child, _stderr, sign_in_prompted) =
-            self.spawn_agent(home.as_deref(), false, &[], None).await?;
+        let (_scratch, mut child, _stderr, sign_in_prompted) = self
+            .spawn_agent(home.as_deref(), false, &[], None, &Default::default())
+            .await?;
         let (client, mut incoming) = match (child.stdin.take(), child.stdout.take()) {
             (Some(stdin), Some(stdout)) => {
                 client_with_sign_in_prompt(stdin, stdout, self.spec.id, &sign_in_prompted)
@@ -1313,6 +1343,7 @@ impl AcpHarness {
             request_draining(&client, &mut incoming, "logout", json!({})).await
         };
         let result = tokio::time::timeout(SIGN_OUT_TIMEOUT, flow).await;
+        client.close_stdin_for_teardown();
         child.shutdown(self.kill_grace).await;
         match result {
             Ok(outcome) => outcome.map(|_| ()),
@@ -1399,19 +1430,20 @@ impl AcpHarness {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let mut child = cmd.spawn().map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                HarnessError::NotInstalled(crate::executable::binary_hint(&exe))
-            } else {
-                HarnessError::Io(e)
-            }
+            let home = std::env::var_os("HOME");
+            let cwd = home.as_deref().map(std::path::Path::new);
+            crate::executable::spawn_error(e, cwd, || crate::executable::binary_hint(&exe))
         })?;
+        if !exits_on_stdin_eof(self.spec.id) {
+            crate::process::ignores_stdin_eof(&mut child);
+        }
         let on_progress = std::sync::Arc::new(on_progress);
         let announced = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         if let Some(stderr) = child.stderr.take() {
             let on_progress = on_progress.clone();
             let announced = announced.clone();
             tokio::spawn(async move {
-                let mut lines = tokio::io::BufReader::new(stderr).lines();
+                let mut lines = crate::lossy_lines::lossy_lines(stderr);
                 while let Ok(Some(line)) = lines.next_line().await {
                     // Sign-in output carries authorize urls and device codes.
                     tracing::debug!(
@@ -1459,6 +1491,7 @@ impl AcpHarness {
             .await
         };
         let result = tokio::time::timeout(SIGN_IN_TIMEOUT, flow).await;
+        client.close_stdin_for_teardown();
         shutdown_child(&mut child, self.kill_grace).await;
         match result {
             Ok(outcome) => outcome.map(|_| ()),
@@ -1493,6 +1526,20 @@ impl AcpHarness {
     /// Tune the handshake bound (tests shrink it; default 120s).
     pub fn with_handshake_timeout(mut self, timeout: Duration) -> Self {
         self.handshake_timeout = timeout;
+        self
+    }
+
+    /// Tune the turn-stop bound (tests shrink it; default 12s).
+    #[doc(hidden)]
+    pub fn with_stop_timeout(mut self, timeout: Duration) -> Self {
+        self.stop_timeout = timeout;
+        self
+    }
+
+    /// Tune the `session/load` bound (tests shrink it; default 90s).
+    #[doc(hidden)]
+    pub fn with_session_load_timeout(mut self, timeout: Duration) -> Self {
+        self.session_load_timeout = timeout;
         self
     }
 
@@ -1680,6 +1727,7 @@ impl AcpHarness {
         block_on_install: bool,
         extra_args: &[String],
         _mcp: Option<&ensembyte_proto::McpServer>,
+        run_env: &std::collections::BTreeMap<String, String>,
     ) -> Result<
         (
             Option<ScratchDir>,
@@ -1716,18 +1764,19 @@ impl AcpHarness {
         if let Some(dir) = &scratch {
             dir.apply(&mut cmd);
         }
+        crate::apply_run_env(&mut cmd, run_env);
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let child = cmd.spawn().map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                HarnessError::NotInstalled(crate::executable::binary_hint(&exe))
-            } else {
-                HarnessError::Io(e)
-            }
+            let cwd = cwd.filter(|c| !c.is_empty()).map(std::path::Path::new);
+            crate::executable::spawn_error(e, cwd, || crate::executable::binary_hint(&exe))
         })?;
         let mut child = Child::new(child);
+        if !exits_on_stdin_eof(self.spec.id) {
+            crate::process::ignores_stdin_eof(&mut child);
+        }
         let stderr_tail = crate::StderrTail::default();
         let sign_in_prompted = CancellationToken::new();
         if let Some(stderr) = child.stderr.take() {
@@ -1735,7 +1784,7 @@ impl AcpHarness {
             let prompted = sign_in_prompted.clone();
             let harness = self.spec.id;
             tokio::spawn(async move {
-                let mut lines = tokio::io::BufReader::new(stderr).lines();
+                let mut lines = crate::lossy_lines::lossy_lines(stderr);
                 while let Ok(Some(line)) = lines.next_line().await {
                     tracing::debug!(target: "ensembyte_harness::acp", "stderr: {line}");
                     tail.push(&line);
@@ -1759,7 +1808,13 @@ impl AcpHarness {
         cwd: Option<&std::path::Path>,
     ) -> Result<Vec<SlashCommand>, HarnessError> {
         let (_scratch, mut child, _stderr, sign_in_prompted) = self
-            .spawn_agent(cwd.and_then(|p| p.to_str()), false, &[], None)
+            .spawn_agent(
+                cwd.and_then(|p| p.to_str()),
+                false,
+                &[],
+                None,
+                &Default::default(),
+            )
             .await?;
         let (client, mut incoming) = match (child.stdin.take(), child.stdout.take()) {
             (Some(stdin), Some(stdout)) => {
@@ -1817,6 +1872,7 @@ impl AcpHarness {
         let discovery =
             unless_sign_in_prompted(discovery, &sign_in_prompted, self.spec.display_name);
         let result = tokio::time::timeout(self.model_discovery_timeout, discovery).await;
+        client.close_stdin_for_teardown();
         child.shutdown(self.kill_grace).await;
         match result {
             Ok(inner) => inner,
@@ -1830,9 +1886,10 @@ impl AcpHarness {
     /// wire is the source of truth — the spec's static catalog only enriches
     /// matching entries and names the pick when the agent advertises nothing.
     async fn discover_models(&self) -> Result<Vec<Model>, HarnessError> {
-        let (_scratch, mut child, stderr_tail, sign_in_prompted) =
-            self.spawn_agent(None, false, &[], None).await?;
-        let (client, _incoming) = match (child.stdin.take(), child.stdout.take()) {
+        let (_scratch, mut child, stderr_tail, sign_in_prompted) = self
+            .spawn_agent(None, false, &[], None, &Default::default())
+            .await?;
+        let (client, incoming) = match (child.stdin.take(), child.stdout.take()) {
             (Some(stdin), Some(stdout)) => {
                 client_with_sign_in_prompt(stdin, stdout, self.spec.id, &sign_in_prompted)
             }
@@ -1841,6 +1898,10 @@ impl AcpHarness {
                 return Err(HarnessError::Protocol("agent child has no stdio".into()));
             }
         };
+        // Nothing here reads the incoming channel, yet the reader blocks on
+        // it once full — before parsing the session/new response — and a
+        // server request left unanswered can stall the agent. Drain it.
+        let drain = tokio::spawn(drain_discovery_incoming(client.clone(), incoming));
         let discovery = async {
             client
                 .request("initialize", initialize_params(self.spec.id))
@@ -1869,6 +1930,8 @@ impl AcpHarness {
         let discovery =
             unless_sign_in_prompted(discovery, &sign_in_prompted, self.spec.display_name);
         let result = tokio::time::timeout(self.model_discovery_timeout, discovery).await;
+        drain.abort();
+        client.close_stdin_for_teardown();
         child.shutdown(self.kill_grace).await;
         match result {
             Ok(inner) => inner,
@@ -1922,7 +1985,7 @@ fn models_from_session(session_response: &Value, catalog: &[Model]) -> Vec<Model
         .map(|a| a.as_slice())
         .unwrap_or_default();
 
-    let ladder: Vec<ReasoningLevel> = config_options
+    let mut ladder: Vec<ReasoningLevel> = config_options
         .iter()
         .find(|o| o.get("category").and_then(Value::as_str) == Some("thought_level"))
         .and_then(|o| o.get("options").and_then(Value::as_array))
@@ -1933,6 +1996,8 @@ fn models_from_session(session_response: &Value, catalog: &[Model]) -> Vec<Model
                 .collect()
         })
         .unwrap_or_default();
+    ladder.sort_unstable();
+    ladder.dedup();
     let wire_options: Vec<ModelOption> = config_options
         .iter()
         .filter_map(trait_from_config_option)
@@ -2145,6 +2210,24 @@ impl Harness for AcpHarness {
         // quiet watchdog must not park a still-pending model request either.
         true
     }
+    /// `session/cancel` settles the prompt `cancelled`; the agent process
+    /// and its session take the next `session/prompt`.
+    fn stops_turn_in_place(&self) -> bool {
+        true
+    }
+    /// The session's model, effort and model options are selected over the
+    /// protocol (`session/set_model`, `session/set_config_option`), so a
+    /// change applies between turns without a new agent. Clearing one back
+    /// to the agent's default cannot be expressed that way.
+    fn reconfigures_in_place(&self, live: &RunRequest, next: &RunRequest) -> bool {
+        live.cwd == next.cwd
+            && (next.model.is_some() || live.model.is_none())
+            && (next.reasoning.is_some() || live.reasoning.is_none())
+            && live
+                .model_options
+                .keys()
+                .all(|key| next.model_options.contains_key(key))
+    }
 
     fn supports_steering(&self) -> bool {
         true
@@ -2328,7 +2411,13 @@ impl Harness for AcpHarness {
         controls: RunControls,
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
         let (scratch, mut child, stderr_tail, sign_in_prompted) = self
-            .spawn_agent(Some(&request.cwd), true, &[], request.mcp.as_ref())
+            .spawn_agent(
+                Some(&request.cwd),
+                true,
+                &[],
+                request.mcp.as_ref(),
+                &request.env,
+            )
             .await?;
         let stdin = child
             .stdin
@@ -2341,18 +2430,19 @@ impl Harness for AcpHarness {
         let (client, incoming) =
             client_with_sign_in_prompt(stdin, stdout, self.spec.id, &sign_in_prompted);
         let (event_tx, event_rx) = mpsc::channel::<Result<AgentEvent, HarnessError>>(256);
-        let devin_selection = match request.model.as_deref() {
-            Some(model) if self.spec.id == HarnessId::Devin => {
-                let (exe, _) = self.resolve_program(false).await?;
-                let selection = self
-                    .devin_models
-                    .selection(
-                        &exe,
-                        self.model_discovery_timeout,
-                        model,
-                        &request.model_options,
-                    )
-                    .await;
+        let devin_catalog = if self.spec.id == HarnessId::Devin {
+            let (exe, _) = self.resolve_program(false).await?;
+            Some(DevinCatalog {
+                catalog: self.devin_models.clone(),
+                exe,
+                timeout: self.model_discovery_timeout,
+            })
+        } else {
+            None
+        };
+        let devin_selection = match (request.model.as_deref(), &devin_catalog) {
+            (Some(model), Some(devin)) => {
+                let selection = devin.selection(model, &request.model_options).await;
                 if selection.is_none() && model == devin_models::FUSION {
                     let chosen = |key: &str| {
                         request
@@ -2387,6 +2477,7 @@ impl Harness for AcpHarness {
             prompt_complete_extension: self.spec.prompt_complete_extension,
             preempt_steers: self.spec.steering_mode == SteeringMode::StepBoundary,
             devin_selection,
+            devin_catalog,
             resend_unstarted: self.spec.drops_unstarted_cancelled_prompt,
             prompt_stall: self.spec.prompt_stall,
             stall_hint: self.spec.stall_hint,
@@ -2396,6 +2487,8 @@ impl Harness for AcpHarness {
             interrupt_grace: self.interrupt_grace,
             kill_grace: self.kill_grace,
             handshake_timeout: self.handshake_timeout,
+            stop_timeout: self.stop_timeout,
+            session_load_timeout: self.session_load_timeout,
             stderr_tail,
             sign_in_prompted,
         }));
@@ -2431,6 +2524,8 @@ struct Session {
     preempt_steers: bool,
     /// Devin: the requested model's catalog group (see `devin_models`).
     devin_selection: Option<devin_models::Selection>,
+    /// Devin: the catalog a later model switch selects its group from.
+    devin_catalog: Option<DevinCatalog>,
     /// See `AcpAgentSpec::drops_unstarted_cancelled_prompt`.
     resend_unstarted: bool,
     prompt_stall: Option<Duration>,
@@ -2444,8 +2539,37 @@ struct Session {
     interrupt_grace: Duration,
     kill_grace: Duration,
     handshake_timeout: Duration,
+    stop_timeout: Duration,
+    session_load_timeout: Duration,
     stderr_tail: crate::StderrTail,
     sign_in_prompted: CancellationToken,
+}
+
+/// Devin's model catalog, for selecting a model's group on the live session.
+struct DevinCatalog {
+    catalog: std::sync::Arc<devin_models::Catalog>,
+    exe: PathBuf,
+    timeout: Duration,
+}
+
+impl DevinCatalog {
+    async fn selection(
+        &self,
+        model: &str,
+        options: &serde_json::Map<String, Value>,
+    ) -> Option<devin_models::Selection> {
+        self.catalog
+            .selection(&self.exe, self.timeout, model, options)
+            .await
+    }
+}
+
+/// How a session selects a run's model, effort and model options.
+#[derive(Clone, Copy)]
+struct ConfigRules {
+    harness: HarnessId,
+    effort_in_model_id: bool,
+    effort_values: fn(Option<ReasoningLevel>, Option<&str>) -> Vec<&'static str>,
 }
 
 fn initialize_params(harness: HarnessId) -> Value {
@@ -2457,9 +2581,12 @@ fn initialize_params(harness: HarnessId) -> Value {
         // Devin otherwise exposes only the parent's run_subagent call. This
         // unlocks lifecycle tags plus every nested message, thought, and tool
         // update, all of which DevinTracker can route. Do not advertise the
-        // separate subagentControl extension: Orbit has no matching UI yet.
+        // separate subagentControl extension: Ensembyte has no matching UI yet.
         capabilities["_meta"] = json!({ "cognition.ai/subagentSupport": true });
     }
+    // Grok gets no `_meta.clientType`, deliberately: naming a client type
+    // that can show a prompt turns the actions its Auto-mode classifier
+    // denies into permission requests, which ensembyte accepts like any other.
     json!({
         "protocolVersion": 1,
         "clientInfo": {
@@ -2472,6 +2599,17 @@ fn initialize_params(harness: HarnessId) -> Value {
         // the diff pane, and commands belong to the agent's own sandbox.
         "clientCapabilities": capabilities,
     })
+}
+
+/// `session/cancel` params. Grok treats a cancel carrying a user gesture as
+/// a barrier against its stale background-task wake prompts until the next
+/// real prompt; a bare cancel lets them restart the stopped work.
+fn cancel_params(harness: HarnessId, session_id: &str) -> Value {
+    let mut params = json!({ "sessionId": session_id });
+    if harness == HarnessId::Grok {
+        params["_meta"] = json!({ "cancelTrigger": "ctrl_c" });
+    }
+    params
 }
 
 /// `session/new` `mcpServers` for an injected server: ACP spells a stdio
@@ -2932,12 +3070,12 @@ fn stop_outcome(
 fn prompt_turn(
     client: RpcClient,
     session_id: String,
-    text: String,
+    prompt: &PromptInput,
     prompt_id: Option<String>,
 ) -> BoxFuture<'static, Result<Value, HarnessError>> {
     let mut params = json!({
         "sessionId": session_id,
-        "prompt": [{ "type": "text", "text": text }],
+        "prompt": prompt.blocks(),
     });
     if let Some(id) = prompt_id {
         params["_meta"] = json!({ "promptId": id, "requestId": id });
@@ -2945,6 +3083,49 @@ fn prompt_turn(
     // Written now, not on first poll: a steer's `session/cancel` issued in
     // the same loop iteration must reach the agent after this prompt.
     client.request_now("session/prompt", params)
+}
+
+/// A message bound for the agent: its text plus the image blocks inlined
+/// with it — empty unless the agent advertises `promptCapabilities.image`;
+/// the image paths also ride the text as refs either way.
+#[derive(Clone, Default)]
+struct PromptInput {
+    text: String,
+    images: Vec<Value>,
+}
+
+impl PromptInput {
+    async fn new(text: String, attachments: &[String], inline_images: bool) -> Self {
+        let images = if inline_images && !attachments.is_empty() {
+            match crate::pi::load_images(attachments).await {
+                Value::Array(images) => images,
+                _ => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        Self { text, images }
+    }
+
+    fn blocks(&self) -> Vec<Value> {
+        std::iter::once(json!({ "type": "text", "text": self.text }))
+            .chain(self.images.iter().cloned())
+            .collect()
+    }
+
+    /// Several queued messages delivered as one prompt.
+    fn join(prompts: impl IntoIterator<Item = PromptInput>) -> Self {
+        let mut texts = Vec::new();
+        let mut images = Vec::new();
+        for prompt in prompts {
+            texts.push(prompt.text);
+            images.extend(prompt.images);
+        }
+        Self {
+            text: texts.join("\n\n"),
+            images,
+        }
+    }
 }
 
 /// Answer a server→client request. Permission requests are auto-accepted with
@@ -3005,6 +3186,54 @@ fn is_user_question(options: &[Value]) -> bool {
     })
 }
 
+/// Question-shaped permission requests still waiting on the user. ACP
+/// requires the client to answer every pending permission request
+/// `cancelled` once it cancels the prompt, so a stop or interrupt answers
+/// them here instead of leaving the agent waiting on a dialog nobody sees.
+#[derive(Default)]
+struct PendingQuestions {
+    /// Ids not yet answered; whoever removes an id answers it, exactly once.
+    unanswered: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+    tasks: tokio::task::JoinSet<()>,
+}
+
+impl PendingQuestions {
+    fn spawn(
+        &mut self,
+        client: RpcClient,
+        id: Value,
+        answer: impl std::future::Future<Output = Value> + Send + 'static,
+    ) {
+        while self.tasks.try_join_next().is_some() {}
+        self.lock().push(id.clone());
+        let unanswered = std::sync::Arc::clone(&self.unanswered);
+        self.tasks.spawn(async move {
+            let result = answer.await;
+            let mut unanswered = unanswered
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(index) = unanswered.iter().position(|pending| *pending == id) {
+                unanswered.remove(index);
+                client.respond(&id, result);
+            }
+        });
+    }
+
+    /// Answer every waiting question `cancelled` and drop its dialog.
+    fn cancel_all(&mut self, client: &RpcClient) {
+        self.tasks.abort_all();
+        for id in std::mem::take(&mut *self.lock()) {
+            client.respond(&id, json!({ "outcome": { "outcome": "cancelled" } }));
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Value>> {
+        self.unanswered
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
 /// The live-run request handler: tool permissions auto-accept like
 /// [`handle_server_request`], but question-shaped requests block on the
 /// engine's input bridge (in a subtask so the message loop keeps flowing)
@@ -3017,6 +3246,7 @@ fn handle_server_request_live(
     params: &Value,
     request_input: &std::sync::Arc<RequestInputFn>,
     session_id: &str,
+    questions: &mut PendingQuestions,
 ) -> Vec<AgentEvent> {
     if params
         .get("sessionId")
@@ -3060,9 +3290,8 @@ fn handle_server_request_live(
         multiline: false,
         multi_select: false,
     };
-    let client = client.clone();
     let request_input = std::sync::Arc::clone(request_input);
-    tokio::spawn(async move {
+    questions.spawn(client.clone(), id, async move {
         let answers = (request_input)(vec![question.clone()])
             .await
             .unwrap_or_default();
@@ -3077,11 +3306,10 @@ fn handle_server_request_live(
             })
             .and_then(|o| o.get("optionId").and_then(Value::as_str));
         match picked {
-            Some(option_id) => client.respond(
-                &id,
-                json!({ "outcome": { "outcome": "selected", "optionId": option_id } }),
-            ),
-            None => client.respond(&id, json!({ "outcome": { "outcome": "cancelled" } })),
+            Some(option_id) => {
+                json!({ "outcome": { "outcome": "selected", "optionId": option_id } })
+            }
+            None => json!({ "outcome": { "outcome": "cancelled" } }),
         }
     });
     Vec::new()
@@ -3173,21 +3401,171 @@ fn windows_noop_browser(executable: &Path) -> Result<String, HarnessError> {
     Ok(format!("\"{executable}\" --noop-browser %s"))
 }
 
-/// `session/new`. Agents that sign in from Settings never start a browser
-/// sign-in mid-chat; an auth_required answer points the user there instead.
-async fn new_session(
+/// How a resumed run restores its session: `session/load` replays the whole
+/// transcript, `session/resume` only reattaches it. Each is used only when
+/// advertised; Antigravity prefers resume because its load replays every
+/// tool call, which on a long chat outlasts the handshake. An agent
+/// declaring neither still gets a load attempt — a method-not-found refusal
+/// falls back to a fresh session (see [`session_unrestorable`]).
+fn restore_method(init: &Value, harness: HarnessId) -> &'static str {
+    let capabilities = &init["agentCapabilities"];
+    let load = capabilities["loadSession"].as_bool() == Some(true);
+    let resume = !capabilities["sessionCapabilities"]["resume"].is_null();
+    match (load, resume) {
+        (true, true) if harness == HarnessId::Antigravity => "session/resume",
+        (false, true) => "session/resume",
+        _ => "session/load",
+    }
+}
+
+/// Whether a failed restore means the agent no longer has the session, so
+/// starting fresh loses nothing a retry would recover: ACP's
+/// resource-not-found code, no restore method at all, or a message that
+/// names the session as missing ("Session not found" from Devin). A bare
+/// "not found" is not enough: a missing MCP server command or model fails
+/// a load in the same words while the session is fine. Grok is the one
+/// exception: for an unknown session its only answer is a generic
+/// "Path not found." (FS_NOT_FOUND, verified on 1.0.46), and a missing
+/// working directory cannot be the cause there — the agent was started in
+/// it. Anything else — the load timing out, the agent exiting or its pipe
+/// closing before an answer, any other refusal — keeps the session for the
+/// next message.
+fn session_unrestorable(harness: HarnessId, error: &HarnessError) -> bool {
+    let HarnessError::Protocol(message) = error else {
+        return false;
+    };
+    let message = message.to_ascii_lowercase();
+    let says = |needles: &[&str]| needles.iter().any(|needle| message.contains(needle));
+    says(&["(code -32002)", "(code -32601)"])
+        || says(&["session not found", "unknown session", "no such session"])
+        || (harness == HarnessId::Grok
+            && message.contains("path not found")
+            && message.contains("fs_not_found"))
+}
+
+/// `session/new`, or for a resumed run the advertised restore with a visible
+/// fallback to a fresh session when the agent no longer has it (see
+/// [`session_unrestorable`]); any other restore failure errors the run and
+/// keeps the session. auth_required propagates so setup can sign in and
+/// retry.
+#[allow(clippy::too_many_arguments)]
+async fn open_session(
     client: &RpcClient,
     incoming: &mut mpsc::Receiver<Incoming>,
-    params: Value,
+    init: &Value,
+    harness: HarnessId,
+    request: &RunRequest,
     agent_name: &str,
-    signs_in_from_settings: bool,
-) -> Result<Value, HarnessError> {
-    match request_draining(client, incoming, "session/new", params).await {
-        Err(error) if signs_in_from_settings && is_auth_required(&error) => {
-            Err(HarnessError::Protocol(not_signed_in(agent_name)))
+    load_timeout: Duration,
+    event_tx: &mpsc::Sender<Result<AgentEvent, HarnessError>>,
+) -> Result<(String, Value), HarnessError> {
+    let params = json!({
+        "cwd": request.cwd,
+        "mcpServers": acp_mcp_servers(request.mcp.as_ref()),
+    });
+    if let Some(resume) = &request.resume {
+        let method = restore_method(init, harness);
+        let mut restore = params.clone();
+        restore["sessionId"] = Value::String(resume.clone());
+        let restored = if method == "session/load" {
+            tokio::time::timeout(
+                load_timeout,
+                request_draining(client, incoming, method, restore),
+            )
+            .await
+            .unwrap_or_else(|_| {
+                Err(HarnessError::Protocol(format!(
+                    "session/load: the history replay did not finish within {}s",
+                    load_timeout.as_secs()
+                )))
+            })
+        } else {
+            request_draining(client, incoming, method, restore).await
+        };
+        match restored {
+            Ok(response) => return Ok((resume.clone(), response)),
+            Err(e) if is_auth_required(&e) => return Err(e),
+            // A slow or interrupted restore is retried by the next message;
+            // starting fresh would replace the stored session for good.
+            Err(e) if !session_unrestorable(harness, &e) => {
+                return Err(HarnessError::Protocol(format!(
+                    "{agent_name} could not restore session {resume}; the next message tries again: {e}"
+                )));
+            }
+            // A missing/foreign session falls back to a fresh one.
+            Err(e) => {
+                tracing::debug!(
+                    target: "ensembyte_harness::acp",
+                    "{method} failed (starting fresh): {e}"
+                );
+                let _ = send(event_tx, AgentEvent::Error {
+                    message: format!("{agent_name} could not restore session {resume}; starting a new session without the previous context: {e}"),
+                }).await;
+            }
         }
-        other => other,
     }
+    let new = request_draining(client, incoming, "session/new", params).await?;
+    let session_id = new
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    Ok((session_id, new))
+}
+
+/// The sign-in a run may perform on its own after auth_required: the method
+/// the agent itself names as its default (`_meta.defaultAuthMethodId` — Grok's
+/// `cached_token`, which re-reads its stored login). Not just any advertised
+/// method: the others open a browser sign-in nobody is watching. `Err` names
+/// the kind of a method that cannot run here at all (terminal, env var).
+fn run_auth_method(init: &Value) -> Result<Option<String>, String> {
+    let Some(default) = init["_meta"]["defaultAuthMethodId"].as_str() else {
+        return Ok(None);
+    };
+    let Some(method) = init["authMethods"]
+        .as_array()
+        .and_then(|methods| methods.iter().find(|m| m["id"].as_str() == Some(default)))
+    else {
+        return Ok(None);
+    };
+    match method["type"].as_str() {
+        None | Some("agent") => Ok(Some(default.to_owned())),
+        Some(kind) => Err(kind.replace('_', " ")),
+    }
+}
+
+/// Answer auth_required once from the run itself (see [`run_auth_method`]),
+/// so a login the agent can restore by itself does not fail the chat.
+async fn authenticate_for_run(
+    client: &RpcClient,
+    incoming: &mut mpsc::Receiver<Incoming>,
+    init: &Value,
+    agent_name: &str,
+    required: &HarnessError,
+) -> Result<(), HarnessError> {
+    let method = match run_auth_method(init) {
+        Ok(Some(method)) => method,
+        Ok(None) => return Err(HarnessError::Protocol(signed_out(agent_name, required))),
+        Err(kind) => {
+            return Err(HarnessError::Protocol(format!(
+                "{agent_name} isn't signed in, and its sign-in ({kind}) can't run inside a \
+                 chat. Sign in from a terminal, then send the message again."
+            )));
+        }
+    };
+    request_draining(
+        client,
+        incoming,
+        "authenticate",
+        json!({ "methodId": method }),
+    )
+    .await
+    .map(|_| ())
+    .map_err(|e| HarnessError::Protocol(signed_out(agent_name, &e)))
+}
+
+fn signed_out(agent_name: &str, error: &HarnessError) -> String {
+    format!("{agent_name} isn't signed in: {error}")
 }
 
 /// acp reserves -32000 for auth_required.
@@ -3348,7 +3726,7 @@ async fn request_draining(
     method: &'static str,
     params: Value,
 ) -> Result<Value, HarnessError> {
-    let loading_session = matches!(method, "session/new" | "session/load");
+    let loading_session = matches!(method, "session/new" | "session/load" | "session/resume");
     let requested_session = params
         .get("sessionId")
         .and_then(Value::as_str)
@@ -3437,6 +3815,38 @@ async fn request_draining(
     })
 }
 
+/// Discard a probe's notifications and refuse its server requests, like
+/// command discovery does, until the probe drops the receiver's task.
+async fn drain_discovery_incoming(client: RpcClient, mut incoming: mpsc::Receiver<Incoming>) {
+    while let Some(inc) = incoming.recv().await {
+        if let Incoming::Request { id, .. } = inc {
+            client.respond_error(&id, -32601, "unsupported during discovery");
+        }
+    }
+}
+
+/// [`request_draining`] for a session control call (`set_model`,
+/// `set_config_option`): the session loop is blocked while one waits, so an
+/// agent that never answers must not hold off the run's stop or interrupt.
+async fn control_request(
+    client: &RpcClient,
+    incoming: &mut mpsc::Receiver<Incoming>,
+    method: &'static str,
+    params: Value,
+) -> Result<Value, HarnessError> {
+    tokio::time::timeout(
+        CONTROL_REQUEST_TIMEOUT,
+        request_draining(client, incoming, method, params),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        Err(HarnessError::Protocol(format!(
+            "{method}: the agent did not answer within {}s",
+            CONTROL_REQUEST_TIMEOUT.as_secs()
+        )))
+    })
+}
+
 fn prompt_like_request(
     client: RpcClient,
     method: &'static str,
@@ -3464,11 +3874,11 @@ fn track_open_tools(ev: &AgentEvent, open_tools: &mut std::collections::HashSet<
 fn steering_call_future(
     client: &RpcClient,
     session_id: &str,
-    text: &str,
+    prompt: &PromptInput,
 ) -> BoxFuture<'static, Result<Value, HarnessError>> {
     let params = json!({
         "sessionId": session_id,
-        "prompt": [{ "type": "text", "text": text }],
+        "prompt": prompt.blocks(),
         "_meta": { "steering": { "idleBehavior": "promptRequired" } },
     });
     prompt_like_request(client.clone(), "_session/steering", params)
@@ -3476,6 +3886,172 @@ fn steering_call_future(
 
 /// The per-run event loop: one task multiplexing agent messages, the pending
 /// turn, the steering mailbox, the interrupt token, and consumer liveness.
+/// Select `request`'s model, effort and model options on the session —
+/// at its start, and again when a later message changes them. Returns the
+/// session's options as they stand afterwards, which the next switch
+/// compares against.
+async fn select_session_config(
+    client: &RpcClient,
+    incoming: &mut mpsc::Receiver<Incoming>,
+    rules: ConfigRules,
+    session_id: &str,
+    mut session_response: Value,
+    request: &RunRequest,
+    devin_selection: Option<devin_models::Selection>,
+) -> Result<Value, HarnessError> {
+    // Devin selects one advertised member of the requested model's group;
+    // effort and speed baked into a saved id apply unless the run chose
+    // its own.
+    let mut request = request.clone();
+    if rules.harness == HarnessId::Devin
+        && let Some(model) = request.model.clone()
+    {
+        let selection = devin_selection.unwrap_or_default();
+        let advertised = devin_models::wait_for_model(
+            client,
+            incoming,
+            session_id,
+            &mut session_response,
+            &model,
+            &selection.members,
+        )
+        .await?;
+        request.model = Some(advertised);
+        if request.reasoning.is_none() {
+            request.reasoning = selection.effort;
+        }
+        if selection.fast && !request.model_options.contains_key("speed") {
+            request
+                .model_options
+                .insert("speed".into(), Value::String("fast".into()));
+        }
+    }
+    // ACP has had two model-selection surfaces. Newer config-option agents
+    // use category=model below; Grok Build currently advertises only the
+    // first-class `models` state and requires `session/set_model`. Other
+    // ACP clients follow the same split. Unlike the best-effort auxiliary options,
+    // an explicit model switch is strict: prompting with a different
+    // model than the picker shows is worse than surfacing the RPC error.
+    let requested_model: Option<String> = match request.model.as_deref() {
+        Some(model) if rules.effort_in_model_id => Some(effort_variant_id(
+            &session_response,
+            model,
+            request.reasoning,
+        )),
+        model => model.map(str::to_owned),
+    };
+    if rules.harness == HarnessId::Antigravity {
+        validate_config_model_selection(
+            &session_response,
+            requested_model.as_deref(),
+            &request.model_options,
+        )?;
+    }
+    if let Some(model) = first_class_model_change(&session_response, requested_model.as_deref())? {
+        control_request(
+            client,
+            incoming,
+            "session/set_model",
+            json!({
+                "sessionId": session_id,
+                "modelId": model,
+            }),
+        )
+        .await
+        .map_err(|error| {
+            HarnessError::Protocol(format!("agent rejected model switch to {model}: {error}"))
+        })?;
+        // The next switch compares against the model now current.
+        if let Some(models) = session_response.get_mut("models") {
+            models["currentModelId"] = Value::String(model);
+        }
+    }
+    // Apply the run's model + effort + model options through the
+    // session's advertised config options. Best-effort for effort and
+    // traits: a rejected auxiliary set is logged and the agent default
+    // runs.
+    let efforts = (rules.effort_values)(request.reasoning, request.model.as_deref());
+    let mut options_snapshot = session_response;
+    let mut sets = config_option_sets(
+        &options_snapshot,
+        requested_model.as_deref(),
+        &efforts,
+        &request.model_options,
+    );
+    // Devin's effort and speed choices depend on the selected model:
+    // switch the model first, then choose them from what it offers.
+    let deferred = rules.harness == HarnessId::Devin
+        && sets
+            .iter()
+            .any(|(id, _)| is_model_config_option(&options_snapshot, id));
+    if deferred {
+        sets.retain(|(id, _)| is_model_config_option(&options_snapshot, id));
+    }
+    let mut pass = 0;
+    loop {
+        for (config_id, payload) in std::mem::take(&mut sets) {
+            let mut params = serde_json::Map::new();
+            params.insert("sessionId".into(), session_id.into());
+            params.insert("configId".into(), config_id.clone().into());
+            if let Some(payload) = payload.as_object() {
+                for (k, v) in payload {
+                    params.insert(k.clone(), v.clone());
+                }
+            }
+            match control_request(
+                client,
+                incoming,
+                "session/set_config_option",
+                Value::Object(params),
+            )
+            .await
+            {
+                Ok(response) => {
+                    if let Some(options) = response.get("configOptions") {
+                        options_snapshot["configOptions"] = options.clone();
+                    } else if let Some(value) = payload.get("value")
+                        && let Some(option) = options_snapshot["configOptions"]
+                            .as_array_mut()
+                            .and_then(|options| {
+                                options.iter_mut().find(|o| o["id"] == config_id.as_str())
+                            })
+                    {
+                        // The next switch compares against the value now set.
+                        option["currentValue"] = value.clone();
+                    }
+                }
+                Err(e) => {
+                    if matches!(rules.harness, HarnessId::Antigravity | HarnessId::Devin)
+                        && requested_model.is_some()
+                        && is_model_config_option(&options_snapshot, &config_id)
+                    {
+                        return Err(HarnessError::Protocol(format!(
+                            "agent rejected requested model {}: {e}",
+                            requested_model.as_deref().unwrap_or_default()
+                        )));
+                    }
+                    tracing::debug!(
+                        target: "ensembyte_harness::acp",
+                        "session/set_config_option {config_id}={payload} rejected (agent default runs): {e}"
+                    );
+                }
+            }
+        }
+        pass += 1;
+        if !deferred || pass > 1 {
+            break;
+        }
+        sets = config_option_sets(
+            &options_snapshot,
+            requested_model.as_deref(),
+            &efforts,
+            &request.model_options,
+        );
+        sets.retain(|(id, _)| !is_model_config_option(&options_snapshot, id));
+    }
+    Ok(options_snapshot)
+}
+
 async fn run_session(session: Session) {
     let Session {
         // Locals drop in reverse binding order: reap the child before cleanup.
@@ -3485,12 +4061,13 @@ async fn run_session(session: Session) {
         mut incoming,
         event_tx,
         controls,
-        request,
+        mut request,
         harness,
         agent_name,
         prompt_complete_extension,
         preempt_steers,
         devin_selection,
+        devin_catalog,
         resend_unstarted,
         prompt_stall,
         stall_hint,
@@ -3502,16 +4079,25 @@ async fn run_session(session: Session) {
         interrupt_grace,
         kill_grace,
         handshake_timeout,
+        stop_timeout,
+        session_load_timeout,
         stderr_tail,
         sign_in_prompted,
     } = session;
     let RunControls {
+        realtime: _,
         execution_lease: _execution_lease,
         request_input,
         mut steering,
         interrupt,
+        turn: turn_control,
     } = controls;
     let request_input = std::sync::Arc::new(request_input);
+    let rules = ConfigRules {
+        harness,
+        effort_in_model_id,
+        effort_values,
+    };
 
     // ---- handshake + session (interruptible) ------------------------------
     let setup = async {
@@ -3520,280 +4106,172 @@ async fn run_session(session: Session) {
             .await?;
         let steer_ext = steering_supported(&init);
         let init_commands = scan_available_commands(&init);
+        let inline_images =
+            init["agentCapabilities"]["promptCapabilities"]["image"].as_bool() == Some(true);
 
-        let session_params = json!({
-            "cwd": request.cwd,
-            "mcpServers": acp_mcp_servers(request.mcp.as_ref()),
-        });
-        let (session_id, mut session_response) = if let Some(resume) = &request.resume {
-            let mut load = session_params.clone();
-            load["sessionId"] = Value::String(resume.clone());
-            match request_draining(&client, &mut incoming, "session/load", load).await {
-                Ok(resp) => (resume.clone(), resp),
-                Err(e) if auth_method.is_some() && is_auth_required(&e) => {
-                    return Err(HarnessError::Protocol(not_signed_in(agent_name)));
-                }
-                // A missing/foreign session falls back to a fresh one.
-                Err(e) => {
-                    tracing::debug!(
-                        target: "ensembyte_harness::acp",
-                        "session/load failed (starting fresh): {e}"
-                    );
-                    let _ = send(&event_tx, AgentEvent::Error {
-                        message: format!("{agent_name} could not restore session {resume}; starting a new session without the previous context: {e}"),
-                    }).await;
-                    let new = new_session(
-                        &client,
-                        &mut incoming,
-                        session_params.clone(),
-                        agent_name,
-                        auth_method.is_some(),
-                    )
-                    .await?;
-                    (
-                        new.get("sessionId")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                            .to_owned(),
-                        new,
-                    )
-                }
-            }
-        } else {
-            let new = new_session(
+        // auth_required gets one sign-in and retry; agents that sign in
+        // from Settings never start a sign-in mid-chat and point there.
+        let mut authenticated = false;
+        let (session_id, session_response) = loop {
+            match open_session(
                 &client,
                 &mut incoming,
-                session_params,
+                &init,
+                harness,
+                &request,
                 agent_name,
-                auth_method.is_some(),
+                session_load_timeout,
+                &event_tx,
             )
-            .await?;
-            (
-                new.get("sessionId")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned(),
-                new,
-            )
+            .await
+            {
+                Err(e) if is_auth_required(&e) && auth_method.is_some() => {
+                    return Err(HarnessError::Protocol(not_signed_in(agent_name)));
+                }
+                Err(e) if is_auth_required(&e) && !authenticated => {
+                    authenticated = true;
+                    authenticate_for_run(&client, &mut incoming, &init, agent_name, &e).await?;
+                }
+                Err(e) if is_auth_required(&e) => {
+                    return Err(HarnessError::Protocol(signed_out(agent_name, &e)));
+                }
+                other => break other?,
+            }
         };
         if session_id.is_empty() {
             return Err(HarnessError::Protocol(
                 "session/new returned no sessionId".into(),
             ));
         }
-        // Devin selects one advertised member of the requested model's group;
-        // effort and speed baked into a saved id apply unless the run chose
-        // its own.
-        let mut request = request.clone();
-        if harness == HarnessId::Devin
-            && let Some(model) = request.model.clone()
-        {
-            let selection = devin_selection.clone().unwrap_or_default();
-            let advertised = devin_models::wait_for_model(
-                &client,
-                &mut incoming,
-                &session_id,
-                &mut session_response,
-                &model,
-                &selection.members,
-            )
-            .await?;
-            request.model = Some(advertised);
-            if request.reasoning.is_none() {
-                request.reasoning = selection.effort;
-            }
-            if selection.fast && !request.model_options.contains_key("speed") {
-                request
-                    .model_options
-                    .insert("speed".into(), Value::String("fast".into()));
-            }
-        }
-        // ACP has had two model-selection surfaces. Newer config-option agents
-        // use category=model below; Grok Build currently advertises only the
-        // first-class `models` state and requires `session/set_model`. Other
-        // ACP clients follow the same split. Unlike the best-effort auxiliary options,
-        // an explicit model switch is strict: prompting with a different
-        // model than the picker shows is worse than surfacing the RPC error.
-        let requested_model: Option<String> = match request.model.as_deref() {
-            Some(model) if effort_in_model_id => Some(effort_variant_id(
-                &session_response,
-                model,
-                request.reasoning,
-            )),
-            model => model.map(str::to_owned),
-        };
-        if harness == HarnessId::Antigravity {
-            validate_config_model_selection(
-                &session_response,
-                requested_model.as_deref(),
-                &request.model_options,
-            )?;
-        }
-        if let Some(model) =
-            first_class_model_change(&session_response, requested_model.as_deref())?
-        {
-            request_draining(
-                &client,
-                &mut incoming,
-                "session/set_model",
-                json!({
-                    "sessionId": session_id,
-                    "modelId": model,
-                }),
-            )
-            .await
-            .map_err(|error| {
-                HarnessError::Protocol(format!("agent rejected model switch to {model}: {error}"))
-            })?;
-        }
-        // Apply the run's model + effort + model options through the
-        // session's advertised config options. Best-effort for effort and
-        // traits: a rejected auxiliary set is logged and the agent default
-        // runs.
-        let efforts = effort_values(request.reasoning, request.model.as_deref());
         let session_commands = scan_available_commands(&session_response);
         let init_commands = if session_commands.is_empty() {
             init_commands
         } else {
             session_commands
         };
-        let mut options_snapshot = session_response;
-        let mut sets = config_option_sets(
-            &options_snapshot,
-            requested_model.as_deref(),
-            &efforts,
-            &request.model_options,
-        );
-        // Devin's effort and speed choices depend on the selected model:
-        // switch the model first, then choose them from what it offers.
-        let deferred = harness == HarnessId::Devin
-            && sets
-                .iter()
-                .any(|(id, _)| is_model_config_option(&options_snapshot, id));
-        if deferred {
-            sets.retain(|(id, _)| is_model_config_option(&options_snapshot, id));
-        }
-        let mut pass = 0;
-        loop {
-            for (config_id, payload) in std::mem::take(&mut sets) {
-                let mut params = serde_json::Map::new();
-                params.insert("sessionId".into(), session_id.clone().into());
-                params.insert("configId".into(), config_id.clone().into());
-                if let Some(payload) = payload.as_object() {
-                    for (k, v) in payload {
-                        params.insert(k.clone(), v.clone());
-                    }
-                }
-                match request_draining(
-                    &client,
-                    &mut incoming,
-                    "session/set_config_option",
-                    Value::Object(params),
-                )
-                .await
-                {
-                    Ok(response) => {
-                        if let Some(options) = response.get("configOptions") {
-                            options_snapshot["configOptions"] = options.clone();
-                        }
-                    }
-                    Err(e) => {
-                        if matches!(harness, HarnessId::Antigravity | HarnessId::Devin)
-                            && requested_model.is_some()
-                            && is_model_config_option(&options_snapshot, &config_id)
-                        {
-                            return Err(HarnessError::Protocol(format!(
-                                "agent rejected requested model {}: {e}",
-                                requested_model.as_deref().unwrap_or_default()
-                            )));
-                        }
-                        tracing::debug!(
-                            target: "ensembyte_harness::acp",
-                            "session/set_config_option {config_id}={payload} rejected (agent default runs): {e}"
-                        );
-                    }
-                }
-            }
-            pass += 1;
-            if !deferred || pass > 1 {
-                break;
-            }
-            sets = config_option_sets(
-                &options_snapshot,
-                requested_model.as_deref(),
-                &efforts,
-                &request.model_options,
-            );
-            sets.retain(|(id, _)| !is_model_config_option(&options_snapshot, id));
-        }
-        Ok::<(String, bool, Vec<SlashCommand>), HarnessError>((
+        let session_options = select_session_config(
+            &client,
+            &mut incoming,
+            rules,
+            &session_id,
+            session_response,
+            &request,
+            devin_selection.clone(),
+        )
+        .await?;
+        Ok::<(String, bool, bool, Vec<SlashCommand>, Value), HarnessError>((
             session_id,
             steer_ext,
+            inline_images,
             init_commands,
+            session_options,
         ))
     };
-    let setup = unless_sign_in_prompted(setup, &sign_in_prompted, agent_name);
-    let (session_id, steer_ext, init_commands) = tokio::select! {
-        res = tokio::time::timeout(handshake_timeout, setup) => {
-            let res = res.unwrap_or_else(|_| {
-                // A hung handshake (agent waiting on a login it can never
-                // get, a wedged adapter) used to spin "Working" forever —
-                // the false "thinking for 2+ minutes then nothing" class of
-                // report. Bound it and say what was reached.
-                Err(HarnessError::Protocol(format!(
-                    "{agent_name} did not complete the ACP handshake within {}s \
-                     (the agent may be waiting for a login — try running it once \
-                     in a terminal)",
-                    handshake_timeout.as_secs()
-                )))
-            });
-            match res {
-                Ok(v) => v,
-                Err(e) => {
-                    // A child that dies before the handshake used to surface only
-                    // the RPC-side symptom ("transport closed") — its exit status
-                    // and stderr, both already in hand, were dropped, leaving
-                    // startup crashes undiagnosable (user report). When the child
-                    // is already gone, give the reader task a beat to drain the
-                    // pipe, then append the crash text; the Done carrying it is
-                    // journaled, so the cause survives for later inspection. A
-                    // still-live child (the timeout) contributes its stderr tail.
-                    let error = match child.try_wait() {
-                        Ok(Some(status)) => {
-                            tokio::time::sleep(Duration::from_millis(200)).await;
-                            format!(
-                                "{e}; {}",
-                                crate::crash_message(agent_name, Some(status), &stderr_tail)
-                            )
-                        }
-                        _ => match stderr_tail.snapshot() {
-                            Some(tail) => format!("{e}; stderr: {tail}"),
-                            None => e.to_string(),
-                        },
-                    };
-                    tracing::warn!(target: "ensembyte_harness::acp", %error, "agent setup failed");
+    let mut setup_exit = None;
+    let mut setup_drain_deadline = None;
+    let setup_budget = if request.resume.is_some() {
+        handshake_timeout + session_load_timeout
+    } else {
+        handshake_timeout
+    };
+    // Scoped: the setup future borrows `incoming` until it is dropped.
+    let res = {
+        let setup = unless_sign_in_prompted(setup, &sign_in_prompted, agent_name);
+        tokio::pin!(setup);
+        let handshake_deadline = tokio::time::sleep(setup_budget);
+        tokio::pin!(handshake_deadline);
+        loop {
+            tokio::select! {
+                res = &mut setup => break res,
+                // A hung handshake (agent waiting on a login it can never get, a
+                // wedged adapter) used to spin "Working" forever — the false
+                // "thinking for 2+ minutes then nothing" class of report. Bound it
+                // and say what was reached.
+                _ = &mut handshake_deadline => {
+                    break Err(HarnessError::Protocol(format!(
+                        "{agent_name} did not complete the ACP handshake within {}s \
+                         (the agent may be waiting for a login — try running it once \
+                         in a terminal)",
+                        setup_budget.as_secs()
+                    )));
+                }
+                // A crash mid-handshake must not sit out the whole bound: a
+                // descendant holding stdout open keeps the requests pending. Same
+                // short drain as the main loop for frames already written.
+                status = child.wait(), if setup_exit.is_none() => {
+                    setup_exit = Some(status.ok());
+                    child.request_group_shutdown();
+                    setup_drain_deadline = Some(tokio::time::Instant::now() + Duration::from_millis(200));
+                }
+                _ = tokio::time::sleep_until(setup_drain_deadline.unwrap_or_else(tokio::time::Instant::now)),
+                    if setup_drain_deadline.is_some() =>
+                {
+                    break Err(HarnessError::Protocol(format!(
+                        "{agent_name} exited during the ACP handshake"
+                    )));
+                }
+                _ = interrupt.cancelled() => {
                     let _ = event_tx
                         .send(Ok(AgentEvent::Done {
-                            status: DoneStatus::Errored,
+                            status: DoneStatus::Interrupted,
                             result: None,
-                            error: Some(error),
+                            error: None,
                             session_id: None,
                         }))
                         .await;
+                    client.close_stdin_for_teardown();
                     child.shutdown(kill_grace).await;
                     return;
                 }
             }
-        },
-        _ = interrupt.cancelled() => {
+        }
+    };
+    let (session_id, steer_ext, inline_images, init_commands, mut session_options) = match res {
+        Ok(v) => v,
+        Err(e) => {
+            // A child that dies before the handshake used to surface only
+            // the RPC-side symptom ("transport closed") — its exit status
+            // and stderr, both already in hand, were dropped, leaving
+            // startup crashes undiagnosable (user report). When the child
+            // is already gone, give the reader task a beat to drain the
+            // pipe, then append the crash text; the Done carrying it is
+            // journaled, so the cause survives for later inspection. A
+            // still-live child (the timeout) contributes its stderr tail.
+            let exited = match setup_exit {
+                Some(status) => Some(status),
+                None => match child.try_wait() {
+                    Ok(Some(status)) => {
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        Some(Some(status))
+                    }
+                    _ => None,
+                },
+            };
+            let error = match exited {
+                Some(status) => {
+                    stderr_tail.wait_closed().await;
+                    format!(
+                        "{e}; {}",
+                        crate::crash_message(agent_name, status, &stderr_tail)
+                    )
+                }
+                None => match stderr_tail.snapshot() {
+                    Some(tail) => format!("{e}; stderr: {tail}"),
+                    None => e.to_string(),
+                },
+            };
+            tracing::warn!(target: "ensembyte_harness::acp", %error, "agent setup failed");
             let _ = event_tx
                 .send(Ok(AgentEvent::Done {
-                    status: DoneStatus::Interrupted,
+                    status: DoneStatus::Errored,
                     result: None,
-                    error: None,
-                    session_id: None,
+                    error: Some(error),
+                    // A resumed run that never got going still owns the
+                    // session it was restoring; the next message retries it.
+                    session_id: request.resume.clone(),
                 }))
                 .await;
+            client.close_stdin_for_teardown();
             child.shutdown(kill_grace).await;
             return;
         }
@@ -3813,6 +4291,7 @@ async fn run_session(session: Session) {
     )
     .await
     {
+        client.close_stdin_for_teardown();
         child.shutdown(kill_grace).await;
         return;
     }
@@ -3825,6 +4304,7 @@ async fn run_session(session: Session) {
         )
         .await
     {
+        client.close_stdin_for_teardown();
         child.shutdown(kill_grace).await;
         return;
     }
@@ -3861,28 +4341,34 @@ async fn run_session(session: Session) {
     };
     let mut prompt_stall_deadline: Option<tokio::time::Instant> =
         prompt_stall.map(|d| tokio::time::Instant::now() + d);
-    // The text of the prompt in flight (re-sent by a preempt when the agent
-    // drops an unstarted cancelled prompt).
-    let mut current_prompt_text = prompt_transform(request.reasoning, &request.prompt);
+    // The prompt in flight (re-sent by a preempt when the agent drops an
+    // unstarted cancelled prompt).
+    let mut current_prompt = PromptInput::new(
+        prompt_transform(request.reasoning, &request.prompt),
+        &request.attachments,
+        inline_images,
+    )
+    .await;
     let mut turn: Option<BoxFuture<'static, Result<Value, HarnessError>>> = Some({
         prompt_turn(
             client.clone(),
             session_id.clone(),
-            current_prompt_text.clone(),
+            &current_prompt,
             current_prompt_id.clone(),
         )
     });
     // Steers waiting for the turn boundary (agents without the extension, or
     // extension steers that lost the turn-end race).
-    let mut queued_steers: VecDeque<String> = VecDeque::new();
+    let mut queued_steers: VecDeque<PromptInput> = VecDeque::new();
     // The in-flight `_session/steering` call (text + response future), plus
     // followers awaiting their turn. Polled from the main select so the loop
     // keeps draining `incoming` while the agent responds — awaiting inline
     // deadlocks against a full incoming channel when the agent floods
     // updates (the reader blocks on the channel and never parses the
     // steering response).
-    let mut steering_call: Option<(String, BoxFuture<'static, Result<Value, HarnessError>>)> = None;
-    let mut steer_backlog: VecDeque<String> = VecDeque::new();
+    let mut steering_call: Option<(PromptInput, BoxFuture<'static, Result<Value, HarnessError>>)> =
+        None;
+    let mut steer_backlog: VecDeque<PromptInput> = VecDeque::new();
     let mut steering_open = true;
     // Immediate steering for agents without a mid-turn steering extension:
     // a steer cancels the current generation (never a running tool — it
@@ -3896,6 +4382,12 @@ async fn run_session(session: Session) {
     let mut progress_seq: u64 = 0;
     let mut interrupted = false;
     let mut interrupt_sent = false;
+    // A turn stop (`TurnControl::stop_turn`) in flight: `session/cancel`
+    // ends the prompt and the session stays up for the next one.
+    let mut stopping = false;
+    // When a stop in flight gives up on the agent (see DEFAULT_STOP_TIMEOUT).
+    let mut stop_deadline: Option<tokio::time::Instant> = None;
+    let mut questions = PendingQuestions::default();
     let mut done_current = false;
     let mut done_after_interrupt = false;
     let mut escalation_target = None;
@@ -3933,6 +4425,32 @@ async fn run_session(session: Session) {
     const BUSY_RECENT: Duration = Duration::from_secs(3);
     const CANCEL_FLUSH: Duration = Duration::from_secs(2);
     let mut cancel_flush_deadline: Option<tokio::time::Instant> = None;
+    // When our last prompt settled. Only traffic arriving past it (and past
+    // the settled turn's own trailing frames) is an unowned turn: counting
+    // the tail of our own turn as "busy" cancelled an idle session for every
+    // prompt sent within BUSY_RECENT of the last one — and an idle-session
+    // cancel is not harmless (Hermes 0.20 fails the next prompt with an
+    // internal error).
+    const OWN_TAIL: Duration = Duration::from_millis(500);
+    let mut prompt_settled_at: Option<tokio::time::Instant> = None;
+    // Messages that change the model, effort or options: the session takes a
+    // change only between turns, so one sent mid-turn waits here — and the
+    // messages after it in the mailbox wait behind it — until the session is
+    // quiet. `released` hands the next one to the steering branch.
+    let mut deferred: VecDeque<crate::SteerMessage> = VecDeque::new();
+    let mut released: Option<crate::SteerMessage> = None;
+    macro_rules! quiet {
+        () => {
+            turn.is_none()
+                && cancel_flush_deadline.is_none()
+                && queued_steers.is_empty()
+                && steering_call.is_none()
+                && steer_backlog.is_empty()
+                && open_tools.is_empty()
+                && !(last_update_at.elapsed() < BUSY_RECENT
+                    && prompt_settled_at.is_none_or(|settled| last_update_at > settled + OWN_TAIL))
+        };
+    }
 
     let mut child_exit = None;
     let mut exit_drain_deadline = None;
@@ -3963,9 +4481,14 @@ async fn run_session(session: Session) {
 
             res = async { turn.as_mut().expect("guarded by if").await }, if turn.is_some() => {
                 turn = None;
+                stop_deadline = None;
                 if res.is_err() && client.is_closed() {
                     break 'main;
                 }
+                prompt_settled_at = Some(tokio::time::Instant::now());
+                // The settled prompt's tool calls are over with it; a tool
+                // still reported open would read as an unowned turn.
+                open_tools.clear();
                 starve_deadline = None;
                 prompt_stall_deadline = None;
                 if let Some(id) = current_prompt_id.take() {
@@ -4000,7 +4523,7 @@ async fn run_session(session: Session) {
                             .to_owned(),
                         Ok(Err(_)) | Err(_) => "promptRequired".to_owned(),
                     };
-                    if interrupted {
+                    if interrupted || stopping {
                         // Winding down; abandoned like any queued steer.
                     } else if outcome != "promptRequired" {
                         let (prev, next) = rotate(&mut assistant_message_id);
@@ -4047,7 +4570,7 @@ async fn run_session(session: Session) {
                                 &method,
                                 &params,
                                 &request_input,
-                                &session_id,
+                                &session_id, &mut questions,
                             ) {
                                 if !send(&event_tx, ev).await {
                                     consumer_gone = true;
@@ -4082,13 +4605,15 @@ async fn run_session(session: Session) {
                 }
                 // A steer preempted this turn: the session lives on and the
                 // steers continue it below, so there is no turn end to report.
+                let stopped = std::mem::take(&mut stopping);
                 let preempted = std::mem::take(&mut preempt_sent)
                     && !interrupted
+                    && !stopped
                     && res.is_ok()
                     && !queued_steers.is_empty();
                 preempt_pending = false;
                 if !preempted {
-                    let (status, mut error) = stop_outcome(&res, interrupted);
+                    let (status, mut error) = stop_outcome(&res, interrupted || stopped);
                     if !interrupted
                         && auth_method.is_some()
                         && res.as_ref().is_err_and(is_auth_required)
@@ -4112,7 +4637,7 @@ async fn run_session(session: Session) {
                     {
                         break 'main;
                     }
-                    if interrupted || res.is_err() {
+                    if interrupted || (res.is_err() && !stopped) {
                         break 'main;
                     }
                 }
@@ -4121,11 +4646,11 @@ async fn run_session(session: Session) {
                 // boundary; otherwise stay alive for the mailbox — the caller
                 // owns teardown (mirrors the codex harness).
                 if !queued_steers.is_empty() {
-                    let mut texts = Vec::with_capacity(queued_steers.len() + 1);
+                    let mut prompts = Vec::with_capacity(queued_steers.len() + 1);
                     if preempted && resend_unstarted && progress_seq != prompt_seq {
-                        texts.push(std::mem::take(&mut current_prompt_text));
+                        prompts.push(std::mem::take(&mut current_prompt));
                     }
-                    while let Some(text) = queued_steers.pop_front() {
+                    while let Some(steer) = queued_steers.pop_front() {
                         let (prev, next) = rotate(&mut assistant_message_id);
                         if !send(
                             &event_tx,
@@ -4138,7 +4663,7 @@ async fn run_session(session: Session) {
                         {
                             break 'main;
                         }
-                        texts.push(text);
+                        prompts.push(steer);
                     }
                     done_current = false;
                     open_tools.clear();
@@ -4148,11 +4673,11 @@ async fn run_session(session: Session) {
                         prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
-                    current_prompt_text = texts.join("\n\n");
+                    current_prompt = PromptInput::join(prompts);
                     turn = Some(prompt_turn(
                         client.clone(),
                         session_id.clone(),
-                        current_prompt_text.clone(),
+                        &current_prompt,
                         current_prompt_id.clone(),
                     ));
                 } else if !steering_open {
@@ -4259,7 +4784,7 @@ async fn run_session(session: Session) {
                         && turn.is_some()
                         && open_tools.is_empty()
                     {
-                        client.notify("session/cancel", Some(json!({ "sessionId": session_id })));
+                        client.notify("session/cancel", Some(cancel_params(harness, &session_id)));
                         preempt_sent = true;
                     }
                 }
@@ -4271,7 +4796,7 @@ async fn run_session(session: Session) {
                         &method,
                         &params,
                         &request_input,
-                        &session_id,
+                        &session_id, &mut questions,
                     ) {
                         if !send(&event_tx, ev).await {
                             break 'main;
@@ -4339,9 +4864,9 @@ async fn run_session(session: Session) {
                         "promptRequired".to_owned()
                     }
                 };
-                if interrupted {
-                    // The run is winding down; the steer is abandoned like
-                    // any queued steer at interrupt.
+                if interrupted || stopping {
+                    // The run is winding down, or its turn stopping: the
+                    // steer is abandoned like any queued steer.
                 } else if outcome != "promptRequired" {
                     // Injected into a live turn → a Steered boundary. But if
                     // the turn ended while the call was in flight, the
@@ -4381,7 +4906,7 @@ async fn run_session(session: Session) {
                                         &method,
                                         &params,
                                         &request_input,
-                                &session_id,
+                                &session_id, &mut questions,
                                     ) {
                                         if !send(&event_tx, ev).await {
                                             consumer_gone = true;
@@ -4459,11 +4984,11 @@ async fn run_session(session: Session) {
                         prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
-                    current_prompt_text = text.clone();
+                    current_prompt = text;
                     turn = Some(prompt_turn(
                         client.clone(),
                         session_id.clone(),
-                        text,
+                        &current_prompt,
                         current_prompt_id.clone(),
                     ));
                 }
@@ -4509,11 +5034,11 @@ async fn run_session(session: Session) {
                         prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
-                    current_prompt_text = text.clone();
+                    current_prompt = text;
                     turn = Some(prompt_turn(
                         client.clone(),
                         session_id.clone(),
-                        text,
+                        &current_prompt,
                         current_prompt_id.clone(),
                     ));
                 } else if turn.is_none() && !steering_open {
@@ -4538,6 +5063,7 @@ async fn run_session(session: Session) {
                 // Drop the dead future: a response that somehow arrives later
                 // resolves a closed channel harmlessly.
                 turn = None;
+                stop_deadline = None;
                 let (prev, _next) = rotate(&mut assistant_message_id);
                 if !send(
                     &event_tx,
@@ -4551,7 +5077,11 @@ async fn run_session(session: Session) {
                 if !send(
                     &event_tx,
                     AgentEvent::Done {
-                        status: DoneStatus::Completed,
+                        status: if std::mem::take(&mut stopping) {
+                            DoneStatus::Interrupted
+                        } else {
+                            DoneStatus::Completed
+                        },
                         result: None,
                         error: None,
                         session_id: Some(session_id.clone()),
@@ -4582,11 +5112,11 @@ async fn run_session(session: Session) {
                         prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
-                    current_prompt_text = text.clone();
+                    current_prompt = text;
                     turn = Some(prompt_turn(
                         client.clone(),
                         session_id.clone(),
-                        text,
+                        &current_prompt,
                         current_prompt_id.clone(),
                     ));
                 } else if !steering_open {
@@ -4596,18 +5126,117 @@ async fn run_session(session: Session) {
                 }
             },
 
-            steer = steering.recv(), if steering_open && !interrupted => match steer {
+            _ = tokio::time::sleep(Duration::from_millis(100)),
+                if released.is_none() && !deferred.is_empty() && !interrupted && quiet!() =>
+            {
+                released = deferred.pop_front();
+            },
+
+            steer = async {
+                match released.take() {
+                    Some(msg) => Some(msg),
+                    None => steering.recv().await,
+                }
+            }, if (released.is_some() || (steering_open && deferred.is_empty())) && !interrupted => match steer {
                 Some(msg) => {
+                    if msg.config.is_some() && !quiet!() {
+                        deferred.push_back(msg);
+                        continue 'main;
+                    }
+                    if let Some(next) = msg.config.as_deref() {
+                        let selection = match (&devin_catalog, next.model.as_deref()) {
+                            (Some(devin), Some(model)) => {
+                                devin.selection(model, &next.model_options).await
+                            }
+                            _ => None,
+                        };
+                        // Awaited inline, so a stop or an interrupt must
+                        // still get through while the agent answers.
+                        let applied = tokio::select! {
+                            res = select_session_config(
+                                &client,
+                                &mut incoming,
+                                rules,
+                                &session_id,
+                                session_options.clone(),
+                                next,
+                                selection,
+                            ) => Some(res),
+                            _ = interrupt.cancelled() => {
+                                interrupt_sent = true;
+                                interrupted = true;
+                                None
+                            }
+                            _ = turn_control.stop_requested() => None,
+                        };
+                        let Some(applied) = applied else {
+                            if interrupted {
+                                // Idle between turns, like the interrupt arm.
+                                break 'main;
+                            }
+                            // The stopped message never started its turn;
+                            // whatever it already switched is re-compared
+                            // against the old snapshot on the next change.
+                            deferred.clear();
+                            released = None;
+                            done_current = true;
+                            if !send(&event_tx, AgentEvent::Done {
+                                status: DoneStatus::Interrupted,
+                                result: None,
+                                error: None,
+                                session_id: Some(session_id.clone()),
+                            }).await {
+                                break 'main;
+                            }
+                            continue 'main;
+                        };
+                        match applied {
+                            Ok(options) => {
+                                session_options = options;
+                                request.model = next.model.clone();
+                                request.reasoning = next.reasoning;
+                                request.model_options = next.model_options.clone();
+                            }
+                            Err(e) => {
+                                // The message cannot run as it was sent.
+                                let (prev, next) = rotate(&mut assistant_message_id);
+                                let message = e.to_string();
+                                done_current = true;
+                                if !send(&event_tx, AgentEvent::Steered {
+                                    assistant_message_id: Some(prev),
+                                    next_assistant_message_id: Some(next),
+                                }).await
+                                    || !send(&event_tx, AgentEvent::Error { message: message.clone() }).await
+                                    || !send(&event_tx, AgentEvent::Done {
+                                        status: DoneStatus::Errored,
+                                        result: None,
+                                        error: Some(message),
+                                        session_id: Some(session_id.clone()),
+                                    }).await
+                                {
+                                    break 'main;
+                                }
+                                continue 'main;
+                            }
+                        }
+                    }
                     // Same transform as the initial prompt: Claude's
                     // Ultrathink prefix rides every steer too.
-                    let text = prompt_transform(request.reasoning, &msg.prompt);
+                    let prompt = PromptInput::new(
+                        prompt_transform(request.reasoning, &msg.prompt),
+                        &msg.attachments,
+                        inline_images,
+                    )
+                    .await;
                     if turn.is_none() && cancel_flush_deadline.is_some() {
                         // A busy-session cancel is already in flight: this
                         // steer lines up behind it and dispatches at flush.
-                        queued_steers.push_back(text);
+                        queued_steers.push_back(prompt);
                     } else if turn.is_none()
                         && (!open_tools.is_empty()
-                            || last_update_at.elapsed() < BUSY_RECENT)
+                            || (last_update_at.elapsed() < BUSY_RECENT
+                                && prompt_settled_at
+                                    .is_none_or(|settled| last_update_at > settled + OWN_TAIL)))
                     {
                         // Mid self-continued turn (see BUSY_RECENT above):
                         // cancel it rather than prompt into the starve.
@@ -4617,11 +5246,8 @@ async fn run_session(session: Session) {
                             "steer into a self-continuing session; cancelling \
                              the unowned turn before prompting"
                         );
-                        client.notify(
-                            "session/cancel",
-                            Some(json!({ "sessionId": session_id })),
-                        );
-                        queued_steers.push_back(text);
+                        client.notify("session/cancel", Some(cancel_params(harness, &session_id)));
+                        queued_steers.push_back(prompt);
                         cancel_flush_deadline =
                             Some(tokio::time::Instant::now() + CANCEL_FLUSH);
                     } else if turn.is_none() {
@@ -4646,11 +5272,11 @@ async fn run_session(session: Session) {
                         prompt_complete_extension.then(|| format!("ensembyte-p{prompt_seq}"));
                     prompt_stall_deadline =
                         prompt_stall.map(|d| tokio::time::Instant::now() + d);
-                    current_prompt_text = text.clone();
+                    current_prompt = prompt;
                     turn = Some(prompt_turn(
                         client.clone(),
                         session_id.clone(),
-                        text,
+                        &current_prompt,
                         current_prompt_id.clone(),
                     ));
                     } else if steer_ext {
@@ -4659,24 +5285,21 @@ async fn run_session(session: Session) {
                         // select branch. One call in flight at a time;
                         // followers wait in the backlog.
                         if steering_call.is_some() {
-                            steer_backlog.push_back(text);
+                            steer_backlog.push_back(prompt);
                         } else {
-                            let fut = steering_call_future(&client, &session_id, &text);
-                            steering_call = Some((text, fut));
+                            let fut = steering_call_future(&client, &session_id, &prompt);
+                            steering_call = Some((prompt, fut));
                         }
                     } else {
                         // No extension: preempt the generation and continue
                         // the turn with this steer (see `preempt_pending`).
-                        queued_steers.push_back(text);
+                        queued_steers.push_back(prompt);
                         preempt_pending = preempt_steers;
                         if preempt_pending
                             && !preempt_sent
                             && open_tools.is_empty()
                         {
-                            client.notify(
-                                "session/cancel",
-                                Some(json!({ "sessionId": session_id })),
-                            );
+                            client.notify("session/cancel", Some(cancel_params(harness, &session_id)));
                             preempt_sent = true;
                         }
                     }
@@ -4689,11 +5312,48 @@ async fn run_session(session: Session) {
                 }
             },
 
+            // End the prompt in flight, not the agent: `session/cancel`
+            // settles it `cancelled` and the session takes the next prompt
+            // (background work the agent holds keeps running). Steers still
+            // waiting for this turn's end go with it.
+            _ = turn_control.stop_requested(), if !interrupted => {
+                queued_steers.clear();
+                steer_backlog.clear();
+                // A steer still in flight goes with the turn too: its answer
+                // (promptRequired, once the turn is cancelled) would queue it
+                // again and run the cancelled message after all.
+                steering_call = None;
+                deferred.clear();
+                released = None;
+                preempt_pending = false;
+                if turn.is_some() {
+                    stopping = true;
+                    stop_deadline = Some(tokio::time::Instant::now() + stop_timeout);
+                    if !preempt_sent {
+                        client.notify("session/cancel", Some(cancel_params(harness, &session_id)));
+                    }
+                    questions.cancel_all(&client);
+                } else {
+                    // Between turns: nothing to cancel. Settle the stop so the
+                    // host sees the turn over.
+                    done_current = true;
+                    if !send(&event_tx, AgentEvent::Done {
+                        status: DoneStatus::Interrupted,
+                        result: None,
+                        error: None,
+                        session_id: Some(session_id.clone()),
+                    }).await {
+                        break 'main;
+                    }
+                }
+            },
+
             _ = interrupt.cancelled(), if !interrupt_sent => {
                 interrupt_sent = true;
                 interrupted = true;
                 if turn.is_some() {
-                    client.notify("session/cancel", Some(json!({ "sessionId": session_id })));
+                    client.notify("session/cancel", Some(cancel_params(harness, &session_id)));
+                    questions.cancel_all(&client);
                     // Escalate if the agent doesn't wind down (stopReason
                     // "cancelled") within the grace periods.
                     if let Some(pid) = crate::process::signal_target(&child) {
@@ -4703,6 +5363,34 @@ async fn run_session(session: Session) {
                 } else {
                     // Idle between turns: nothing to cancel — the terminal
                     // bookkeeping below still guarantees Done { Interrupted }.
+                    break 'main;
+                }
+            },
+
+            // The stop's cancel went unanswered: the agent is wedged on it
+            // (the stall watchdog is off once traffic arrived; only an
+            // interrupt escalates). Close the turn as stopped and retire the
+            // process; the next message restores the session in a fresh one.
+            _ = tokio::time::sleep_until(stop_deadline.unwrap_or_else(tokio::time::Instant::now)),
+                if stop_deadline.is_some() && !interrupted =>
+            {
+                stop_deadline = None;
+                if turn.is_some() && stopping {
+                    tracing::warn!(
+                        target: "ensembyte_harness::acp",
+                        "{agent_name} did not settle a stopped turn within {}s; retiring the process",
+                        stop_timeout.as_secs()
+                    );
+                    let (prev, _next) = rotate(&mut assistant_message_id);
+                    let _ = send(
+                        &event_tx,
+                        AgentEvent::AssistantMessageCompleted { assistant_message_id: prev },
+                    )
+                    .await;
+                    // Wind down like an interrupt: open subagents settle
+                    // Interrupted, then the terminal bookkeeping sends the
+                    // turn's Done { Interrupted }.
+                    interrupted = true;
                     break 'main;
                 }
             },
@@ -4814,6 +5502,7 @@ async fn run_session(session: Session) {
         }
     }
 
+    client.close_stdin_for_teardown();
     child.shutdown(kill_grace).await;
 }
 
@@ -4886,11 +5575,11 @@ mod tests {
 
     #[test]
     fn windows_browser_suppression_quotes_the_executable_path() {
-        let command = windows_noop_browser(Path::new(r"C:\Program Files\Orbit\ensembyte.exe"))
+        let command = windows_noop_browser(Path::new(r"C:\Program Files\Ensembyte\ensembyte.exe"))
             .expect("browser command");
         assert_eq!(
             command,
-            r#""C:\\Program Files\\Orbit\\ensembyte.exe" --noop-browser %s"#
+            r#""C:\\Program Files\\Ensembyte\\ensembyte.exe" --noop-browser %s"#
         );
         for path in [r"C:\semi;colon\ensembyte.exe", r"C:\percent%s\ensembyte.exe"] {
             assert!(windows_noop_browser(Path::new(path)).is_err());
@@ -5368,6 +6057,123 @@ mod tests {
     }
 
     #[test]
+    fn restore_prefers_what_the_agent_advertises() {
+        let init = |load: bool, resume: bool| {
+            let mut capabilities = json!({ "loadSession": load });
+            if resume {
+                capabilities["sessionCapabilities"] = json!({ "resume": {} });
+            }
+            json!({ "agentCapabilities": capabilities })
+        };
+        assert_eq!(
+            restore_method(&init(true, true), HarnessId::Grok),
+            "session/load"
+        );
+        assert_eq!(
+            restore_method(&init(true, true), HarnessId::Antigravity),
+            "session/resume"
+        );
+        assert_eq!(
+            restore_method(&init(false, true), HarnessId::Grok),
+            "session/resume"
+        );
+        assert_eq!(
+            restore_method(&init(true, false), HarnessId::Antigravity),
+            "session/load"
+        );
+        // Undeclared: a load attempt, whose refusal starts fresh.
+        assert_eq!(
+            restore_method(&json!({}), HarnessId::Hermes),
+            "session/load"
+        );
+    }
+
+    #[test]
+    fn only_a_missing_session_is_unrestorable() {
+        let error = |message: &str| HarnessError::Protocol(format!("session/load: {message}"));
+        // Grok 1.0.46's answer for an unknown session id.
+        let grok_missing = r#"Path not found. (code -32603): {"detail":"No such file or directory (os error 2)","code":"FS_NOT_FOUND"}"#;
+        assert!(session_unrestorable(HarnessId::Grok, &error(grok_missing)));
+        // From another agent the same words say nothing about the session.
+        assert!(!session_unrestorable(
+            HarnessId::Devin,
+            &error(grok_missing)
+        ));
+        for missing in [
+            // Devin 3000.11 for an unknown session id.
+            r#"Session not found (code -32016): {"cognition.ai/errorKind":"session_not_found"}"#,
+            "Resource not found (code -32002)",
+            "Method not found (code -32601)",
+            "unknown session (code -32602)",
+        ] {
+            assert!(
+                session_unrestorable(HarnessId::Devin, &error(missing)),
+                "{missing}"
+            );
+        }
+        for kept in [
+            "the history replay did not finish within 90s",
+            "app-server exited before responding",
+            "app-server stdin closed: Broken pipe",
+            "agent exited during setup",
+            "session store is locked (code -32603)",
+            "Invalid params (code -32602)",
+            // A load fails in these words while the session is fine.
+            "MCP server command not found: ensembyte (code -32603)",
+            "model not found: grok-9 (code -32603)",
+            "Path not found. (code -32603)",
+        ] {
+            for harness in [HarnessId::Grok, HarnessId::Devin, HarnessId::Hermes] {
+                assert!(!session_unrestorable(harness, &error(kept)), "{kept}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_run_signs_in_only_with_the_agents_own_default_method() {
+        // Grok 1.0.46's initialize.
+        let grok = json!({
+            "authMethods": [
+                { "id": "cached_token", "name": "cached_token" },
+                { "id": "grok.com", "name": "Grok" },
+            ],
+            "_meta": { "defaultAuthMethodId": "cached_token" },
+        });
+        assert_eq!(run_auth_method(&grok), Ok(Some("cached_token".into())));
+        // Devin advertises only a browser login and names no default.
+        let devin = json!({
+            "authMethods": [{ "id": "devin-browser", "name": "Log in with browser" }],
+        });
+        assert_eq!(run_auth_method(&devin), Ok(None));
+        // A default that is not advertised is not trusted either.
+        let stale = json!({ "authMethods": [], "_meta": { "defaultAuthMethodId": "gone" } });
+        assert_eq!(run_auth_method(&stale), Ok(None));
+        for (kind, named) in [("terminal", "terminal"), ("env_var", "env var")] {
+            let init = json!({
+                "authMethods": [{ "id": "m", "name": "M", "type": kind }],
+                "_meta": { "defaultAuthMethodId": "m" },
+            });
+            assert_eq!(run_auth_method(&init), Err(named.to_owned()));
+        }
+    }
+
+    #[test]
+    fn grok_cancel_carries_the_gesture_and_others_stay_bare() {
+        assert_eq!(
+            cancel_params(HarnessId::Grok, "s"),
+            json!({ "sessionId": "s", "_meta": { "cancelTrigger": "ctrl_c" } })
+        );
+        assert_eq!(
+            cancel_params(HarnessId::Devin, "s"),
+            json!({ "sessionId": "s" })
+        );
+        // No client type: it would turn Grok's classifier denials into
+        // permission requests (see `initialize_params`).
+        assert!(initialize_params(HarnessId::Grok).get("_meta").is_none());
+        assert!(initialize_params(HarnessId::Hermes).get("_meta").is_none());
+    }
+
+    #[test]
     fn devin_initialize_enables_only_the_supported_subagent_stream() {
         let devin = initialize_params(HarnessId::Devin);
         let meta = &devin["clientCapabilities"]["_meta"];
@@ -5607,6 +6413,68 @@ mod tests {
             vec!["fast-mode"]
         );
         assert_eq!(models[0].options[0].default_choice, "off");
+    }
+
+    #[test]
+    fn grok_thought_levels_order_from_lowest_to_highest() {
+        let response = json!({
+            "sessionId": "s-1",
+            "configOptions": [
+                {
+                    "id": "model",
+                    "name": "Model",
+                    "category": "model",
+                    "type": "select",
+                    "currentValue": "grok-4.7",
+                    "options": [
+                        { "value": "grok-4.7", "name": "Grok 4.7" },
+                        { "value": "grok-4.7-build-fast", "name": "Grok 4.7 Fast" },
+                        { "value": "grok-4.6", "name": "Grok 4.6" },
+                        { "value": "grok-4.5", "name": "Grok 4.5" },
+                    ],
+                },
+                {
+                    "id": "reasoning_effort",
+                    "name": "Reasoning Effort",
+                    "category": "thought_level",
+                    "type": "select",
+                    "currentValue": "xhigh",
+                    "options": [
+                        { "value": "xhigh", "name": "Extra High" },
+                        { "value": "high", "name": "High" },
+                        { "value": "medium", "name": "Medium" },
+                        { "value": "low", "name": "Low" },
+                    ],
+                },
+            ],
+        });
+        let models = models_from_session(&response, &(grok_spec().models)());
+        let ladders = models
+            .iter()
+            .map(|m| (m.id.as_str(), m.reasoning_levels.clone()))
+            .collect::<Vec<_>>();
+        let ascending = vec![
+            ReasoningLevel::Low,
+            ReasoningLevel::Medium,
+            ReasoningLevel::High,
+            ReasoningLevel::XHigh,
+        ];
+        assert_eq!(
+            ladders,
+            vec![
+                ("grok-4.7", ascending.clone()),
+                ("grok-4.7-build-fast", ascending.clone()),
+                ("grok-4.6", ascending),
+                (
+                    "grok-4.5",
+                    vec![
+                        ReasoningLevel::Low,
+                        ReasoningLevel::Medium,
+                        ReasoningLevel::High,
+                    ],
+                ),
+            ]
+        );
     }
 
     #[test]

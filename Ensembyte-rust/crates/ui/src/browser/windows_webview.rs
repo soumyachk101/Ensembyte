@@ -518,13 +518,6 @@ pub(super) enum PointerKind {
     Move,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct NativeComposition {
-    pub device: *mut std::ffi::c_void,
-    pub layer: *mut std::ffi::c_void,
-    pub generation: u64,
-}
-
 impl Host {
     /// Create the page in `data`'s environment. A busy folder at any step
     /// moves the window to its own folder and retries once.
@@ -953,7 +946,7 @@ impl Host {
         bounds: Bounds<Pixels>,
         mask: Bounds<Pixels>,
         scale: f32,
-        composition: Option<NativeComposition>,
+        composition: Option<gpui::NativeComposition>,
     ) {
         let visible = bounds.intersect(&mask);
         {
@@ -984,7 +977,7 @@ impl Host {
 
     /// (Re)create the page visual when the renderer's device generation
     /// changes (first frame, or GPU recovery).
-    fn remount(&self, composition: NativeComposition) {
+    fn remount(&self, composition: gpui::NativeComposition) {
         let mut page = self.page.borrow_mut();
         let Some(page) = page.as_mut() else { return };
         // Handles are only valid for their generation, and the renderer frees

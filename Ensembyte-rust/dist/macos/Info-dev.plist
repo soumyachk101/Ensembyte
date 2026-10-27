@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Ensembyte Dev</string>
+    <key>CFBundleExecutable</key>
+    <string>ensembyte</string>
+    <key>CFBundleIconFile</key>
+    <string>ensembyte.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>app.ensembyte.dev</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Ensembyte Dev</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleVersion</key>
+    <string>__VERSION__</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>LSEnvironment</key>
+    <dict>
+        <key>ENSEMBYTE_AUTO_UPDATE</key>
+        <string>0</string>
+        <key>ENSEMBYTE_DATA_DIR</key>
+        <string>__DATA_DIR__</string>
+        <key>ENSEMBYTE_IPC_PORT</key>
+        <string>__IPC_PORT__</string>
+    </dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Ensembyte uses your microphone for on-device dictation and for voice sessions you start. Voice sessions stream your audio to OpenAI through your ChatGPT-authenticated Codex account.</string>
+    <key>NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+</dict>
+</plist>

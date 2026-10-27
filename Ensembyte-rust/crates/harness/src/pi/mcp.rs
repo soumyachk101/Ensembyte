@@ -8,10 +8,9 @@ pub(super) fn configure(
     let scratch = ScratchDir::new("pi-mcp")?;
     let extension = scratch.path().join("ensembyte-mcp.mjs");
     std::fs::write(&extension, include_str!("mcp.mjs"))?;
-    let serialized = serde_json::to_string(config).expect("serializable MCP config");
-    cmd.arg("--extension")
-        .arg(extension)
-        .env("ENSEMBYTE_PI_MCP", &serialized)
-        .env("ENSEMBYTE_PI_MCP", serialized);
+    cmd.arg("--extension").arg(extension).env(
+        "ENSEMBYTE_PI_MCP",
+        serde_json::to_string(config).expect("serializable MCP config"),
+    );
     Ok(scratch)
 }

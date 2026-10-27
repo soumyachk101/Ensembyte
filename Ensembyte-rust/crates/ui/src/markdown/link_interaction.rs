@@ -256,9 +256,10 @@ impl Element for LinkRanges {
                             cx,
                         );
                         let dismissed = state.dismissed.clone();
-                        let epoch = state.epoch.clone();
                         // This disclosure is not a menu: menu_at consumes every
                         // outside press, preventing other controls from receiving it.
+                        // An outside press only hides it; the links keep their
+                        // ids, so a press on one of them still clicks it.
                         let mut popup = gpui::deferred(
                             gpui::anchored()
                                 .position(rect.bottom_left())
@@ -270,7 +271,6 @@ impl Element for LinkRanges {
                                         .occlude()
                                         .on_mouse_down_out(move |_, window, _| {
                                             dismissed.set(true);
-                                            epoch.set(epoch.get().wrapping_add(1));
                                             window.refresh();
                                         })
                                         .child(card),
@@ -1057,7 +1057,7 @@ mod rendered_tests {
                 assert_eq!(log.borrow().len(), 2);
                 assert_eq!(log.borrow()[0].target.original, "https://example.com/one");
                 assert_eq!(log.borrow()[1].target.original, "https://example.org/two");
-                // Menu starts on Open in Orbit; choose the external action.
+                // Menu starts on Open in Ensembyte; choose the external action.
                 for key in ["down", "enter"] {
                     window.dispatch_event(
                         gpui::PlatformInput::KeyDown(gpui::KeyDownEvent {
@@ -1193,7 +1193,7 @@ mod rendered_tests {
     /// A resolved file link's context menu swaps the web actions for file
     /// rows — the system-level ones only when the owning root is on this
     /// device — which act on the resolved absolute path, and "Open in
-    /// Orbit" routes the file to the viewer.
+    /// Ensembyte" routes the file to the viewer.
     #[cfg(unix)]
     #[gpui::test]
     fn file_link_menu_offers_local_rows_and_acts_on_the_absolute_path(

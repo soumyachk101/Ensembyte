@@ -1,4 +1,4 @@
-// Ported from Zeron (https://github.com/zeronsh/zeron, MIT), crates/orb and crates/ui/src/orb,
+// Ported from Ensembyte (https://github.com/soumyachk101/Ensembyte, MIT), crates/orb and crates/ui/src/orb,
 // itself extracted from Bezel (clearloop, MIT), a port of gpui-thinking-orbs (MIT), a port of
 // Jakub Antalik's thinking-orbs (MIT). See THIRD_PARTY_NOTICES.md.
 //

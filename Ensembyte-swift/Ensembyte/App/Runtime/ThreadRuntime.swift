@@ -766,6 +766,11 @@ final class ThreadRuntime {
             saveRevision += 1
         }
         if saveRevision != lastSavedRevision { scheduleSave() }
+        // A queue restored by install must not sit on an idle lead; flush it now. The
+        // load-time flag skips the lastStatus == .interrupted guard (the mark belongs to
+        // the previous session, not a stop the user just made), so even a thread that was
+        // stopped — or still running — when the app quit gets its prompts back to work.
+        flushFollowUpsIfIdle(resuming: true)
     }
 
     /// Anything that continues the history (a new turn) waits for it first.
@@ -925,33 +930,21 @@ final class ThreadRuntime {
         var attachments: [Attachment]
     }
 
-    /// Interrupts the running turn and sends the draft as soon as the stop
-    /// lands, instead of queueing it as a follow-up. The composer clears at
-    /// once; the message goes out when the turn fully stops (or immediately,
-    /// if the turn finished on its own in the meantime). With heads at work the
-    /// turn is left alone and the draft queues instead: see `hasWorkingHeads`.
-    func interruptAndSend() {
+    /// While the lead's turn runs, Return queues the draft as a follow-up instead of
+    /// stopping the turn: the lead keeps working and the prompt waits for it. With heads
+    /// at work the native ones run inside the lead's session, so nothing is interrupted
+    /// either way; the prompt queues and runs in order. Stopping a turn is the Stop
+    /// button / Esc's job, not Return's. With every message going to a head (the opt-in
+    /// setting), Return instead sends the draft straight to a head.
+    func queueDraftWhileRunning() {
         guard !isDictating else { return }
         guard !isReverting, !draft.isEmpty, phase != .idle else { return }
-        // With every message going to a head, Return while the lead works sends the
-        // draft to a head and leaves the lead's turn alone.
         if dispatchSentHead(text: draft.outgoingText, attachments: draft.attachments) {
             draft = ComposerDraft()
             return
         }
-        // Heads at work are never stopped by a new message. The native ones run inside
-        // the lead's own session, so interrupting the turn would kill them mid-task and
-        // throw away minutes of their work. The draft goes to a Ensembyte-run head of its
-        // own when the settings allow it, else it waits as a follow-up behind the
-        // running turn; either way nothing is interrupted.
-        if hasWorkingHeads {
-            enqueueFollowUp(text: draft.outgoingText, attachments: draft.attachments)
-            draft = ComposerDraft()
-            return
-        }
-        pendingSend = PendingSend(text: draft.outgoingText, attachments: draft.attachments)
+        enqueueFollowUp(text: draft.outgoingText, attachments: draft.attachments)
         draft = ComposerDraft()
-        interrupt()
     }
 
     /// Pairs the dragged follow-up onto another so they go out as one message: both
@@ -1173,10 +1166,13 @@ final class ThreadRuntime {
     }
 
     /// Sends the next queued follow-up to an idle lead at once, even with heads still
-    /// out. A turn the user stopped waits for them instead (see `drainFollowUps`).
-    private func flushFollowUpsIfIdle() {
+    /// out. A turn the user stopped waits for them instead (see `drainFollowUps`) — unless
+    /// the queue is being restored with the thread at app launch: the interrupted mark
+    /// then belongs to a previous session, so `resuming` skips that one guard and the
+    /// prompts run again on the idle lead.
+    private func flushFollowUpsIfIdle(resuming: Bool = false) {
         guard phase == .idle, !followUpFlushScheduled, !followUps.isEmpty,
-              thread?.lastStatus != .interrupted else { return }
+              !(thread?.lastStatus == .interrupted && !resuming) else { return }
         followUpFlushScheduled = true
         Task { await startQueuedFollowUpTurn() }
     }
@@ -1231,11 +1227,11 @@ final class ThreadRuntime {
         scheduleSave()
     }
 
-    /// Sends the next queued follow-up as a direct user message. Only runs when idle after a
-    /// completed turn: an interrupted turn means the user hit stop, so the queue waits for them.
-    /// Returns whether a turn starts.
+    /// Sends the next queued follow-up as a direct user message. Runs when idle after a turn
+    /// the user did not stop: completed and failed turns both drain in order, an interrupted
+    /// one means the user hit stop, so the queue waits for their next word. Returns whether a turn starts.
     private func drainFollowUps(after status: TurnStatus) -> Bool {
-        guard status == .completed, phase == .idle, !followUps.isEmpty else { return false }
+        guard status != .interrupted, phase == .idle, !followUps.isEmpty else { return false }
         var next = takeBundle(startingAt: 0)
         saveRevision += 1
         // Skip prompts that emptied while queued (an attachment file deleted on disk still counts,

@@ -50,6 +50,8 @@
 //! handlers stay transport-agnostic. This includes the workspace file surface,
 //! whose checkout always lives on the routed target device.
 
+mod voice_chat;
+mod voice_remote;
 use async_trait::async_trait;
 use base64::Engine as _;
 use futures::StreamExt;
@@ -61,10 +63,12 @@ use tokio::sync::watch;
 
 use ensembyte_doc::{MessagePart, SessionCommandPayload};
 use ensembyte_proto::{
-    ChatConfig, CreateWorktreeOutcome, EngineInfo, HarnessId, HarnessUpdatePolicy,
+    AgentEvent, ChatConfig, CreateWorktreeOutcome, EngineInfo, HarnessId, HarnessUpdatePolicy,
     ProjectActionDraft, Space, ToolCall, WorkspaceScope,
 };
-use ensembyte_rpc::{LinkCache, RpcError, RpcReply, RpcService, methods, parse_params};
+use ensembyte_rpc::{
+    LinkCache, RpcError, RpcReply, RpcService, capability_errors, methods, parse_params,
+};
 
 use crate::agent_accounts::AgentAccounts;
 use crate::auth::Auth;
@@ -75,6 +79,7 @@ use crate::project_actions::ProjectActionsStore;
 use crate::registry::HarnessRegistry;
 use crate::repos::{Repos, session_home_dir};
 use crate::sessions::SessionsEngine;
+use crate::source_control::{ChangeRequestError, GitHubCli};
 use crate::terminals::Terminals;
 use crate::uploads::Uploads;
 use crate::workspace_host::WorkspaceHost;
@@ -390,12 +395,13 @@ fn resolve_open_terminal_cwd(
     explicit: Option<String>,
     chat_cwd: Option<String>,
     space_cwd: Option<String>,
-) -> Result<String, &'static str> {
+    scratch_root: &std::path::Path,
+) -> Result<String, String> {
     let raw = meaningful_cwd(explicit)
         .or_else(|| meaningful_cwd(chat_cwd))
         .or_else(|| meaningful_cwd(space_cwd))
         .unwrap_or_else(|| "~".to_string());
-    crate::repos::expand_home(&raw)
+    crate::repos::resolve_chat_cwd(&raw, scratch_root)
 }
 
 #[derive(Debug, Deserialize)]
@@ -410,6 +416,10 @@ struct SubscribeTerminalParams {
     terminal_id: String,
     #[serde(default)]
     after_seq: Option<u64>,
+    /// The viewer leaves terminal queries to the host
+    /// (`TerminalSession::host_replies`); older viewers answer them itself.
+    #[serde(default)]
+    host_replies: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -418,6 +428,12 @@ struct WriteTerminalParams {
     terminal_id: String,
     /// Base64 input bytes (plain UTF-8 accepted leniently).
     data: String,
+    /// Remote viewers number their input so a replay after a path change
+    /// is applied once ([`Terminals::write_sequenced`]).
+    #[serde(default)]
+    client_id: Option<String>,
+    #[serde(default)]
+    input_seq: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -495,11 +511,87 @@ struct ReadAttachmentChunkParams {
     offset: u64,
 }
 
+const _: () = assert!(ensembyte_proto::VISUAL_MAX_BYTES == ensembyte_visual::MAX_SCRIPT_BYTES);
+const _: () = assert!(ensembyte_proto::VISUAL_MAX_ASSETS == ensembyte_visual::assets::MAX_ASSETS);
+const _: () = assert!(ensembyte_proto::VISUAL_MAX_ASSET_BYTES == ensembyte_visual::assets::MAX_ASSET_BYTES);
+const _: () = assert!(
+    ensembyte_proto::VISUAL_MAX_TOTAL_ASSET_BYTES == ensembyte_visual::assets::MAX_TOTAL_ASSET_BYTES
+);
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishVisualParams {
+    chat_id: String,
+    title: String,
+    script: String,
+    /// Files the script uses, base64 by name.
+    #[serde(default)]
+    assets: std::collections::BTreeMap<String, String>,
+}
+
+fn no_turn_for_visual() -> RpcError {
+    RpcError::Failed(
+        "This chat has no running turn on this device; show_visual only works from inside a turn."
+            .into(),
+    )
+}
+
+/// Decode and bound a visual's assets.
+fn decode_visual_assets(
+    assets: &std::collections::BTreeMap<String, String>,
+) -> Result<Vec<(String, Vec<u8>)>, RpcError> {
+    use base64::Engine as _;
+    use ensembyte_visual::assets::{MAX_ASSET_BYTES, MAX_ASSETS, MAX_TOTAL_ASSET_BYTES, valid_name};
+    if assets.len() > MAX_ASSETS {
+        return Err(RpcError::BadParams(format!(
+            "a visual takes at most {MAX_ASSETS} assets"
+        )));
+    }
+    let mut total = 0;
+    let mut out = Vec::with_capacity(assets.len());
+    let mut seen = std::collections::HashSet::new();
+    for (name, data) in assets {
+        if !valid_name(name) {
+            return Err(RpcError::BadParams(format!(
+                "asset name '{name}' must be a plain file name"
+            )));
+        }
+        // Stored as files, and file systems often ignore case.
+        if !seen.insert(name.to_ascii_lowercase()) {
+            return Err(RpcError::BadParams(format!(
+                "asset names must differ by more than case ('{name}')"
+            )));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .map_err(|e| RpcError::BadParams(format!("asset '{name}' is not base64: {e}")))?;
+        total += bytes.len();
+        if bytes.len() > MAX_ASSET_BYTES || total > MAX_TOTAL_ASSET_BYTES {
+            return Err(RpcError::BadParams(format!(
+                "asset '{name}' is too large ({} MB each, {} MB together)",
+                MAX_ASSET_BYTES / (1024 * 1024),
+                MAX_TOTAL_ASSET_BYTES / (1024 * 1024)
+            )));
+        }
+        out.push((name.clone(), bytes));
+    }
+    Ok(out)
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FetchToolBlobParams {
     /// Doc-resident sidecar ref (`{chatId}/{partId}` or `…​.diff`).
     blob_ref: String,
+}
+
+/// Where a Cloud chat runs: its session device and that machine's checkout.
+struct CloudHost {
+    device_id: String,
+    cwd: Option<String>,
+    /// The edge wrote the chat's row (a delegate started from a Cloud
+    /// machine, which may only write rows it hosts).
+    row_written: bool,
 }
 
 /// The Mutate surface (feature-inventory §2 DataRpc), tagged by `op`.
@@ -526,10 +618,14 @@ enum MutateParams {
         /// Cwd override (isolated-worktree path); default = the space's folder.
         #[serde(default)]
         cwd: Option<String>,
-        /// The chat whose agent is creating this one (Orbit MCP); recorded
+        /// The chat whose agent is creating this one (Ensembyte MCP); recorded
         /// on the row as `parentChatId` for orchestration trees.
         #[serde(default)]
         parent_chat_id: Option<String>,
+        /// Run on Cloud (the checkout picker's Cloud): the chat gets its own
+        /// Cloud machine, cloning the project's GitHub repository.
+        #[serde(default)]
+        cloud: bool,
     },
     /// Create a space (device + folder pair). Idempotent by id; a live
     /// duplicate `(deviceId, path)` no-ops. `gitDetected` is seeded from the
@@ -543,6 +639,11 @@ enum MutateParams {
         name: Option<String>,
         #[serde(default)]
         git_detected: bool,
+        /// A Cloud project (`deviceId` the logical Cloud device): the GitHub
+        /// repository (`owner/name`) its sessions clone. Ignored elsewhere —
+        /// a device stamps its own folders.
+        #[serde(default)]
+        github_repo: Option<String>,
     },
     /// LWW display-name set; `name: None` clears back to basename(path).
     #[serde(rename_all = "camelCase")]
@@ -607,7 +708,9 @@ enum MutateParams {
     },
 }
 
+#[derive(Clone)]
 pub struct EngineRpc {
+    voice: crate::voice::VoiceManager,
     sessions: SessionsEngine,
     doc_host: DocHost,
     workspace: WorkspaceHost,
@@ -615,9 +718,11 @@ pub struct EngineRpc {
     repos: Repos,
     workspace_files: crate::WorkspaceFiles,
     terminals: Terminals,
+    remote_terminals: crate::remote_terminals::RemoteTerminals,
     project_actions: ProjectActionsStore,
     previews: Option<ensembyte_preview::PreviewService>,
     change_requests: CheckoutChangeRequests,
+    github: GitHubCli,
     diff_sync: CheckoutDiffSync,
     uploads: Uploads,
     agent_accounts: AgentAccounts,
@@ -626,6 +731,10 @@ pub struct EngineRpc {
     updater: Option<ensembyte_update::Updater>,
     harness_updates: Option<crate::harness_updates::HarnessUpdateCoordinator>,
     local_import: Option<crate::local_import::LocalImporter>,
+    /// Cloud runner only: vault grants (ListGithubRepos, credentialed CloneRepo).
+    credentials: Option<crate::credentials::CredentialBroker>,
+    /// Viewports' window focus, for desktop banners.
+    viewport_focus: crate::desktop_notify::ViewportFocus,
     engine_info: EngineInfo,
 }
 
@@ -646,13 +755,23 @@ impl EngineRpc {
         agent_accounts: AgentAccounts,
         workspace_scope: WorkspaceScope,
     ) -> Self {
+        sessions.track_terminal_activity(terminals.clone(), workspace.clone());
         let engine_info = EngineInfo {
             device_id: doc_host.device_id().to_string(),
             workspace_scope,
             cursor_sdk_version: Some(ensembyte_harness::CursorHarness::sdk_version().into()),
-            capabilities: ensembyte_proto::capabilities::current(),
+            capabilities: {
+                let mut capabilities = ensembyte_proto::capabilities::current();
+                if crate::desktop_notify::enabled() {
+                    capabilities
+                        .push(ensembyte_proto::capabilities::DESKTOP_NOTIFICATIONS_V1.to_string());
+                }
+                capabilities
+            },
         };
+        let github = GitHubCli::new().with_store(repos.data_dir());
         Self {
+            voice: sessions.voice_manager(),
             sessions,
             doc_host,
             workspace,
@@ -660,9 +779,11 @@ impl EngineRpc {
             repos,
             workspace_files,
             terminals,
+            remote_terminals: Default::default(),
             project_actions,
             previews: None,
             change_requests,
+            github,
             diff_sync,
             uploads,
             agent_accounts,
@@ -671,12 +792,23 @@ impl EngineRpc {
             updater: None,
             harness_updates: None,
             local_import: None,
+            credentials: None,
+            viewport_focus: Default::default(),
             engine_info,
         }
     }
 
     pub fn with_previews(mut self, previews: ensembyte_preview::PreviewService) -> Self {
         self.previews = Some(previews);
+        self
+    }
+
+    /// Share the engine-wide routing state for terminals on other devices.
+    pub fn with_remote_terminals(
+        mut self,
+        remote_terminals: crate::remote_terminals::RemoteTerminals,
+    ) -> Self {
+        self.remote_terminals = remote_terminals;
         self
     }
 
@@ -698,6 +830,12 @@ impl EngineRpc {
         self
     }
 
+    /// Share the core's viewport focus (`SetViewportFocus` writes it).
+    pub fn with_viewport_focus(mut self, focus: crate::desktop_notify::ViewportFocus) -> Self {
+        self.viewport_focus = focus;
+        self
+    }
+
     pub fn with_harness_updates(
         mut self,
         coordinator: crate::harness_updates::HarnessUpdateCoordinator,
@@ -712,10 +850,324 @@ impl EngineRpc {
         self
     }
 
+    #[cfg(test)]
+    pub(crate) fn with_github(mut self, github: GitHubCli) -> Self {
+        self.github = github;
+        self
+    }
+
+    /// Attach the Cloud runner's credential broker.
+    pub fn with_credentials(mut self, broker: crate::credentials::CredentialBroker) -> Self {
+        self.credentials = Some(broker);
+        self
+    }
+
     fn auth(&self) -> Result<&Auth, RpcError> {
         self.auth
             .as_ref()
             .ok_or_else(|| RpcError::Failed("auth unavailable".into()))
+    }
+
+    /// The edge client the IPC-only Cloud / vault methods act through, as the
+    /// signed-in user of this runtime's organization — or the unavailable
+    /// stand-in (local profile, development without an edge, signed out, no
+    /// organization), which answers without any network call.
+    fn cloud(&self) -> crate::cloud_client::CloudClient {
+        use crate::cloud_client::CloudClient;
+        if self.engine_info.workspace_scope == WorkspaceScope::Local {
+            return CloudClient::unavailable();
+        }
+        let Some(edge) = self.workspace.edge() else {
+            return CloudClient::unavailable();
+        };
+        let org_id = match &self.auth {
+            Some(auth) if auth.workos_enabled() => match auth.state() {
+                crate::auth::AuthState::SignedIn {
+                    org_id: Some(org_id),
+                    ..
+                } => org_id,
+                _ => return CloudClient::unavailable(),
+            },
+            // Development bearer: the profile's org scopes every room.
+            _ => self.workspace.org_id().to_string(),
+        };
+        CloudClient::new(edge.url.clone(), org_id, edge.token.clone())
+    }
+
+    /// Whether the engine hosting `chat_id` can switch its provider: this one
+    /// can; a peer (a Cloud machine included) says so on its device row.
+    fn host_switches_providers(&self, chat_id: &str) -> bool {
+        let Some(device_id) = self
+            .workspace
+            .chat(chat_id)
+            .ok()
+            .flatten()
+            .map(|chat| chat.device_id)
+        else {
+            return true;
+        };
+        device_id == self.workspace.device_id()
+            || self.workspace.read_devices().is_ok_and(|devices| {
+                devices.iter().any(|device| {
+                    device.id == device_id
+                        && device.supports(ensembyte_proto::capabilities::PROVIDER_SWITCH_V1)
+                })
+            })
+    }
+
+    /// A deleted Cloud chat takes its machine with it (and whatever is
+    /// uncommitted there): otherwise the sandbox outlives every way to reach
+    /// it. Best-effort and in the background — the chat is already gone. A
+    /// chat with no machine of its own (a side chat in its parent's) has no
+    /// session to delete, and the edge says so.
+    fn delete_cloud_machines(&self, chat_ids: Vec<String>) {
+        if chat_ids.is_empty() {
+            return;
+        }
+        let cloud = self.cloud();
+        tokio::spawn(async move {
+            for chat_id in chat_ids {
+                match cloud.delete_session(&chat_id).await {
+                    Ok(_) => tracing::info!(chat = %chat_id, "deleted chat's Cloud machine"),
+                    Err(err) => {
+                        tracing::warn!(chat = %chat_id, error = %err, "Cloud machine not deleted")
+                    }
+                }
+            }
+        });
+    }
+
+    /// The logical Cloud device (no engine; the edge writes its row with the
+    /// `cloud-account` capability), as opposed to a session's device.
+    fn is_cloud_account_device(&self, device_id: &str) -> bool {
+        if crate::cloud_accounts::is_cloud_accounts_target(device_id) {
+            return true;
+        }
+        self.workspace.read_devices().is_ok_and(|devices| {
+            devices.iter().any(|d| {
+                d.id == device_id
+                    && d.capabilities
+                        .iter()
+                        .any(|c| c == ensembyte_proto::CLOUD_ACCOUNT_CAPABILITY)
+            })
+        })
+    }
+
+    /// Requests aimed at a Cloud device that this engine answers itself:
+    /// harness and model catalogs come from this engine's own catalog
+    /// restricted to Cloud's harnesses (every session machine has both CLIs),
+    /// so opening a composer never dials — let alone wakes — a sandbox. The
+    /// logical Cloud device has no engine: its skill/command catalogs are the
+    /// global ones, and anything else fails fast. `None` = forward as usual.
+    async fn answer_for_cloud(
+        &self,
+        target: &str,
+        method: &str,
+        params: &serde_json::Value,
+    ) -> Option<Result<RpcReply, RpcError>> {
+        let account = self.is_cloud_account_device(target);
+        let local = |drop: &[&str]| {
+            let mut params = params.clone();
+            if let Some(map) = params.as_object_mut() {
+                for key in ["targetDeviceId"].iter().chain(drop) {
+                    map.remove(*key);
+                }
+            }
+            params
+        };
+        match method {
+            methods::LIST_HARNESSES => {
+                // Enabled = Cloud has an account to run it with (unknown
+                // while the vault can't be read: then every one is).
+                let ready = crate::cloud_accounts::ready_harnesses(&self.cloud()).await;
+                let descriptors: Vec<_> = self
+                    .registry
+                    .descriptors()
+                    .into_iter()
+                    .filter(|d| crate::registry::CLOUD_HARNESS_IDS.contains(&d.id))
+                    .map(|mut d| {
+                        d.installed = true;
+                        d.enabled = Some(ready.as_ref().is_none_or(|ready| ready.contains(&d.id)));
+                        d
+                    })
+                    .collect();
+                Some(RpcReply::value(&descriptors))
+            }
+            methods::LIST_MODELS => {
+                let p: ListModelsParams = match parse_params(local(&[])) {
+                    Ok(p) => p,
+                    Err(e) => return Some(Err(e)),
+                };
+                if !crate::registry::CLOUD_HARNESS_IDS.contains(&p.harness) {
+                    return Some(Err(RpcError::Failed(
+                        "Cloud runs Codex and Claude Code only".into(),
+                    )));
+                }
+                Some(self.handle(method, local(&[])).await)
+            }
+            methods::LIST_SKILLS | methods::LIST_COMMANDS if account => Some(
+                self.handle(method, local(&["chatId", "spaceId", "path"]))
+                    .await,
+            ),
+            _ if account => Some(Err(RpcError::Failed(
+                crate::cloud_client::ACCOUNT_DEVICE_HAS_NO_ENGINE.into(),
+            ))),
+            _ => None,
+        }
+    }
+
+    /// `ListCloudBranches {repo, defaultBranch?}`: the branches a Cloud
+    /// session of `repo` can start from — GitHub's, through the user's
+    /// connection — the default first and marked current.
+    async fn cloud_branches(&self, params: serde_json::Value) -> Result<RpcReply, RpcError> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct P {
+            repo: String,
+            #[serde(default)]
+            default_branch: Option<String>,
+        }
+        let p: P = parse_params(params)?;
+        let mut names = self
+            .cloud()
+            .github_branches(&p.repo)
+            .await
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        if let Some(default) = &p.default_branch {
+            names.sort_by_key(|name| name != default);
+            if !names.contains(default) {
+                names.insert(0, default.clone());
+            }
+        }
+        let refs: Vec<ensembyte_proto::RepoRef> = names
+            .into_iter()
+            .map(|name| ensembyte_proto::RepoRef {
+                current: p.default_branch.as_deref() == Some(name.as_str()),
+                name,
+                worktree_path: None,
+            })
+            .collect();
+        RpcReply::value(&refs)
+    }
+
+    /// Where a chat runs when it runs on Cloud: its own new session machine
+    /// (minted by the edge, idempotent per chat) cloning the project's GitHub
+    /// repository — or, for a side chat whose parent runs on a session
+    /// machine, that same machine (they share files). `None` = not Cloud;
+    /// create normally.
+    async fn cloud_chat_host(
+        &self,
+        chat_id: &str,
+        space_id: Option<&str>,
+        parent_chat_id: Option<&str>,
+        branch: Option<&str>,
+        cloud: bool,
+        config: Option<&ChatConfig>,
+    ) -> Result<Option<CloudHost>, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let on_cloud = |device_id: &str| device_id.starts_with(ensembyte_proto::CLOUD_DEVICE_PREFIX);
+        // A side chat of a Cloud chat shares its machine (and files), unless
+        // it asks for a Cloud session of its own.
+        if !cloud
+            && let Some(parent) = parent_chat_id
+            && let Some(parent) = self.workspace.chat(parent).map_err(failed)?
+            && on_cloud(&parent.device_id)
+        {
+            return Ok(Some(CloudHost {
+                device_id: parent.device_id,
+                cwd: parent.cwd,
+                row_written: false,
+            }));
+        }
+        if !cloud {
+            return Ok(None);
+        }
+        if let Some(existing) = self.workspace.chat(chat_id).map_err(failed)?
+            && on_cloud(&existing.device_id)
+        {
+            return Ok(Some(CloudHost {
+                device_id: existing.device_id,
+                cwd: existing.cwd,
+                // A Cloud machine may not write a delegate's row (the edge did).
+                row_written: crate::runner::session().is_some(),
+            }));
+        }
+        // On a Cloud machine: a delegate of the chat this machine runs, on a
+        // machine of its own (the edge clones the parent's repository and
+        // writes the delegate's row — a machine writes only rows it hosts).
+        if let Some(session) = crate::runner::session() {
+            let parent = parent_chat_id.ok_or_else(|| {
+                RpcError::Failed(
+                    "A Cloud machine starts Cloud chats only as children of its chat.".into(),
+                )
+            })?;
+            if parent != session.chat_id {
+                return Err(RpcError::Failed(
+                    "A Cloud machine starts Cloud chats only as children of the chat it runs."
+                        .into(),
+                ));
+            }
+            let started = self
+                .cloud()
+                .create_child_session(chat_id, parent, branch, config)
+                .await
+                .map_err(|e| RpcError::Failed(format!("Couldn't start a Cloud session: {e}")))?;
+            self.await_chat_row(chat_id).await?;
+            return Ok(Some(CloudHost {
+                device_id: started.device_id,
+                cwd: started.path,
+                row_written: true,
+            }));
+        }
+        let space_id =
+            space_id.ok_or_else(|| RpcError::Failed("Cloud sessions run in a project.".into()))?;
+        let space = self
+            .workspace
+            .space(space_id)
+            .map_err(failed)?
+            .ok_or_else(|| RpcError::Failed("That project no longer exists.".into()))?;
+        let full_name = space.github_repo.ok_or_else(|| {
+            RpcError::Failed("This project has no GitHub repository for Cloud to clone.".into())
+        })?;
+        let cloud_client = self.cloud();
+        let repo = cloud_client
+            .github_repos(Some(&full_name))
+            .await
+            .map_err(failed)?
+            .into_iter()
+            .find(|repo| repo.full_name.eq_ignore_ascii_case(&full_name))
+            .ok_or_else(|| {
+                RpcError::Failed(format!(
+                    "Cloud can't reach {full_name} — install the Ensembyte GitHub App on it in Settings → Cloud."
+                ))
+            })?;
+        let session = cloud_client
+            .create_session(chat_id, space_id, &repo, branch)
+            .await
+            .map_err(|e| RpcError::Failed(format!("Couldn't start a Cloud session: {e}")))?;
+        Ok(Some(CloudHost {
+            device_id: session.device_id,
+            cwd: session.path,
+            row_written: false,
+        }))
+    }
+
+    /// Wait for a chat row written elsewhere (the edge, for a delegate) to
+    /// reach this engine's registry, so what follows — a first prompt, a
+    /// title — finds it.
+    async fn await_chat_row(&self, chat_id: &str) -> Result<(), RpcError> {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            if self.workspace.chat(chat_id).ok().flatten().is_some() {
+                return Ok(());
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(RpcError::Failed(
+                    "The Cloud session started, but its chat hasn't synced here yet; try again shortly.".into(),
+                ));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     }
 
     fn updater(&self) -> Result<&ensembyte_update::Updater, RpcError> {
@@ -786,9 +1238,9 @@ impl EngineRpc {
             }
             if chat.space_id.is_none() {
                 let cwd = chat.cwd.as_deref().unwrap_or("~");
-                return crate::repos::expand_home(cwd)
+                return crate::repos::resolve_chat_cwd(cwd, &self.repos.scratch_root())
                     .map(std::path::PathBuf::from)
-                    .map_err(|error| RpcError::Failed(error.to_string()));
+                    .map_err(RpcError::Failed);
             }
         }
         self.file_search_root(p).await
@@ -1028,7 +1480,8 @@ impl EngineRpc {
             // only unary calls below get the reply deadline.
             if matches!(
                 method,
-                methods::WATCH_CHECKOUT_CHANGE_REQUEST
+                methods::OWN_VOICE_V2
+                    | methods::WATCH_CHECKOUT_CHANGE_REQUEST
                     | methods::WATCH_WORKSPACE_GIT_STATUS
                     | methods::WATCH_HARNESS_UPDATES
             ) {
@@ -1088,6 +1541,108 @@ impl EngineRpc {
         }
     }
 
+    /// Terminal I/O for a terminal on `target`: a direct link when the two
+    /// devices can reach each other, the relay otherwise
+    /// ([`crate::remote_terminals`]). Writes never wait on the network.
+    async fn remote_terminal(
+        &self,
+        target: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<RpcReply, RpcError> {
+        use crate::remote_terminals::Write;
+        let relay: std::sync::Arc<dyn crate::remote_terminals::Relay> =
+            std::sync::Arc::new(self.clone());
+        let ok = || RpcReply::value(&serde_json::json!({ "ok": true }));
+        match method {
+            methods::SUBSCRIBE_TERMINAL => {
+                let p: SubscribeTerminalParams = parse_params(params)?;
+                let direct = self.previews.clone().map(|previews| {
+                    std::sync::Arc::new(previews)
+                        as std::sync::Arc<dyn crate::remote_terminals::Direct>
+                });
+                let stream = self
+                    .remote_terminals
+                    .subscribe(
+                        relay,
+                        direct,
+                        target,
+                        &p.terminal_id,
+                        p.after_seq.unwrap_or(0),
+                        p.host_replies,
+                    )
+                    .await?;
+                Ok(RpcReply::Stream(stream))
+            }
+            methods::WRITE_TERMINAL => {
+                let p: WriteTerminalParams = parse_params(params)?;
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&p.data)
+                    .unwrap_or_else(|_| p.data.into_bytes());
+                self.remote_terminals
+                    .send(&relay, target, &p.terminal_id, Write::Input(bytes))?;
+                ok()
+            }
+            methods::RESIZE_TERMINAL => {
+                let p: ResizeTerminalParams = parse_params(params)?;
+                self.remote_terminals.send(
+                    &relay,
+                    target,
+                    &p.terminal_id,
+                    Write::Resize {
+                        cols: p.cols,
+                        rows: p.rows,
+                    },
+                )?;
+                ok()
+            }
+            _ => {
+                let p: TerminalIdParams = parse_params(params.clone())?;
+                let reply = self.forward(target, method, params).await;
+                if reply.is_ok() {
+                    self.remote_terminals.ended(target, &p.terminal_id);
+                }
+                reply
+            }
+        }
+    }
+
+    async fn prepare_voice_bridge(
+        &self,
+        chat: &str,
+    ) -> Result<
+        (
+            ensembyte_harness::codex::realtime::RealtimeHandle,
+            tokio::sync::broadcast::Receiver<ensembyte_proto::voice::VoiceEvent>,
+            std::sync::Arc<crate::sessions::VoiceActivity>,
+        ),
+        ensembyte_proto::voice::VoiceRejection,
+    > {
+        use ensembyte_proto::voice::VoiceRejection;
+        // Without Codex here a retry can never connect: ask for an install.
+        if !self
+            .registry
+            .resolve(HarnessId::Codex)
+            .is_ok_and(|codex| codex.installed())
+        {
+            return Err(VoiceRejection::NativeRuntimeUnavailable);
+        }
+        let mut request = self
+            .doc_host
+            .request_from_chat_row(chat, "")
+            .ok_or(VoiceRejection::Unsupported)?;
+        if request.cwd.is_empty() {
+            request.cwd = "~".into();
+        }
+        self.sessions
+            .start_idle(chat, request)
+            .await
+            .map_err(|_| VoiceRejection::Unsupported)?;
+        self.sessions
+            .take_voice_bridge(chat)
+            .ok_or(VoiceRejection::Unsupported)
+    }
+
     fn mutate(&self, params: MutateParams) -> Result<(), RpcError> {
         let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
         match params {
@@ -1099,7 +1654,12 @@ impl EngineRpc {
                 branch,
                 cwd,
                 parent_chat_id,
+                cloud: _,
             } => {
+                // A voice orchestrator is hidden, so the chats it creates are
+                // the user's top-level sessions rather than its side chats.
+                let parent_chat_id = parent_chat_id
+                    .filter(|parent| !ensembyte_proto::voice::is_orchestrator_chat(parent));
                 self.workspace
                     .create_chat_with_parent(
                         &chat_id,
@@ -1123,17 +1683,55 @@ impl EngineRpc {
                 path,
                 name,
                 git_detected,
-            } => self
-                .workspace
-                .create_space(&space_id, &device_id, &path, name, git_detected)
-                .map_err(failed),
+                github_repo,
+            } => match github_repo {
+                Some(repo) if device_id.starts_with(ensembyte_proto::CLOUD_DEVICE_PREFIX) => self
+                    .workspace
+                    .create_cloud_space(&space_id, &device_id, &path, name, &repo)
+                    .map_err(failed),
+                _ => self
+                    .workspace
+                    .create_space(&space_id, &device_id, &path, name, git_detected)
+                    .map_err(failed),
+            },
             MutateParams::RenameSpace { space_id, name } => self
                 .workspace
                 .rename_space(&space_id, name.as_deref())
                 .map_err(failed)
                 .map(drop),
             MutateParams::DeleteSpace { space_id } => {
+                let chats = self.workspace.read_chats().unwrap_or_default();
+                let mut cloud_chats: Vec<String> = chats
+                    .iter()
+                    .filter(|chat| {
+                        chat.space_id.as_deref() == Some(space_id.as_str())
+                            && ensembyte_proto::is_cloud_device(&chat.device_id, "")
+                    })
+                    .map(|chat| chat.id.clone())
+                    .collect();
+                // Their children on Cloud with no project of their own (side
+                // chats on a deleted machine, delegates) go with them.
+                let orphans: Vec<String> = chats
+                    .iter()
+                    .filter(|chat| {
+                        chat.space_id.is_none()
+                            && ensembyte_proto::is_cloud_device(&chat.device_id, "")
+                            && chat
+                                .parent_chat_id
+                                .as_ref()
+                                .is_some_and(|parent| cloud_chats.contains(parent))
+                    })
+                    .map(|chat| chat.id.clone())
+                    .collect();
                 let deleted = self.workspace.delete_space(&space_id).map_err(failed)?;
+                for orphan in &orphans {
+                    if let Err(err) = self.workspace.delete_chat(orphan) {
+                        tracing::warn!(chat = %orphan, error = %err, "deleting a Cloud chat's child failed");
+                    }
+                    self.doc_host.purge_chat(orphan);
+                }
+                cloud_chats.extend(orphans);
+                self.delete_cloud_machines(cloud_chats);
                 // Best-effort teardown of live runs we host for the deleted chats
                 // (the doc rows are already tombstoned; a straggler run would only
                 // write into an orphaned session doc).
@@ -1142,8 +1740,8 @@ impl EngineRpc {
                 let chat_ids = deleted.chat_ids;
                 tokio::spawn(async move {
                     for chat_id in chat_ids {
-                        if let Err(err) = sessions.interrupt(&chat_id).await {
-                            tracing::debug!(chat = %chat_id, error = %err, "deleteSpace interrupt skipped");
+                        if let Err(err) = sessions.terminate(&chat_id).await {
+                            tracing::debug!(chat = %chat_id, error = %err, "deleteSpace teardown skipped");
                         }
                         doc_host.purge_chat(&chat_id);
                     }
@@ -1160,11 +1758,13 @@ impl EngineRpc {
                 .set_chat_branch(&chat_id, &branch)
                 .map_err(failed)
                 .map(drop),
-            MutateParams::SetChatCwd { chat_id, cwd } => self
-                .workspace
-                .set_chat_cwd(&chat_id, &cwd)
-                .map_err(failed)
-                .map(drop),
+            MutateParams::SetChatCwd { chat_id, cwd } => {
+                self.voice.retire_chat(&chat_id);
+                self.workspace
+                    .set_chat_cwd(&chat_id, &cwd)
+                    .map_err(failed)
+                    .map(drop)
+            }
             MutateParams::SetChatActivity {
                 chat_id,
                 last_message_at,
@@ -1174,11 +1774,13 @@ impl EngineRpc {
                 .set_chat_activity(&chat_id, last_message_at, created_at)
                 .map_err(failed)
                 .map(drop),
-            MutateParams::SetChatHost { chat_id, device_id } => self
-                .workspace
-                .set_chat_host(&chat_id, &device_id)
-                .map_err(failed)
-                .map(drop),
+            MutateParams::SetChatHost { chat_id, device_id } => {
+                self.voice.retire_chat(&chat_id);
+                self.workspace
+                    .set_chat_host(&chat_id, &device_id)
+                    .map_err(failed)
+                    .map(drop)
+            }
             MutateParams::SetChatArchived { chat_id, archived } => self
                 .workspace
                 .set_chat_archived(&chat_id, archived)
@@ -1187,14 +1789,72 @@ impl EngineRpc {
             MutateParams::ChangeSidebarPin { change } => {
                 self.workspace.change_sidebar_pin(&change).map_err(failed)
             }
-            MutateParams::SetChatConfig { chat_id, config } => self
-                .workspace
-                .set_chat_config(&chat_id, &config)
-                .map_err(failed)
-                .map(drop),
+            MutateParams::SetChatConfig { chat_id, config } => {
+                // A chat may change provider between turns, never during one:
+                // the live run belongs to the old harness and would keep
+                // writing into the transcript the new one is about to read.
+                // (Only a hosting engine knows about the turn; on any other
+                // device the row simply syncs to the host, which turns the
+                // stale session away at dispatch.)
+                let switching = self
+                    .workspace
+                    .chat(&chat_id)
+                    .map_err(failed)?
+                    .and_then(|chat| chat.config)
+                    .is_some_and(|current| current.harness != config.harness);
+                if switching && self.sessions.turn_in_flight(&chat_id) {
+                    return Err(RpcError::Failed(
+                        "Wait for the current turn to finish before switching provider".into(),
+                    ));
+                }
+                if switching && !self.host_switches_providers(&chat_id) {
+                    return Err(RpcError::Failed(
+                        "This chat's computer needs a newer Ensembyte to switch provider".into(),
+                    ));
+                }
+                self.voice.retire_chat(&chat_id);
+                self.workspace
+                    .set_chat_config(&chat_id, &config)
+                    .map_err(failed)
+                    .map(drop)
+            }
             MutateParams::DeleteChat { chat_id } => {
+                let on_cloud = self
+                    .workspace
+                    .chat(&chat_id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|chat| ensembyte_proto::is_cloud_device(&chat.device_id, ""));
+                // A Cloud chat's children on Cloud go with it: its delegates
+                // (each on a machine of its own, which would otherwise outlive
+                // the parent) and its side chats (on its machine, now gone).
+                let children: Vec<String> = if on_cloud {
+                    self.workspace
+                        .read_chats()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|chat| {
+                            chat.parent_chat_id.as_deref() == Some(chat_id.as_str())
+                                && ensembyte_proto::is_cloud_device(&chat.device_id, "")
+                        })
+                        .map(|chat| chat.id)
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                self.voice.retire_chat(&chat_id);
                 self.workspace.delete_chat(&chat_id).map_err(failed)?;
                 self.doc_host.purge_chat(&chat_id);
+                for child in &children {
+                    self.voice.retire_chat(child);
+                    if let Err(err) = self.workspace.delete_chat(child) {
+                        tracing::warn!(chat = %child, error = %err, "deleting a Cloud chat's child failed");
+                    }
+                    self.doc_host.purge_chat(child);
+                }
+                if on_cloud {
+                    self.delete_cloud_machines(std::iter::once(chat_id).chain(children).collect());
+                }
                 Ok(())
             }
             MutateParams::RenameDevice { device_id, name } => self
@@ -1219,6 +1879,20 @@ impl EngineRpc {
 /// transport means the shared device link itself cannot carry other calls.
 fn should_invalidate_link(error: &RpcError) -> bool {
     matches!(error, RpcError::Closed | RpcError::Transport(_))
+}
+
+fn change_request_rpc_error(error: ChangeRequestError) -> RpcError {
+    let code = match error {
+        ChangeRequestError::CliUnavailable => capability_errors::PULL_REQUESTS_CLI_UNAVAILABLE,
+        ChangeRequestError::Authentication => capability_errors::PULL_REQUESTS_AUTHENTICATION,
+        ChangeRequestError::RateLimited => capability_errors::PULL_REQUESTS_RATE_LIMITED,
+        ChangeRequestError::Timeout => capability_errors::PULL_REQUESTS_TIMEOUT,
+        ChangeRequestError::Decode => capability_errors::PULL_REQUESTS_DECODE,
+        ChangeRequestError::RepositoryUnavailable
+        | ChangeRequestError::UnsupportedRepository
+        | ChangeRequestError::CommandFailed => capability_errors::PULL_REQUESTS_COMMAND_FAILED,
+    };
+    RpcError::Capability(code.into())
 }
 
 /// Reply deadline for a relay-forwarded unary call. The relay is WebSocket
@@ -1295,6 +1969,13 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<(), ensembyte_harness::HarnessError>>,
 {
+    // A Cloud device registers only Codex + Claude Code; installing anything
+    // else would put a CLI on it that nothing may run (or probe).
+    if !registry.is_registered(harness) {
+        return Err(RpcError::Failed(format!(
+            "{harness:?} is not available on this device"
+        )));
+    }
     if !ensembyte_harness::install::can_install(harness) {
         return Err(RpcError::Failed(
             "No supported installer or required tools available on this device".into(),
@@ -1307,6 +1988,12 @@ where
 }
 
 fn forward_deadline(method: &str) -> std::time::Duration {
+    if method == methods::PREPARE_VOICE_V2 {
+        return Duration::from_secs(65);
+    }
+    if method == methods::NEGOTIATE_VOICE_V2 {
+        return Duration::from_secs(95);
+    }
     use std::time::Duration;
     match method {
         methods::CLONE_REPO | methods::FETCH_ALL | methods::APPLY_UPDATE => {
@@ -1334,6 +2021,9 @@ const LOGIN_TUNNEL_TTL: Duration = Duration::from_secs(15 * 60);
 /// list (plus [`is_stream_method`] for streams) to make more of the surface
 /// device-addressable — the handlers themselves need no changes.
 fn forwardable(method: &str) -> bool {
+    if voice_remote::handles(method) {
+        return true;
+    }
     matches!(
         method,
         methods::FORK_SIDE_CHAT
@@ -1342,6 +2032,8 @@ fn forwardable(method: &str) -> bool {
             | methods::CANCEL_INSTALL
             | methods::GET_TITLE_SETTINGS
             | methods::SET_TITLE_SETTINGS
+            | methods::GET_COMMIT_CREDIT
+            | methods::SET_COMMIT_CREDIT
             | methods::SET_HARNESS_ENABLED
             | methods::LIST_MODELS
             | methods::LIST_SKILLS
@@ -1365,6 +2057,8 @@ fn forwardable(method: &str) -> bool {
             | methods::LIST_REPOS
             | methods::ADD_REPO
             | methods::CLONE_REPO
+            // Answered by the Cloud device, which holds the GitHub grant.
+            | methods::LIST_GITHUB_REPOS
             | methods::CREATE_REPO
             | methods::LIST_BRANCHES
             | methods::LIST_REFS
@@ -1374,10 +2068,16 @@ fn forwardable(method: &str) -> bool {
             | methods::FETCH_ALL
             | methods::SWITCH_REF
             | methods::LIST_FOLDERS
+            | methods::GET_WORKTREE_SETTINGS
+            | methods::SET_WORKTREE_SETTINGS
             | methods::LIST_DRIVES
+            | methods::SEARCH_HOME_FOLDERS
+            | methods::RELEASE_HOME_FOLDER_SEARCH
             | methods::SEARCH_FILES
             | methods::LIST_WORKSPACE_DIRECTORY
             | methods::SEARCH_WORKSPACE_FILES
+            | methods::WARM_WORKSPACE_SEARCH
+            | methods::SEARCH_WORKSPACE_CONTENT
             | methods::READ_WORKSPACE_IMAGE
             | methods::READ_WORKSPACE_FILE
             | methods::DELETE_WORKSPACE_ENTRY
@@ -1395,6 +2095,11 @@ fn forwardable(method: &str) -> bool {
             | methods::WATCH_CHECKOUT_DIFFS
             | methods::WATCH_WORKSPACE_GIT_STATUS
             | methods::WATCH_CHECKOUT_CHANGE_REQUEST
+            | methods::LIST_CHANGE_REQUEST_PAGE
+            | methods::GET_CHANGE_REQUEST_REPOSITORY
+            | methods::GET_CHANGE_REQUEST
+            | methods::GET_CHANGE_REQUEST_DIFF
+            | methods::POST_CHANGE_REQUEST_COMMENT
             | methods::GET_CHECKOUT_DIFF
             | methods::DISCARD_WORKING_TREE
             | methods::GET_CHECKOUT_FILE_DIFF_TEXT
@@ -1413,6 +2118,7 @@ fn forwardable(method: &str) -> bool {
             | methods::COMPLETE_AGENT_LOGIN
             | methods::POLL_AGENT_LOGIN
             | methods::CANCEL_AGENT_LOGIN
+            | methods::RELAY_AGENT_LOGIN_CALLBACK
             // Uploads/attachments target the chat's host device (the agent reads
             // the committed file from that device's disk).
             | methods::UPLOAD_CHUNK
@@ -1432,6 +2138,9 @@ fn forwardable(method: &str) -> bool {
 
 /// Forwardable methods whose reply is a stream (proxied item-by-item).
 fn is_stream_method(method: &str) -> bool {
+    if method == methods::OWN_VOICE_V2 {
+        return true;
+    }
     matches!(
         method,
         methods::WATCH_DOC_MESSAGES
@@ -1682,6 +2391,32 @@ impl RpcService for AuthRpc {
 }
 
 #[async_trait]
+impl crate::remote_terminals::Relay for EngineRpc {
+    async fn call(
+        &self,
+        target: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, RpcError> {
+        match self.forward(target, method, params).await? {
+            RpcReply::Value(value) => Ok(value),
+            RpcReply::Stream(_) => Err(RpcError::Failed(format!("{method} replied with a stream"))),
+        }
+    }
+    async fn subscribe(
+        &self,
+        target: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<BoxStream<'static, serde_json::Value>, RpcError> {
+        match self.forward(target, method, params).await? {
+            RpcReply::Stream(stream) => Ok(stream),
+            RpcReply::Value(_) => Err(RpcError::Failed(format!("{method} replied with a value"))),
+        }
+    }
+}
+
+#[async_trait]
 impl RpcService for EngineRpc {
     async fn handle(&self, method: &str, params: serde_json::Value) -> Result<RpcReply, RpcError> {
         // Device-addressed routing: forward calls that target another device over its
@@ -1691,6 +2426,24 @@ impl RpcService for EngineRpc {
             && target != self.doc_host.device_id()
         {
             let target = target.to_string();
+            // Settings → Providers' Cloud: its logins live in the vault.
+            if crate::cloud_accounts::is_cloud_accounts_target(&target)
+                && crate::cloud_accounts::handles(method)
+            {
+                return Box::pin(crate::cloud_accounts::dispatch(
+                    self.cloud(),
+                    self.agent_accounts.clone(),
+                    method,
+                    params,
+                ))
+                .await;
+            }
+            if (target.starts_with(ensembyte_proto::CLOUD_DEVICE_PREFIX)
+                || crate::cloud_accounts::is_cloud_accounts_target(&target))
+                && let Some(reply) = self.answer_for_cloud(&target, method, &params).await
+            {
+                return reply;
+            }
             if matches!(
                 method,
                 methods::START_AGENT_LOGIN
@@ -1700,15 +2453,57 @@ impl RpcService for EngineRpc {
             ) {
                 return self.forward_agent_login(&target, method, params).await;
             }
+            // Pair while the open crosses the relay, so the terminal's
+            // stream usually starts on the direct link.
+            if method == methods::OPEN_TERMINAL
+                && let Some(previews) = &self.previews
+            {
+                previews.warm_peer(&target);
+            }
+            if matches!(
+                method,
+                methods::SUBSCRIBE_TERMINAL
+                    | methods::WRITE_TERMINAL
+                    | methods::RESIZE_TERMINAL
+                    | methods::CLOSE_TERMINAL
+            ) {
+                return self.remote_terminal(&target, method, params).await;
+            }
             return self.forward(&target, method, params).await;
+        }
+        if matches!(
+            method,
+            methods::SIGN_OUT
+                | methods::SELECT_ORG
+                | methods::COMPLETE_AGENT_LOGIN
+                | methods::ACTIVATE_AGENT_ACCOUNT
+                | methods::FORGET_AGENT_ACCOUNT
+        ) {
+            self.voice.retire();
+        }
+        if voice_remote::handles(method) {
+            return self.voice_remote(method, params).await;
         }
         if AuthRpc::handles(method) {
             return AuthRpc::new(self.auth()?.clone())
                 .handle(method, params)
                 .await;
         }
+        // Cloud device + credential vault: IPC-only (never in `forwardable`),
+        // acting for this runtime's signed-in user against the edge. Boxed so
+        // its state stays out of this dispatcher's already-large frame.
+        if crate::cloud_client::handles(method) {
+            return Box::pin(crate::cloud_client::dispatch(
+                self.cloud(),
+                &self.agent_accounts,
+                method,
+                params,
+            ))
+            .await;
+        }
         match method {
             methods::ENGINE_INFO => RpcReply::value(&self.engine_info),
+            methods::LIST_CLOUD_BRANCHES => Box::pin(self.cloud_branches(params)).await,
             methods::ENGINE_READY => RpcReply::value(&serde_json::json!({ "ready": true })),
             methods::LIST_HARNESSES => RpcReply::value(&self.registry.descriptors()),
             methods::INSTALL_HARNESS => {
@@ -1726,6 +2521,26 @@ impl RpcService for EngineRpc {
                 RpcReply::value(&serde_json::json!({}))
             }
             methods::GET_TITLE_SETTINGS => RpcReply::value(&self.registry.title_settings()),
+            methods::GET_COMMIT_CREDIT => match self.registry.commit_credit() {
+                Some(credit) => RpcReply::value(&credit.status()),
+                None => Err(RpcError::Failed(
+                    "Commit credit isn't available on this engine.".into(),
+                )),
+            },
+            methods::SET_COMMIT_CREDIT => {
+                #[derive(serde::Deserialize)]
+                struct Params {
+                    enabled: bool,
+                }
+                let p: Params = parse_params(params)?;
+                let credit = self.registry.commit_credit().ok_or_else(|| {
+                    RpcError::Failed("Commit credit isn't available on this engine.".into())
+                })?;
+                let status = credit
+                    .set(p.enabled)
+                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                RpcReply::value(&status)
+            }
             methods::SET_TITLE_SETTINGS => {
                 let p: crate::registry::TitleSettings = parse_params(params)?;
                 self.registry
@@ -1883,7 +2698,11 @@ impl RpcService for EngineRpc {
                         "Fork must be created on the source device".into(),
                     ));
                 }
-                if let Some(existing) = self.workspace.chat(&p.chat_id).map_err(failed)? {
+                if let Some(existing) = self
+                    .workspace
+                    .chat(&p.chat_id)
+                    .map_err(|e| RpcError::Failed(e.to_string()))?
+                {
                     if existing.parent_chat_id.as_deref() == Some(parent_chat_id.as_str()) {
                         return RpcReply::value(&existing);
                     }
@@ -1973,6 +2792,17 @@ impl RpcService for EngineRpc {
                 self.workspace.import_chat_row(&chat).map_err(failed)?;
                 RpcReply::value(&chat)
             }
+            methods::SET_VIEWPORT_FOCUS => {
+                #[derive(serde::Deserialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Params {
+                    viewport_id: String,
+                    focused: bool,
+                }
+                let p: Params = parse_params(params)?;
+                self.viewport_focus.set(&p.viewport_id, p.focused);
+                RpcReply::value(&serde_json::json!({}))
+            }
             methods::FOCUS_CHAT => {
                 let p: ChatParams = parse_params(params)?;
                 self.doc_host
@@ -1987,19 +2817,27 @@ impl RpcService for EngineRpc {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
                 let p: ChatParams = parse_params(params)?;
-                if opening_tail {
-                    return Ok(RpcReply::Stream(
-                        opening_doc_messages_stream(self.doc_host.clone(), p.chat_id).await?,
-                    ));
-                }
-                let handle = self
-                    .doc_host
-                    .open(&p.chat_id)
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
-                Ok(RpcReply::Stream(doc_messages_stream(
-                    handle.watch_messages(),
-                    handle.doc_arc(),
-                )))
+                // An open transcript keeps its chat's checkout diff live (and
+                // discardable) even when the chat is archived; the guard lives
+                // exactly as long as the stream.
+                let interest = self.diff_sync.retain_chat(&p.chat_id);
+                let stream = if opening_tail {
+                    opening_doc_messages_stream(self.doc_host.clone(), p.chat_id).await?
+                } else {
+                    let handle = self
+                        .doc_host
+                        .open(&p.chat_id)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    doc_messages_stream(handle.watch_messages(), handle.doc_arc())
+                };
+                Ok(RpcReply::Stream(
+                    stream
+                        .map(move |frame| {
+                            let _held = &interest;
+                            frame
+                        })
+                        .boxed(),
+                ))
             }
             methods::WATCH_QUEUE => {
                 let p: ChatParams = parse_params(params)?;
@@ -2258,11 +3096,16 @@ impl RpcService for EngineRpc {
                             .as_ref()
                             .and_then(|p| p.file_name())
                             .map(|s| s.to_string_lossy().into_owned());
+                        // Servers in this checkout, and any this chat's agent
+                        // or terminals started elsewhere. Only Ensembyte-started
+                        // ones: an older peer advertises every listener.
                         snapshot.services.retain(|service| {
                             service.device_id == device
-                                && cwd.as_ref().is_some_and(|cwd| {
-                                    cwd == std::path::Path::new(&service.project_cwd)
-                                })
+                                && service.ensembyte_owned
+                                && (service.chat_id.as_deref() == Some(chat_id.as_str())
+                                    || cwd.as_ref().is_some_and(|cwd| {
+                                        cwd == std::path::Path::new(&service.project_cwd)
+                                    }))
                         });
                         let value = serde_json::to_value(snapshot).ok()?;
                         Some((value, (changes, chats, false, workspace, catalog, chat_id)))
@@ -2337,9 +3180,13 @@ impl RpcService for EngineRpc {
                     .map_err(|e| RpcError::Failed(format!("{e:#}")))?;
                 RpcReply::value(&serde_json::json!({ "ok": true, "version": version }))
             }
-            methods::WATCH_HARNESS_UPDATES => Ok(RpcReply::Stream(watch_stream(
-                self.harness_updates()?.watch(),
-            ))),
+            methods::WATCH_HARNESS_UPDATES => {
+                let coordinator = self.harness_updates()?;
+                // A view of the rows just opened: re-check any CLI that
+                // changed on disk since its last check (stat-only otherwise).
+                coordinator.recheck_changed_binaries_soon();
+                Ok(RpcReply::Stream(watch_stream(coordinator.watch())))
+            }
             methods::CHECK_HARNESS_UPDATES => {
                 let p: HarnessUpdateParams = parse_params(params)?;
                 let coordinator = self.harness_updates()?.clone();
@@ -2393,6 +3240,55 @@ impl RpcService for EngineRpc {
             }
             methods::MUTATE => {
                 let p: MutateParams = parse_params(params)?;
+                if let MutateParams::CreateChat {
+                    chat_id,
+                    space_id,
+                    device_id,
+                    config,
+                    branch,
+                    cwd,
+                    parent_chat_id,
+                    cloud,
+                } = &p
+                    && let Some(host) = Box::pin(self.cloud_chat_host(
+                        chat_id,
+                        space_id.as_deref(),
+                        parent_chat_id.as_deref(),
+                        branch.as_deref().filter(|b| !b.is_empty()),
+                        *cloud,
+                        config.as_ref(),
+                    ))
+                    .await?
+                {
+                    if host.row_written {
+                        return RpcReply::value(&serde_json::json!({
+                            "ok": true, "deviceId": host.device_id, "cwd": host.cwd,
+                        }));
+                    }
+                    let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+                    // The machine's checkout, not the project's folder on the
+                    // computer it lives on.
+                    let cwd = host.cwd.clone().or_else(|| cwd.clone());
+                    self.workspace
+                        .create_chat_hosted(
+                            chat_id,
+                            space_id.as_deref(),
+                            device_id.as_deref(),
+                            Some(&host.device_id),
+                            config.clone(),
+                            cwd.clone(),
+                            parent_chat_id.clone(),
+                        )
+                        .map_err(failed)?;
+                    if let Some(branch) = branch.as_deref().filter(|b| !b.is_empty()) {
+                        self.workspace
+                            .set_chat_branch(chat_id, branch)
+                            .map_err(failed)?;
+                    }
+                    return RpcReply::value(&serde_json::json!({
+                        "ok": true, "deviceId": host.device_id, "cwd": cwd,
+                    }));
+                }
                 let sidebar_pins = matches!(&p, MutateParams::ChangeSidebarPin { .. });
                 self.mutate(p)?;
                 if sidebar_pins {
@@ -2448,6 +3344,111 @@ impl RpcService for EngineRpc {
                     .map_err(|error| RpcError::Failed(error.to_string()))?
                     .filter_map(|status| async move { serde_json::to_value(status).ok() });
                 Ok(RpcReply::Stream(stream.boxed()))
+            }
+            methods::GET_CHANGE_REQUEST_REPOSITORY => {
+                #[derive(Deserialize)]
+                struct P {
+                    cwd: String,
+                    #[serde(default)]
+                    repository: Option<String>,
+                }
+                let p: P = parse_params(params)?;
+                // Only a chat or project checkout on this device: a caller
+                // never probes arbitrary directories for their remotes.
+                let cwd = self.change_request_root(&p.cwd).await?;
+                let cwd = cwd.as_path();
+                let resolver = crate::source_control::ChangeRequestResolver::new();
+                let repository = match p.repository {
+                    Some(repository) => {
+                        resolver
+                            .matching_repository_for_checkout(cwd, &repository, &self.github)
+                            .await
+                    }
+                    None => resolver.repository_for_checkout(cwd).await,
+                };
+                RpcReply::value(&repository)
+            }
+            methods::LIST_CHANGE_REQUEST_PAGE => {
+                #[derive(Deserialize)]
+                struct P {
+                    repository: String,
+                    #[serde(default)]
+                    filter: ensembyte_proto::ChangeRequestFilter,
+                    #[serde(default)]
+                    after: Option<String>,
+                    #[serde(default)]
+                    refresh: bool,
+                    /// Serve the first page's on-disk copy when there is one.
+                    #[serde(default)]
+                    cached: bool,
+                }
+                let p: P = parse_params(params)?;
+                if !crate::source_control::valid_pr_repository(&p.repository) {
+                    return Err(RpcError::BadParams("repository must be owner/repo".into()));
+                }
+                if p.after
+                    .as_deref()
+                    .is_some_and(|cursor| !crate::source_control::valid_page_cursor(cursor))
+                {
+                    return Err(RpcError::BadParams("invalid page cursor".into()));
+                }
+                let page = self
+                    .github
+                    .list_page(
+                        &p.repository,
+                        p.filter,
+                        p.after.as_deref(),
+                        p.refresh,
+                        p.cached,
+                    )
+                    .await
+                    .map_err(change_request_rpc_error)?;
+                RpcReply::value(&page)
+            }
+            methods::POST_CHANGE_REQUEST_COMMENT => {
+                #[derive(Deserialize)]
+                struct P {
+                    url: String,
+                    body: String,
+                }
+                let p: P = parse_params(params)?;
+                if p.body.trim().is_empty() || p.body.len() > 60_000 {
+                    return Err(RpcError::BadParams(
+                        "Comment must contain 1–60000 bytes".into(),
+                    ));
+                }
+                let comment = self
+                    .github
+                    .post_comment(&p.url, &p.body)
+                    .await
+                    .map_err(change_request_rpc_error)?;
+                RpcReply::value(&comment)
+            }
+            methods::GET_CHANGE_REQUEST | methods::GET_CHANGE_REQUEST_DIFF => {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase")]
+                struct P {
+                    url: String,
+                    #[serde(default)]
+                    refresh: bool,
+                    #[serde(default)]
+                    head_ref_oid: Option<String>,
+                    #[serde(default)]
+                    base_ref_oid: Option<String>,
+                }
+                let p: P = parse_params(params)?;
+                let value = self
+                    .github
+                    .detail_request(
+                        &p.url,
+                        method == methods::GET_CHANGE_REQUEST_DIFF,
+                        p.refresh,
+                        p.head_ref_oid.as_deref(),
+                        p.base_ref_oid.as_deref(),
+                    )
+                    .await
+                    .map_err(change_request_rpc_error)?;
+                RpcReply::value(&value)
             }
             // One-shot scoped capture for the Changes pane: `branch` diffs the
             // working tree against merge-base(baseRef, HEAD); `turn` diffs the
@@ -2596,7 +3597,7 @@ impl RpcService for EngineRpc {
 
                     let snapshot = self
                         .diff_sync
-                        .discard_working_tree(&identity.id, &p.expected_checksum)
+                        .discard_working_tree(&identity, &p.expected_checksum)
                         .await
                         .map_err(|e| RpcError::Failed(e.to_string()))?;
                     RpcReply::value(&serde_json::json!({
@@ -2620,6 +3621,9 @@ impl RpcService for EngineRpc {
                         return Err(RpcError::Failed("checkoutId does not match cwd".into()));
                     }
                     let root = identity.root.as_path();
+                    // A turn's base tree lives in the snapshot's own object
+                    // store, so the snapshot rides along with its sha.
+                    let mut turn_snapshot = None;
                     let (snapshot, base, target) = match p.mode.as_str() {
                         "branch" => {
                             let base_ref = p
@@ -2671,7 +3675,9 @@ impl RpcService for EngineRpc {
                             ))
                             .await
                             .map_err(|error| RpcError::Failed(error.to_string()))?;
-                            (snapshot, turn.tree, None)
+                            let base = turn.tree.tree().to_string();
+                            turn_snapshot = Some(turn.tree);
+                            (snapshot, base, None)
                         }
                         _ => {
                             let base = Box::pin(crate::diff_sync::working_diff_base(root))
@@ -2707,6 +3713,7 @@ impl RpcService for EngineRpc {
                     let pair = Box::pin(crate::diff_sync::read_diff_file_text_at(
                         root,
                         &base,
+                        turn_snapshot.as_ref(),
                         target.as_deref(),
                         file,
                     ))
@@ -2721,14 +3728,17 @@ impl RpcService for EngineRpc {
                             ))
                             .await
                         }
-                        "turn" => {
-                            Box::pin(crate::diff_sync::capture_turn_diff(
-                                &self.repos,
-                                root,
-                                &base,
-                            ))
-                            .await
-                        }
+                        "turn" => match turn_snapshot.as_ref() {
+                            Some(turn) => {
+                                Box::pin(crate::diff_sync::capture_turn_diff(
+                                    &self.repos,
+                                    root,
+                                    turn,
+                                ))
+                                .await
+                            }
+                            None => Err(crate::EngineError::Other("no turn recorded".into())),
+                        },
                         "commit" => {
                             let sha = p
                                 .commit_sha
@@ -2774,17 +3784,60 @@ impl RpcService for EngineRpc {
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 RpcReply::value(&repo)
             }
+            methods::LIST_GITHUB_REPOS => {
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct P {
+                    query: Option<String>,
+                }
+                let p: P = if params.is_null() {
+                    P::default()
+                } else {
+                    parse_params(params)?
+                };
+                // A session machine lists with its own grant; any other device
+                // asks the edge, whose vault calls GitHub without the token
+                // ever leaving it.
+                let repos = match &self.credentials {
+                    Some(broker) => broker
+                        .list_github_repos(p.query.as_deref())
+                        .await
+                        .map_err(RpcError::Failed)?,
+                    None => Box::pin(self.cloud().github_repos(p.query.as_deref()))
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?,
+                };
+                RpcReply::value(&serde_json::json!({ "repos": repos }))
+            }
             methods::CLONE_REPO => {
                 #[derive(Deserialize)]
                 struct P {
                     url: String,
+                    /// Clone into `<parent>/<name>`; default `{data_dir}/repos`.
+                    #[serde(default)]
+                    parent: Option<String>,
                 }
                 let p: P = parse_params(params)?;
-                let repo = self
-                    .repos
-                    .clone_repo(&p.url)
-                    .await
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                // Cloud: wire the GitHub grant into git's credential helper
+                // first, so private repositories clone.
+                let no_credentials = match &self.credentials {
+                    Some(broker) => broker.ensure_git_credentials().await.err(),
+                    None => None,
+                };
+                let cloned = match p
+                    .parent
+                    .as_deref()
+                    .filter(|parent| !parent.trim().is_empty())
+                {
+                    Some(parent) => self.repos.clone_repo_in(&p.url, parent).await,
+                    None => self.repos.clone_repo(&p.url).await,
+                };
+                let repo = cloned.map_err(|e| {
+                    let github = no_credentials
+                        .map(|reason| format!(" (no GitHub access: {reason})"))
+                        .unwrap_or_default();
+                    RpcError::Failed(format!("{e}{github}"))
+                })?;
                 RpcReply::value(&repo)
             }
             methods::CREATE_REPO => {
@@ -2924,6 +3977,16 @@ impl RpcService for EngineRpc {
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 RpcReply::value(&serde_json::json!({ "branch": branch }))
             }
+            methods::GET_WORKTREE_SETTINGS => RpcReply::value(&self.repos.worktree_settings()),
+            methods::SET_WORKTREE_SETTINGS => {
+                let settings: ensembyte_proto::WorktreeSettings = parse_params(params)?;
+                let status = self
+                    .repos
+                    .set_worktree_settings(settings)
+                    .await
+                    .map_err(|error| RpcError::Failed(error.to_string()))?;
+                RpcReply::value(&status)
+            }
             methods::LIST_FOLDERS => {
                 let p: ListFoldersParams = parse_params(params)?;
                 let listing = self
@@ -2932,6 +3995,28 @@ impl RpcService for EngineRpc {
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 RpcReply::value(&listing)
+            }
+            methods::SEARCH_HOME_FOLDERS => {
+                let request: ensembyte_proto::SearchHomeFoldersRequest = parse_params(params)?;
+                if request.query.chars().count() > 256 {
+                    return Err(RpcError::BadParams(
+                        "SearchHomeFolders query must not exceed 256 characters".into(),
+                    ));
+                }
+                let limit = request
+                    .limit
+                    .map_or(crate::repos::HOME_FOLDER_RESULTS, usize::from)
+                    .min(crate::repos::HOME_FOLDER_MAX_RESULTS);
+                let result = self
+                    .repos
+                    .search_home_folders(request.query, limit)
+                    .await
+                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                RpcReply::value(&result)
+            }
+            methods::RELEASE_HOME_FOLDER_SEARCH => {
+                self.repos.release_home_folder_search();
+                RpcReply::value(&serde_json::json!({}))
             }
             methods::LIST_DRIVES => {
                 let drives = self
@@ -2986,6 +4071,28 @@ impl RpcService for EngineRpc {
                 .map_err(|_| RpcError::Failed("workspace file search timed out".into()))?
                 .map_err(RpcError::from)?;
                 RpcReply::value(&matches)
+            }
+            methods::SEARCH_WORKSPACE_CONTENT => {
+                let request: ensembyte_proto::SearchWorkspaceContentRequest = parse_params(params)?;
+                let result = tokio::time::timeout(
+                    crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
+                    self.workspace_files.search_content(request),
+                )
+                .await
+                .map_err(|_| RpcError::Failed("workspace content search timed out".into()))?
+                .map_err(RpcError::from)?;
+                RpcReply::value(&result)
+            }
+            methods::WARM_WORKSPACE_SEARCH => {
+                let request: ensembyte_proto::WarmWorkspaceSearchRequest = parse_params(params)?;
+                let result = tokio::time::timeout(
+                    crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
+                    self.workspace_files.warm_search(request),
+                )
+                .await
+                .map_err(|_| RpcError::Failed("workspace search warm-up timed out".into()))?
+                .map_err(RpcError::from)?;
+                RpcReply::value(&result)
             }
             methods::READ_WORKSPACE_IMAGE => {
                 let request: ensembyte_proto::ReadWorkspaceImageRequest = parse_params(params)?;
@@ -3221,6 +4328,9 @@ impl RpcService for EngineRpc {
                     p.rows,
                 )
                 .map_err(|err| RpcError::Failed(err.to_string()))?;
+                self.terminals
+                    .associate_chat(&run.terminal.id, &p.chat_id)
+                    .map_err(|err| RpcError::Failed(err.to_string()))?;
                 RpcReply::value(&run)
             }
             methods::OPEN_TERMINAL => {
@@ -3241,19 +4351,29 @@ impl RpcService for EngineRpc {
                         .flatten()
                         .map(|space| space.path)
                 });
-                let cwd = resolve_open_terminal_cwd(p.cwd, chat_cwd, space_cwd)
-                    .map_err(|error| RpcError::Failed(error.to_string()))?;
+                let cwd = resolve_open_terminal_cwd(
+                    p.cwd,
+                    chat_cwd,
+                    space_cwd,
+                    &self.repos.scratch_root(),
+                )
+                .map_err(|error| RpcError::Failed(error.to_string()))?;
                 let session = self
                     .terminals
                     .open(&cwd, p.cols, p.rows)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
+                if self.workspace.chat(&p.chat_id).ok().flatten().is_some() {
+                    self.terminals
+                        .associate_chat(&session.id, &p.chat_id)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                }
                 RpcReply::value(&session)
             }
             methods::SUBSCRIBE_TERMINAL => {
                 let p: SubscribeTerminalParams = parse_params(params)?;
                 let rx = self
                     .terminals
-                    .subscribe(&p.terminal_id, p.after_seq)
+                    .subscribe_viewer(&p.terminal_id, p.after_seq, !p.host_replies)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 let stream = futures::stream::unfold(rx, |mut rx| async move {
                     let event = rx.recv().await?;
@@ -3264,9 +4384,18 @@ impl RpcService for EngineRpc {
             }
             methods::WRITE_TERMINAL => {
                 let p: WriteTerminalParams = parse_params(params)?;
-                self.terminals
-                    .write(&p.terminal_id, &p.data)
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                match (p.client_id, p.input_seq) {
+                    (Some(client), Some(seq)) => {
+                        let bytes = base64::engine::general_purpose::STANDARD
+                            .decode(&p.data)
+                            .unwrap_or_else(|_| p.data.into_bytes());
+                        self.terminals
+                            .write_sequenced(&p.terminal_id, &client, seq, &bytes)
+                            .map(|_| ())
+                    }
+                    _ => self.terminals.write(&p.terminal_id, &p.data),
+                }
+                .map_err(|e| RpcError::Failed(e.to_string()))?;
                 RpcReply::value(&serde_json::json!({ "ok": true }))
             }
             methods::RESIZE_TERMINAL => {
@@ -3293,6 +4422,7 @@ impl RpcService for EngineRpc {
                 RpcReply::value(&snapshot)
             }
             methods::ACTIVATE_AGENT_ACCOUNT => {
+                self.voice.retire();
                 let p: AgentAccountParams = parse_params(params)?;
                 let snapshot = self
                     .agent_accounts
@@ -3302,6 +4432,7 @@ impl RpcService for EngineRpc {
                 RpcReply::value(&snapshot)
             }
             methods::FORGET_AGENT_ACCOUNT => {
+                self.voice.retire();
                 let p: AgentAccountParams = parse_params(params)?;
                 let snapshot = self
                     .agent_accounts
@@ -3326,6 +4457,22 @@ impl RpcService for EngineRpc {
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 RpcReply::value(&start)
+            }
+            methods::RELAY_AGENT_LOGIN_CALLBACK => {
+                #[derive(serde::Deserialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Params {
+                    login_id: String,
+                    requester_device_id: String,
+                    path: String,
+                }
+                let p: Params = parse_params(params)?;
+                let relayed = self
+                    .agent_accounts
+                    .relay_callback(&p.login_id, &p.requester_device_id, &p.path)
+                    .await
+                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                RpcReply::value(&relayed)
             }
             methods::COMPLETE_AGENT_LOGIN => {
                 let p: CompleteAgentLoginParams = parse_params(params)?;
@@ -3388,6 +4535,76 @@ impl RpcService for EngineRpc {
                 .map_err(|e| RpcError::Failed(e.to_string()))?;
                 RpcReply::value(&chunk)
             }
+            methods::PUBLISH_VISUAL => {
+                let p: PublishVisualParams = parse_params(params)?;
+                let title: String = p
+                    .title
+                    .trim()
+                    .chars()
+                    .take(ensembyte_proto::VISUAL_MAX_TITLE_CHARS)
+                    .collect();
+                if title.is_empty() {
+                    return Err(RpcError::BadParams("title is empty".into()));
+                }
+                if p.script.trim().is_empty() || p.script.len() > ensembyte_proto::VISUAL_MAX_BYTES {
+                    return Err(RpcError::BadParams(format!(
+                        "script must be 1 to {} bytes",
+                        ensembyte_proto::VISUAL_MAX_BYTES
+                    )));
+                }
+                // Before decoding and storing anything (checked again below).
+                if !self.sessions.has_run(&p.chat_id) {
+                    return Err(no_turn_for_visual());
+                }
+                let id = format!("v:{}", crate::new_id());
+                let assets = decode_visual_assets(&p.assets)?;
+                // Run the script the way the desktop will (setup, render,
+                // every draw, every control) before anyone sees it, so the
+                // agent gets its errors with line numbers and can fix them.
+                let uploads = self.uploads.clone();
+                let (stored_id, script) = (id.clone(), p.script);
+                let (path, report) = tokio::task::spawn_blocking(move || {
+                    let files = ensembyte_visual::Assets::new(
+                        assets
+                            .iter()
+                            .map(|(name, bytes)| (name.clone(), bytes.as_slice().into()))
+                            .collect(),
+                    );
+                    let checked = ensembyte_visual::check_with_assets(
+                        &script,
+                        ensembyte_visual::seed_for(&stored_id),
+                        files,
+                    );
+                    let report = checked
+                        .map_err(|e| RpcError::BadParams(format!("visual script failed: {e}")))?;
+                    // Assets first: a script is only ever found with its files.
+                    uploads
+                        .store_visual_assets(&stored_id, &assets)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    let path = uploads.store_visual(&stored_id, &script).map_err(|e| {
+                        uploads.remove_visual(&stored_id);
+                        RpcError::Failed(e.to_string())
+                    })?;
+                    Ok::<_, RpcError>((path, report))
+                })
+                .await
+                .map_err(|e| RpcError::Failed(e.to_string()))??;
+                let event = AgentEvent::Visual {
+                    id: id.clone(),
+                    path: path.clone(),
+                    title: title.clone(),
+                };
+                if !self.sessions.inject_event(&p.chat_id, event) {
+                    self.uploads.remove_visual(&id);
+                    return Err(no_turn_for_visual());
+                }
+                RpcReply::value(&serde_json::json!({
+                    "id": id,
+                    "title": title,
+                    "checkedInteractions": report.interactions,
+                    "printed": report.logs,
+                }))
+            }
             methods::FETCH_TOOL_BLOB => {
                 let p: FetchToolBlobParams = parse_params(params)?;
                 let text = self
@@ -3405,6 +4622,99 @@ impl RpcService for EngineRpc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn voice_owner_is_shared_across_services_and_shutdown_retires_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let core = crate::EngineCore::assemble_with_profile(
+            crate::EngineProfile::local(temp.path()).unwrap(),
+            std::sync::Arc::new(HarnessRegistry::new()),
+            HarnessId::Codex,
+            None,
+        )
+        .unwrap();
+        let first = core.rpc_service();
+        let second = core.rpc_service();
+        let lease = first.voice.reserve("chat").unwrap();
+        assert!(second.voice.owns_chat("chat"));
+        assert_eq!(
+            second.voice.reserve("other").unwrap_err(),
+            ensembyte_proto::voice::VoiceRejection::Busy
+        );
+        let owner = second.voice.own(lease).unwrap();
+        core.sessions.shutdown().await;
+        assert!(!first.voice.owns_chat("chat"));
+        drop(owner);
+    }
+
+    #[tokio::test]
+    async fn chats_created_by_a_voice_orchestrator_are_top_level() {
+        let temp = tempfile::tempdir().unwrap();
+        let core = crate::EngineCore::assemble_with_profile(
+            crate::EngineProfile::local(temp.path()).unwrap(),
+            std::sync::Arc::new(HarnessRegistry::new()),
+            HarnessId::Codex,
+            None,
+        )
+        .unwrap();
+        let rpc = core.rpc_service();
+        let orchestrator = format!("{}1", ensembyte_proto::voice::ORCHESTRATOR_CHAT_PREFIX);
+        for (chat, parent, expected) in [
+            ("worker", orchestrator.as_str(), None),
+            ("side", "ordinary", Some("ordinary")),
+        ] {
+            rpc.handle(
+                methods::MUTATE,
+                serde_json::json!({"op":"createChat", "chatId":chat,
+                    "parentChatId":parent, "deviceId":core.device_id,
+                    "config":{"harness":"codex","sandbox":"workspace-write"}}),
+            )
+            .await
+            .unwrap();
+            let row = core.workspace.chat(chat).unwrap().unwrap();
+            assert_eq!(row.parent_chat_id.as_deref(), expected);
+        }
+        core.sessions.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn voice_origin_uses_normal_remote_routing() {
+        let temp = tempfile::tempdir().unwrap();
+        let core = crate::EngineCore::assemble_with_profile(
+            crate::EngineProfile::local(temp.path()).unwrap(),
+            std::sync::Arc::new(HarnessRegistry::new()),
+            HarnessId::Codex,
+            None,
+        )
+        .unwrap();
+        let rpc = core.rpc_service();
+        let lease = rpc.voice.reserve("voice-origin").unwrap();
+        let owner = rpc.voice.own(lease).unwrap();
+        for method in [methods::QUEUE_COMMAND, methods::QUEUE_MESSAGE] {
+            let error = match rpc.handle(method, serde_json::json!({"originChatId":"voice-origin","targetDeviceId":"remote","chatId":"other"})).await {
+                Err(error) => error,
+                Ok(_) => panic!("offline remote routing unexpectedly succeeded"),
+            };
+            assert!(
+                matches!(error, RpcError::Failed(ref message) if message == "cannot reach device remote: remote routing unavailable (offline)")
+            );
+        }
+        // Voice origin follows the same forwarding boundary as ordinary MCP
+        // calls; this fixture has no relay configured.
+        rpc.handle(
+            methods::MUTATE,
+            serde_json::json!({"op":"createChat", "chatId":"remote-grok",
+                "originChatId":"voice-origin", "deviceId":"remote",
+                "config":{"harness":"grok","sandbox":"workspace-write"}}),
+        )
+        .await
+        .unwrap();
+        let chat = core.workspace.chat("remote-grok").unwrap().unwrap();
+        assert_eq!(chat.device_id, "remote");
+        assert_eq!(chat.config.unwrap().harness, HarnessId::Grok);
+        drop(owner);
+        core.sessions.shutdown().await;
+    }
 
     // Each subprocess has private HOME/PATH/overrides, avoiding process-global test races.
     #[cfg(unix)]
@@ -3837,6 +5147,12 @@ mod tests {
         assert!(forwardable(methods::WATCH_WORKSPACE_GIT_STATUS));
         assert!(!is_stream_method(methods::LIST_WORKSPACE_DIRECTORY));
         assert!(!is_stream_method(methods::SEARCH_WORKSPACE_FILES));
+        assert!(forwardable(methods::WARM_WORKSPACE_SEARCH));
+        assert!(!is_stream_method(methods::WARM_WORKSPACE_SEARCH));
+        assert!(forwardable(methods::SEARCH_WORKSPACE_CONTENT));
+        assert!(!is_stream_method(methods::SEARCH_WORKSPACE_CONTENT));
+        assert!(forwardable(methods::SEARCH_HOME_FOLDERS));
+        assert!(forwardable(methods::RELEASE_HOME_FOLDER_SEARCH));
         assert!(!is_stream_method(methods::READ_WORKSPACE_FILE));
         assert!(!is_stream_method(methods::WRITE_WORKSPACE_FILE));
         assert!(is_stream_method(methods::WATCH_WORKSPACE_FILES));
@@ -3845,6 +5161,15 @@ mod tests {
         assert!(is_stream_method(methods::WATCH_HARNESS_UPDATES));
         assert!(forwardable(methods::CHECK_HARNESS_UPDATES));
         assert!(forwardable(methods::APPLY_HARNESS_UPDATE));
+        assert!(forwardable(methods::LIST_CHANGE_REQUEST_PAGE));
+        assert!(!is_stream_method(methods::LIST_CHANGE_REQUEST_PAGE));
+        assert!(forwardable(methods::GET_CHANGE_REQUEST_REPOSITORY));
+        assert!(forwardable(methods::GET_CHANGE_REQUEST));
+        assert!(forwardable(methods::GET_CHANGE_REQUEST_DIFF));
+        assert!(forwardable(methods::POST_CHANGE_REQUEST_COMMENT));
+        assert!(!is_stream_method(methods::POST_CHANGE_REQUEST_COMMENT));
+        assert!(!is_stream_method(methods::GET_CHANGE_REQUEST));
+        assert!(!is_stream_method(methods::GET_CHANGE_REQUEST_DIFF));
     }
 
     /// Every forwardable unary method gets a bounded reply deadline —
@@ -3883,6 +5208,45 @@ mod tests {
             forward_deadline(methods::QUEUE_COMMAND),
             Duration::from_secs(30)
         );
+        assert_eq!(
+            forward_deadline(methods::LIST_CHANGE_REQUEST_PAGE),
+            Duration::from_secs(30)
+        );
+    }
+
+    #[test]
+    fn pull_request_errors_are_stable_and_sanitized() {
+        for (error, expected) in [
+            (
+                ChangeRequestError::CliUnavailable,
+                capability_errors::PULL_REQUESTS_CLI_UNAVAILABLE,
+            ),
+            (
+                ChangeRequestError::Authentication,
+                capability_errors::PULL_REQUESTS_AUTHENTICATION,
+            ),
+            (
+                ChangeRequestError::RateLimited,
+                capability_errors::PULL_REQUESTS_RATE_LIMITED,
+            ),
+            (
+                ChangeRequestError::Timeout,
+                capability_errors::PULL_REQUESTS_TIMEOUT,
+            ),
+            (
+                ChangeRequestError::Decode,
+                capability_errors::PULL_REQUESTS_DECODE,
+            ),
+            (
+                ChangeRequestError::CommandFailed,
+                capability_errors::PULL_REQUESTS_COMMAND_FAILED,
+            ),
+        ] {
+            assert!(matches!(
+                change_request_rpc_error(error),
+                RpcError::Capability(code) if code == expected
+            ));
+        }
     }
 
     #[test]
@@ -3895,31 +5259,65 @@ mod tests {
             resolve_open_terminal_cwd(
                 Some("/proj".into()),
                 Some("/chat".into()),
-                Some("/space".into())
+                Some("/space".into()),
+                std::path::Path::new("/scratch")
             )
             .unwrap(),
             "/proj"
         );
         assert_eq!(
-            resolve_open_terminal_cwd(None, Some("/chat".into()), Some("/space".into())).unwrap(),
+            resolve_open_terminal_cwd(
+                None,
+                Some("/chat".into()),
+                Some("/space".into()),
+                std::path::Path::new("/scratch")
+            )
+            .unwrap(),
             "/chat"
         );
         assert_eq!(
-            resolve_open_terminal_cwd(Some("~".into()), None, Some("/space".into())).unwrap(),
+            resolve_open_terminal_cwd(
+                Some("~".into()),
+                None,
+                Some("/space".into()),
+                std::path::Path::new("/scratch")
+            )
+            .unwrap(),
             "/space",
             "tilde is a fallback, not an override of the selected project"
         );
         assert_eq!(
-            resolve_open_terminal_cwd(None, None, Some("/space".into())).unwrap(),
+            resolve_open_terminal_cwd(
+                None,
+                None,
+                Some("/space".into()),
+                std::path::Path::new("/scratch")
+            )
+            .unwrap(),
             "/space"
         );
-        assert_eq!(resolve_open_terminal_cwd(None, None, None).unwrap(), home);
         assert_eq!(
-            resolve_open_terminal_cwd(Some("~".into()), Some("/chat".into()), None).unwrap(),
+            resolve_open_terminal_cwd(None, None, None, std::path::Path::new("/scratch")).unwrap(),
+            home
+        );
+        assert_eq!(
+            resolve_open_terminal_cwd(
+                Some("~".into()),
+                Some("/chat".into()),
+                None,
+                std::path::Path::new("/scratch")
+            )
+            .unwrap(),
             "/chat"
         );
         assert_eq!(
-            resolve_open_terminal_cwd(Some("  ".into()), Some("/chat".into()), None).unwrap(),
+            resolve_open_terminal_cwd(
+                Some("  ".into()),
+                Some("/chat".into()),
+                None,
+                std::path::Path::new("/scratch")
+            )
+            .unwrap(),
             "/chat"
         );
         assert_eq!(canvas_space_id("space-canvas:s1"), Some("s1"));

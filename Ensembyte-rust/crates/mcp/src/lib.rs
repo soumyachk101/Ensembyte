@@ -19,28 +19,32 @@
 mod jsonrpc;
 mod tools;
 mod transcript;
-#[path = "ensembyte.rs"]
 mod ensembyte;
 
 pub use jsonrpc::serve_stdio;
 pub use tools::{ToolDef, Tools};
 pub use transcript::{RenderOptions, RenderedMessage, render_entries};
-pub use ensembyte::{Origin, EngineClient};
-/// Legacy alias during rename transition.
-pub type Orbit = EngineClient;
+pub use ensembyte::{Origin, Ensembyte};
 
 /// How `ensembyte mcp` finds the engine and who it speaks for.
 #[derive(Debug, Clone)]
 pub struct McpConfig {
     /// Loopback IPC port of the engine to proxy (`ENSEMBYTE_IPC_PORT`, default 27654).
     pub ipc_port: u16,
+    /// The engine's data dir, whose `ipc-token` authenticates the IPC dial
+    /// (`ENSEMBYTE_DATA_DIR`; the `ensembyte` binary fills in its default). The token
+    /// itself is resolved at every dial — `ENSEMBYTE_IPC_TOKEN`, then the
+    /// `ENSEMBYTE_IPC_TOKEN_FILE` the engine injects, then `{data_dir}/ipc-token`
+    /// — so a long-lived server follows the engine across restarts.
+    pub data_dir: Option<std::path::PathBuf>,
     /// The chat whose agent spawned this server, when injected by the engine.
     pub origin: Origin,
 }
 
 impl McpConfig {
-    /// Resolve from the process environment: `ENSEMBYTE_IPC_PORT` for the engine,
-    /// `ENSEMBYTE_CHAT_ID` / `ENSEMBYTE_DEVICE_ID` for the originating chat.
+    /// Resolve from the process environment: `ENSEMBYTE_IPC_PORT` /
+    /// `ENSEMBYTE_DATA_DIR` for the engine, `ENSEMBYTE_CHAT_ID` / `ENSEMBYTE_DEVICE_ID`
+    /// for the originating chat.
     pub fn from_env() -> Self {
         let ipc_port = std::env::var("ENSEMBYTE_IPC_PORT")
             .ok()
@@ -48,6 +52,9 @@ impl McpConfig {
             .unwrap_or(27654);
         Self {
             ipc_port,
+            data_dir: std::env::var_os("ENSEMBYTE_DATA_DIR")
+                .filter(|dir| !dir.is_empty())
+                .map(std::path::PathBuf::from),
             origin: Origin::from_env(),
         }
     }
@@ -55,7 +62,7 @@ impl McpConfig {
 
 /// Run the MCP server on this process's stdin/stdout until stdin closes.
 pub async fn run(config: McpConfig) -> anyhow::Result<()> {
-    let engine = EngineClient::new(format!("ws://127.0.0.1:{}", config.ipc_port), config.origin);
-    let tools = Tools::new(std::sync::Arc::new(engine));
+    let ensembyte = Ensembyte::new(config.ipc_port, config.data_dir, config.origin);
+    let tools = Tools::new(std::sync::Arc::new(ensembyte));
     serve_stdio(std::sync::Arc::new(tools)).await
 }

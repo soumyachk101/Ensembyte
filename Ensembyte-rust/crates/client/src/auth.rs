@@ -25,9 +25,10 @@ use crate::lock;
 /// Refresh this long before `exp` (legacy AppConfig: 60s early margin).
 pub const EARLY_REFRESH_SECS: i64 = 60;
 
-/// Production edge base URL on Vercel.
-pub const PRODUCTION_EDGE_URL: &str = "https://ensembyte.vercel.app";
-pub const WORKOS_CLIENT_ID: &str = "client_01M55181GVHA5FECWKZ4KD7N5W";
+/// Production endpoints (edge/wrangler.jsonc). Mobile always talks to prod —
+/// a stale override once broke sign-in in the worst ghost way.
+pub const PRODUCTION_EDGE_URL: &str = "https://edge.ensembyte.com";
+pub const WORKOS_CLIENT_ID: &str = "client_01KWD0EAKZKD50YCQJNYSRE4BY";
 pub const WORKOS_API_BASE: &str = "https://api.workos.com";
 /// OAuth redirect: `ensembyte://callback?code=…&state=…`.
 pub const CALLBACK_SCHEME: &str = "ensembyte";

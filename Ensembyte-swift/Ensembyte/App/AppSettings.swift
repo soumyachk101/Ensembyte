@@ -803,7 +803,7 @@ final class AppSettings {
         if let stored = defaults.array(forKey: Key.panelSize) as? [Double], stored.count == 2 {
             panelSize = CGSize(width: stored[0], height: stored[1])
         }
-        hydraQueueHeads = defaults.object(forKey: Key.hydraQueueHeads) as? Bool ?? true
+        hydraQueueHeads = defaults.object(forKey: Key.hydraQueueHeads) as? Bool ?? false
         hydraAlwaysHeads = defaults.object(forKey: Key.hydraAlwaysHeads) as? Bool ?? false
         hydraIsolateHeads = defaults.object(forKey: Key.hydraIsolateHeads) as? Bool ?? true
         hydraMaxHeads = HydraPair.clampedCap(defaults.object(forKey: Key.hydraMaxHeads) as? Int)

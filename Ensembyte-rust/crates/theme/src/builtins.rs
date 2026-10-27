@@ -263,7 +263,7 @@ fn ensembyte_dark() -> ThemeVariant {
         source: source(
             "ensembyte-dark",
             "native",
-            "https://github.com/soumyachk101/Ensembyte",
+            "https://github.com/ensembyte/comet",
             "d138049",
             "MIT",
         ),
@@ -297,7 +297,7 @@ fn ensembyte_light() -> ThemeVariant {
         source: source(
             "ensembyte-light",
             "native",
-            "https://github.com/soumyachk101/Ensembyte",
+            "https://github.com/ensembyte/comet",
             "d138049",
             "MIT",
         ),

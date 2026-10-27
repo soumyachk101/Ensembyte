@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Builds website/changelog.json from CHANGELOG.md.
+"""Builds website/changelog.json from CHANGELOG.md for macOS releases.
 
 Run: python3 scripts/build_changelog.py
 Idempotent: rewrites website/changelog.json from scratch each run.
-### Thanks bullets land in the `thanks` list, not in the sections.
+Ensures macOS changelog feeds contain only macOS/Swift changes.
 """
 
 import datetime
@@ -26,9 +26,12 @@ HEADING_MAP = {
     "bug fixes": "Bug fixes",
     "fixed": "Bug fixes",
     "refinements": "Refinements",
+    "macos updates (`ensembyte-swift/`)": "macOS Updates",
+    "macos updates": "macOS Updates",
+    "swift core updates": "macOS Updates",
+    "swift core improvements & testing": "macOS Updates",
 }
-# ### Thanks bullets land in the `thanks` list, not in the sections.
-SECTION_ORDER = ["New features", "Bug fixes", "Refinements"]
+SECTION_ORDER = ["New features", "macOS Updates", "Bug fixes", "Refinements"]
 
 
 def git_date(args):
@@ -74,6 +77,17 @@ def split_releases(text):
     return releases
 
 
+def clean_summary_for_mac(summary_text):
+    # Filter out sentences or clauses mentioning Ensembyte-rust or Windows/Linux
+    if not summary_text:
+        return ""
+    # Split by comma or semicolon followed by 'alongside' or 'in Ensembyte-rust'
+    cleaned = re.sub(r',?\s*alongside\s+[^.]*?(?:Ensembyte-rust|Windows and Linux)[^.]*?\.', '.', summary_text, flags=re.IGNORECASE)
+    cleaned = re.sub(r',?\s*and automated CI cargo-deny[^.]*?\.', '.', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\s*\([^)]*Ensembyte-rust[^)]*\)', '', cleaned)
+    return cleaned.strip()
+
+
 def parse_notes(lines):
     summary_lines = []
     sections = {}
@@ -82,15 +96,22 @@ def parse_notes(lines):
     for line in lines:
         m = SECTION_RE.match(line)
         if m:
-            key = m.group(1).strip().lower()
+            heading = m.group(1).strip()
+            key = heading.lower()
             if key == "thanks":
                 current = "thanks"
+                continue
+            # Filter out Rust / cross-platform headings for macOS release notes
+            if "ensembyte-rust" in key or "security & engine" in key or "cross-platform" in key:
+                current = "skip_platform"
                 continue
             current = HEADING_MAP.get(key)
             if current and current not in sections:
                 sections[current] = []
             elif current is None:
                 current = None
+            continue
+        if current == "skip_platform":
             continue
         if current is None:
             if line.strip():
@@ -104,7 +125,7 @@ def parse_notes(lines):
                         thanks.append(item)
                     else:
                         sections[current].append(item)
-    summary = " ".join(summary_lines)
+    summary = clean_summary_for_mac(" ".join(summary_lines))
     ordered = [
         {"title": title, "items": sections[title]}
         for title in SECTION_ORDER
@@ -124,10 +145,17 @@ def extract_section(version):
             while lines and not lines[-1].strip():
                 lines.pop()
             out = []
+            skip = False
             for line in lines:
                 if line.startswith("### "):
-                    out.append("## " + line[4:])
-                else:
+                    h = line[4:].strip().lower()
+                    if "ensembyte-rust" in h or "security & engine" in h:
+                        skip = True
+                        continue
+                    else:
+                        skip = False
+                        out.append("## " + line[4:])
+                elif not skip:
                     out.append(line)
             return "\n".join(out) + "\n"
     return None

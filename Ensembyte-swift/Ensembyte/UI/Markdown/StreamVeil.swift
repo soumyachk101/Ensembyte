@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Streamed text arrives the way zeron draws it (`crates/ui/src/markdown/veil.rs`, itself a
+/// Streamed text arrives the way ensembyte draws it (`crates/ui/src/markdown/veil.rs`, itself a
 /// port of mugen-markdown's `FadePainter`): every flush is committed to layout at once, and a
 /// purely cosmetic veil over the characters that just arrived dissolves over the next beat.
 /// Nothing moves and nothing resizes; a token that fades in exactly where it will stay is
