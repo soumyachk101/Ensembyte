@@ -2,6 +2,21 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.14] - 2026-10-30
+
+### New features
+- Thread Working Modes (Single Agent, Heads in Panel, Heads in Thread): Support three working modes per thread: single agent (solo work without secondary heads), heads in floating panel, or heads nested as child threads in the sidebar.
+- Single-Agent Solo Mode: Enforces direct in-thread work with strict solo prompts instructing the model not to open hydra delegation blocks.
+- Thread Tasks & Artifacts Section (`ThreadTaskSection`): Bottom collapsible sheet with dedicated Todos (interactive checklist) and Artifacts (syntax-highlighted code diff hunks, markdown, and image previews) tabs.
+- Chat Header Panels Menu: Added a Panels capsule menu in the conversation header to quickly toggle between Todos and Artifacts.
+
+### Bug fixes
+- Header Title Overflow: Added an elastic spacer between thread titles and right-hand action capsules, ensuring long branch and thread titles truncate cleanly with an ellipsis without pushing buttons off-screen.
+
+### Refinements
+- Provider Solo Flag Propagation: Passes the solo thread mode flag directly into ACP, Codex, Command Code, and OpenAI-compatible provider sessions.
+- Settings Working Mode Card: Visual picker in Hydra Settings to easily view and configure the active thread's working mode.
+
 ## [1.1.13] - 2026-10-30
 
 ### New features

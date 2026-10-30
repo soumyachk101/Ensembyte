@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.14] - 2026-10-30
+
+Ensembyte 1.1.14 brings three flexible thread working modes (Single agent, Heads in panel, and Heads in thread), interactive docked thread task and artifact panels, and header overflow layout resilience to Ensembyte-swift for macOS.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Thread Working Modes (`WorkingMode`, `singleAgentMode`)**: Select between Single agent (solo execution with no secondary heads or panels), Heads in panel (parallel worker heads docked beside the thread), or Heads in thread (nested child threads in the sidebar).
+- **Single-Agent Solo Policy**: Automatic prompt enforcement instructing models to do all work in-thread without generating delegation blocks or requesting heads.
+- **Docked Tasks & Artifacts Section (`ThreadTaskSection`)**: Bottom collapsible sheet featuring live **Todos** checklist tracking and a rich **Artifacts** tab with syntax-colored diff hunks, markdown rendering, and image previewing.
+- **Header Panels Menu**: Fast capsule menu in the chat chrome to toggle between Todos and Artifacts views.
+- **Header Layout Resilience**: Elastic spacing between thread titles and right-hand action capsules to prevent buttons from overflowing off-screen on narrow window sizes.
+- **Provider Solo Mode Integration**: Propagates solo mode status directly into ACP, Codex, Command Code, and OpenAI-compatible provider sessions.
+
 ## [1.1.13] - 2026-10-30
 
 Ensembyte 1.1.13 introduces a native embedded web browser with multi-tab browsing, live timeline artifact cards across all provider sessions, flexible Hydra head workspaces, and comprehensive browser keyboard shortcuts in Ensembyte-swift for macOS.

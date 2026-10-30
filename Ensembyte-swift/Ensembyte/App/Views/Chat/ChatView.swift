@@ -300,6 +300,10 @@ struct ChatView: View {
                 TerminalPanel(runtime: runtime, directory: directory)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            if runtime.isTaskSectionVisible {
+                ThreadTaskSection(runtime: runtime) { withAnimation(Chrome.panelSlide) { runtime.isTaskSectionVisible = false } }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .detailSheet()
@@ -311,6 +315,7 @@ struct ChatView: View {
         .transition(.identity)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { columnHeight = $0 }
         .animation(switching ? nil : Chrome.panelSlide, value: runtime.isTerminalVisible)
+        .animation(switching ? nil : Chrome.panelSlide, value: runtime.isTaskSectionVisible)
         // A merge or pull request link in this chat can hand its request to a helper, which
         // opens in the panel and lands it on the same provider and model as this thread.
         .environment(\.mergeRequestTarget, MergeRequestTarget(chatID: runtime.threadID) { link in
@@ -1323,6 +1328,12 @@ private struct ChatChromeRow: View {
                     // Animated, the old and new titles ghost over each other
                     // mid-flight. Scroll progress still drives it per frame.
                     .animation(nil, value: title)
+                // The row spans the pane: the title above absorbs overflow by truncating
+                // (its own `lineLimit(1)`), and the trailing capsules stay pinned fully
+                // on screen. Without this slack the row hugged its ideal width, a long
+                // branch or title pushed the right-side controls off the edge, and the
+                // window's rounded corner clipped them.
+                Spacer(minLength: 0)
                 HStack(spacing: 8) {
                     ChromeCapsule {
                         OpenInMenu(directory: directory)
@@ -1335,6 +1346,10 @@ private struct ChatChromeRow: View {
                             GitActionsMenu(runtime: runtime, directory: directory, git: git)
                         }
                     }
+                    // The icon-only capsule: browser, terminal and changes stay one height.
+                    // The title-bearing Panels menu sits in its own capsule so its taller
+                    // label row can't bump this icon row's height (a title control in a
+                    // capsule drags the whole capsule's height up with it).
                     ChromeCapsule {
                         ChromeIconButton(symbol: "globe", isActive: model.settings.showsBrowserPanel, help: "Browser") {
                             withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel.toggle() }
@@ -1346,6 +1361,16 @@ private struct ChatChromeRow: View {
                         ChromeDivider()
                         ChromeIconButton(symbol: "plusminus", isActive: runtime.isDiffVisible, help: "Changes" + ShortcutStore.hint(for: .toggleChanges)) {
                             runtime.toggleDiff()
+                        }
+                    }
+                    ChromeCapsule {
+                        ChromeTextMenu(symbol: "checklist", title: "Panels", help: "Tasks and Artifacts panels") {
+                            PopoverItem("Todos", isChecked: runtime.isTaskSectionVisible && runtime.taskSectionTab == .todos) {
+                                withAnimation(Chrome.panelSlide) { runtime.taskSectionTab = .todos; runtime.isTaskSectionVisible = true }
+                            }
+                            PopoverItem("Artifacts", isChecked: runtime.isTaskSectionVisible && runtime.taskSectionTab == .artifacts) {
+                                withAnimation(Chrome.panelSlide) { runtime.taskSectionTab = .artifacts; runtime.isTaskSectionVisible = true }
+                            }
                         }
                     }
                 }

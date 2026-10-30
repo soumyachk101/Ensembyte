@@ -37,6 +37,10 @@ struct SessionConfiguration: Sendable {
     /// its system prompt and switches its own sub-agent tool off, so every head goes out
     /// through the delegation block as a thread of Ensembyte's.
     var hydra: HydraLaunch?
+    /// Set when the thread is in single-agent mode: no Hydra heads go out for it, so the
+    /// session keeps its own sub-agent tool (the lead does the work itself, like a plain
+    /// chat) and the Hydra policy is not in force.
+    var solo = false
     /// The conversation so far, for a provider that keeps nothing between launches (the
     /// API providers hold their history in memory only): the exchanges go back in as
     /// context, so a session that starts over still knows what was said.

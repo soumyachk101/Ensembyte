@@ -203,6 +203,10 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
     /// Thread mode: when true, heads spawn as child threads in the sidebar
     /// rather than appearing in a floating HydraPanel. Default is false (panel).
     var hydraThreadMode = false
+    /// Single-agent mode: when true, no Hydra heads ever go out for the thread, even if
+    /// the lead writes a delegation block - the work stays in the thread, like a plain
+    /// chat. Default is false.
+    var singleAgentMode = false
 
     /// Spawned from another thread, whichever side of the panel it is on.
     var isHelper: Bool { parentThreadID != nil }
@@ -297,6 +301,7 @@ struct ChatThread: Codable, Identifiable, Hashable, Sendable {
         hydraSpawnCount = container.value(.hydraSpawnCount, default: 0)
         hydra = container.value(.hydra, default: nil)
         hydraThreadMode = container.value(.hydraThreadMode, default: false)
+        singleAgentMode = container.value(.singleAgentMode, default: false)
     }
 }
 

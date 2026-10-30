@@ -279,6 +279,15 @@ final class ThreadRuntime {
     var subagentPanelDock: PanelDockCorner = .bottomTrailing
     /// The same for the Hydra panel.
     var hydraPanelDock: PanelDockCorner = .bottomTrailing
+    /// The tabs of this thread's task section, the Todos list and the Artifacts list.
+    enum TaskSectionTab: Equatable {
+        case todos
+        case artifacts
+    }
+    /// Whether this thread's task section is open under the conversation.
+    var isTaskSectionVisible = false
+    /// Which tab of the task section is showing.
+    var taskSectionTab: TaskSectionTab = .todos
     /// The head whose timeline the Hydra panel shows.
     var hydraSelectedHeadID: UUID?
     /// The head popped out of the Hydra panel into a second panel of its own, if any, and
@@ -1634,6 +1643,7 @@ final class ThreadRuntime {
                     interactionMode: thread.interactionMode,
                     apiKey: app.settings.apiKey(for: thread.provider),
                     hydra: hydra,
+                    solo: app.isSingleAgentMode(for: threadID),
                     transcript: apiTranscript(),
                     isHydraHead: thread.hydra?.kind == .ensembyte,
                     antiSlopEnabled: signature.antiSlopEnabled
@@ -1697,6 +1707,7 @@ final class ThreadRuntime {
                 runtimeMode: thread.runtimeMode,
                 interactionMode: thread.interactionMode,
                 hydra: hydra,
+                solo: app.isSingleAgentMode(for: threadID),
                 isHydraHead: thread.provider == .codex && thread.hydra?.kind == .ensembyte,
                 managesCodexHeadHistory: thread.provider == .codex && thread.hydra?.tracksProviderHistory == true
                     && (resumeID == nil || thread.hydra?.ownedCodexSessionID == resumeID),
@@ -3206,6 +3217,20 @@ final class ThreadRuntime {
               let entry = entries.last(where: { $0.turnID == turnID && $0.kind == .assistant && Self.holdsDelegationBlock($0) })
                 ?? entries.last(where: { $0.turnID == turnID && $0.kind == .assistant }),
               case .assistant(var message) = entry.item.content else { return .none }
+        // Single-agent mode: no heads ever go out for this thread, even when the lead
+        // writes a delegation block. The block leaves the reply and the lead hears the
+        // work stays in the thread; `.none` so the caller starts no follow-up turn.
+        if app.isSingleAgentMode(for: threadID) {
+            guard HydraPrompts.hasDelegationBlock(in: message.text) else { return .none }
+            endDelegationStream()
+            message.text = HydraPrompts.withoutDelegationBlock(message.text)
+            if message.text.isEmpty { message.text = "No heads went out." }
+            entry.item.content = .assistant(message)
+            saveRevision += 1
+            scheduleSave()
+            appendHydraNote("No heads went out: this thread is in single-agent mode, so the lead does it itself.")
+            return .none
+        }
         // A block read as it streamed: an entry that closed after the last flush goes out
         // now, then the block is finished here rather than read again from the top.
         scanStreamedDelegations(entryID: hydraStream?.entryID ?? entry.id, turnID: turnID, text: message.text)

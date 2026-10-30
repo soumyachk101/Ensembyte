@@ -252,6 +252,7 @@ extension AppModel {
             isolatesHeads: settings.hydraIsolateHeads,
             autoMerges: settings.hydraAutoMerge,
             reviewsHeads: settings.hydraReviewHeads,
+            solo: thread.singleAgentMode,
             projects: ownRefs
         )
     }
@@ -422,6 +423,26 @@ extension AppModel {
         }
     }
 
+    /// Returns true when the given thread is in single-agent mode: no Hydra heads ever
+    /// go out for it, even if the lead writes a delegation block. The work stays in the
+    /// thread, like a plain chat.
+    func isSingleAgentMode(for threadID: UUID) -> Bool {
+        thread(threadID)?.singleAgentMode ?? false
+    }
+
+    /// Switches a thread between ordinary Hydra mode and single-agent mode. In single-agent
+    /// mode no heads go out for the thread; the panel visibility is reset so the heads
+    /// surface is shown (a solo thread keeps a panel it simply never fills).
+    func setSingleAgentMode(_ on: Bool, for threadID: UUID) {
+        let previous = isSingleAgentMode(for: threadID)
+        guard previous != on else { return }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+            updateThread(threadID) { $0.singleAgentMode = on }
+            if on { runtime(for: threadID).isHydraPanelHidden = false }
+        }
+    }
+
+    @discardableResult
     func spawnEnsembyteHead(
         from parentID: UUID,
         task: String,
@@ -433,6 +454,10 @@ extension AppModel {
         profile: String? = nil,
         brief: @escaping @Sendable (HydraPersona, HydraPrompts.Workplace) -> String
     ) -> ChatThread? {
+        guard !isSingleAgentMode(for: parentID) else {
+            runtime(for: parentID).appendHydraNote("This thread is in single-agent mode, so no heads go out: the work stays in this thread.")
+            return nil
+        }
         guard let head = insertHydraHead(from: parentID, task: task, origin: origin, batchID: batchID, preferredIndex: preferredIndex, project: project, profile: profile) else { return nil }
         Task { await startEnsembyteHead(head.id, attachments: attachments, brief: brief) }
         return head

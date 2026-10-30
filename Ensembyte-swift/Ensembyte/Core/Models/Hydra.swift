@@ -159,6 +159,12 @@ struct HydraLaunch: Hashable, Sendable {
     /// `hydraReviewHeads` setting): it reads the files the reports name and corrects what
     /// is wrong itself, rather than trusting the reports or sending out a head to check.
     var reviewsHeads = false
+    /// The thread is single-agent: Hydra is on, but the lead keeps no team, works the
+    /// thread itself in-thread, and no delegation block goes out (the thread's
+    /// `singleAgentMode` choice, on when the user keeps it; the team's policy stands when
+    /// it is off). The launch's fields that shape a team are moot for it: the solo lead
+    /// gets the plain in-thread brief instead.
+    var solo = false
     /// The projects in the sidebar, the chat's own first: the lead may send a head to any
     /// of them by name, and its work lands and merges there.
     var projects: [HydraProjectRef] = []
@@ -787,10 +793,20 @@ enum HydraPrompts {
         """
     }
 
+    /// The lead's policy on a single-agent thread: the team is kept off for it, so the
+    /// lead works the request itself, in-thread, and hears the thread's shape plainly, so
+    /// a provider told of Hydra elsewhere does not send heads that never go out.
+    private static let soloPolicy = """
+    [Hydra is on] This thread is a single-agent thread: you work it yourself, in-thread. Do the work directly in this thread with your own tools, whatever its size: read, edit and run here, and answer the user when the work is done. Send no heads, open no hydra block, and do not ask for one: the thread keeps no team. Open no agent, task, spawn_agent or sub-agent tool of your own either, which would run the work inside your own session. A message that opens with [Hydra] is from Ensembyte, not the user.
+    """
+
     /// The policy for a lead whose session keeps it in its system prompt: the API
-    /// providers, and Claude, Codex and Copilot, which define it at launch.
+    /// providers, and Claude, Codex and Copilot, which define it at launch. A solo
+    /// thread keeps no team: its lead gets the single-agent brief instead, and the
+    /// team's policy, byte for byte, stands for every other thread.
     static func fallbackPolicy(_ launch: HydraLaunch) -> String {
-        fallbackPolicy(maxHeads: launch.maxHeads, isolated: launch.isolatesHeads, autoMerges: launch.autoMerges, reviewsHeads: launch.reviewsHeads, heads: launch.headsLabel, projects: launch.projects, profiles: launch.headProfiles)
+        guard !launch.solo else { return soloPolicy }
+        return fallbackPolicy(maxHeads: launch.maxHeads, isolated: launch.isolatesHeads, autoMerges: launch.autoMerges, reviewsHeads: launch.reviewsHeads, heads: launch.headsLabel, projects: launch.projects, profiles: launch.headProfiles)
     }
 
     /// The true merge state for the front of a lead's message, so it never promises a merge that already happened or claims one that failed.
@@ -843,6 +859,20 @@ enum HydraPrompts {
     /// manual delegation mode needs a user/project/skill request, not only the standing
     /// developer policy. Keep this out of automatic reports, which have their own limit.
     static func delegationRequest(_ launch: HydraLaunch, explicitSpawn: Bool = false) -> String {
+        // A solo thread keeps no team, so no block is offered with the request: the
+        // standing solo policy already says the work stays in-thread, and an explicit
+        // "spawn heads" in a solo thread is refused as much here as when the block
+        // itself is refused.
+        guard !launch.solo else {
+            return """
+            [Hydra setting: enabled]
+            This thread is a single-agent thread: you work it yourself, in-thread. Do the work directly in this thread with your own tools, whatever its size. Send no heads, open no hydra block, and do not ask for one, whatever the request below says.
+
+            ---
+
+
+            """
+        }
         let route = "Delegate through the final hydra block so Ensembyte runs the selected heads in parallel; do not use native agent tools."
         let promptRule = explicitSpawn
             ? "The user explicitly requested to spawn Hydra heads. Do NOT perform research, file edits, or tool commands inline yourself. You MUST immediately reply with the ```hydra block below."

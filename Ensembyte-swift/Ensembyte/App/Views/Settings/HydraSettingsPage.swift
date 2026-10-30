@@ -91,6 +91,9 @@ struct HydraSettingsPage: View {
                     toggleRow("Heads work at a working effort", detail: "A lead thinking above medium sends its heads out at medium on the same model — on a scale without a medium (Z.ai), at the scale's own middle rung; a pair that names the heads' effort keeps it.", isOn: $settings.hydraTempersHeadEffort)
                 }
             }
+            ChromeSection(title: "Working mode") {
+                workingModeCard
+            }
             ChromeSection(title: "Messages") {
                 ChromeCard {
                     toggleRow("Queued follow-ups start on heads", detail: "A prompt queued behind a running turn goes out at once.", isOn: $settings.hydraQueueHeads, blockedBy: settings.hydraAlwaysHeads ? "Every message already goes to a head." : nil)
@@ -207,6 +210,121 @@ struct HydraSettingsPage: View {
                     .foregroundStyle(Chrome.secondaryText)
                 }
             }
+        }
+    }
+
+    // The thread's working mode: one agent with no heads, heads in the floating panel, or
+    // heads as nested threads. The two per-thread flags carry it; the picker keeps them
+    // mutually consistent by writing both on every change.
+    private enum WorkingMode: Hashable {
+        case single, panel, thread
+
+        /// The picker's symbol, one per mode.
+        var symbol: String {
+            switch self {
+            case .single: "person"
+            case .panel: "square.on.square"
+            case .thread: "list.bullet.indent"
+            }
+        }
+    }
+
+    /// The "Working mode" card: the chat it controls, its Hydra switch, and its mode.
+    private var workingModeCard: some View {
+        let threadID = model.selectedThreadID
+        let thread = threadID.flatMap { model.thread($0) }
+        return ChromeCard {
+            if let thread {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: thread.title.isEmpty ? "New thread" : thread.title)
+                            .font(.system(.body, weight: .semibold))
+                            .foregroundStyle(Chrome.primaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text("Changes apply to this chat only.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Chrome.secondaryText)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 12)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, Chrome.rowControlTrailingPadding)
+                .padding(.vertical, 14)
+                ChromeRowDivider()
+                ChromeRow(
+                    title: "Hydra",
+                    detail: "Turn Hydra on or off for this chat only. The app-wide switch above sets the default for every chat."
+                ) {
+                    SettingsSwitch(isOn: Binding(
+                        get: { model.hydraIsOn(thread) },
+                        set: { model.setHydra($0, for: thread.id) }
+                    ))
+                }
+                ChromeRowDivider()
+                ChromeRow(title: "Working mode", detail: workingModeDetail(for: thread)) {
+                    ChromeVisualPicker(
+                        options: [
+                            (WorkingMode.single, "Single agent"),
+                            (WorkingMode.panel, "Heads in panel"),
+                            (WorkingMode.thread, "Heads in thread"),
+                        ],
+                        selection: Binding(
+                            get: { workingMode(for: thread) },
+                            set: { apply($0, to: thread.id) }
+                        )
+                    ) { mode in
+                        Image(systemName: mode.symbol)
+                    }
+                }
+            } else {
+                HStack(spacing: 14) {
+                    Text("No chat selected.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Chrome.secondaryText)
+                    Spacer(minLength: 12)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, Chrome.rowControlTrailingPadding)
+                .padding(.vertical, 14)
+            }
+        }
+        .id(threadID)
+        .disabled(threadID == nil)
+    }
+
+    /// The mode the two per-thread flags carry: single-agent first, then thread mode, then the
+    /// panel the app defaults to.
+    private func workingMode(for thread: ChatThread) -> WorkingMode {
+        if model.isSingleAgentMode(for: thread.id) { return .single }
+        if model.isThreadMode(for: thread.id) { return .thread }
+        return .panel
+    }
+
+    /// The mode's words, under the picker's title.
+    private func workingModeDetail(for thread: ChatThread) -> String {
+        switch workingMode(for: thread) {
+        case .single: return "One agent works this thread: no heads, no panels."
+        case .panel: return "Heads work in the floating head panel beside the chat."
+        case .thread: return "Heads work as nested threads in the sidebar."
+        }
+    }
+
+    /// Writes both per-thread flags for the chosen mode, so the pair always reads back as one
+    /// mode: single turns single on and thread off, the panel turns both off, and thread turns
+    /// only thread on.
+    private func apply(_ mode: WorkingMode, to threadID: UUID) {
+        switch mode {
+        case .single:
+            model.setSingleAgentMode(true, for: threadID)
+            model.setHydraThreadMode(false, for: threadID)
+        case .panel:
+            model.setSingleAgentMode(false, for: threadID)
+            model.setHydraThreadMode(false, for: threadID)
+        case .thread:
+            model.setSingleAgentMode(false, for: threadID)
+            model.setHydraThreadMode(true, for: threadID)
         }
     }
 

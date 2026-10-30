@@ -18,8 +18,8 @@ struct HydraButton: View {
     /// Briefly true after heads go out, so the badge first shows the sending pulse
     /// inside its own box before morphing into the working count.
     @State private var isSending = false
-    /// Right-tapping the mark opens the per-chat Hydra switch in place.
-    @State private var isHydraSwitchShown = false
+    /// Left-clicking the mark with nothing out yet and Hydra off opens its dropdown in place.
+    @State private var isHydraMenuShown = false
     /// The first chat's intro, opened by the mark itself until it has been read.
     @State private var isIntroShown = false
 
@@ -39,7 +39,7 @@ struct HydraButton: View {
             } else if heads.isEmpty {
                 // With Hydra on there is nothing out yet to show, so the mark explains itself; with it
                 // off, "Hydra is on" would be untrue, and what the user needs is the switch.
-                if isOn { isExplaining = true } else { isHydraSwitchShown = true }
+                if isOn { isExplaining = true } else { isHydraMenuShown = true }
             } else {
                 togglePanel()
             }
@@ -82,17 +82,14 @@ struct HydraButton: View {
         }
         .buttonStyle(.plain)
         .chromeGlassCircle()
-        .background {
-            HydraRightTap { isHydraSwitchShown.toggle() }
-        }
         .onHover { hovering in
             withAnimation(Chrome.hover) { isHovering = hovering }
         }
         .popover(isPresented: $isExplaining, arrowEdge: .bottom) {
             HydraIdlePopover(thread: thread)
         }
-        .popover(isPresented: $isHydraSwitchShown, arrowEdge: .bottom) {
-            HydraSwitchPopover(thread: thread, isOn: isOn, isHydraSwitchShown: $isHydraSwitchShown)
+        .popover(isPresented: $isHydraMenuShown, arrowEdge: .bottom) {
+            HydraMenu(thread: thread)
         }
         .popover(isPresented: $isIntroShown, arrowEdge: .bottom) {
             HydraIntroPopover { model.settings.hasSeenHydraIntro = true; isIntroShown = false }
@@ -191,7 +188,7 @@ struct HydraButton: View {
     private func help(isOn: Bool, running: Int, hasHeads: Bool) -> String {
         guard isOn else {
             return model.hydraIsHeldByMode(thread)
-                ? "Hydra is off in this mode: \(thread.provider.displayName)'s heads run without asking permission · Right-click to turn it on anyway"
+                ? "Hydra is off in this mode: \(thread.provider.displayName)'s heads run without asking permission · Click the mark to turn it on anyway"
                 : "Hydra is on in Settings"
         }
         var parts = ["Hydra is on"]
@@ -210,113 +207,39 @@ struct HydraButton: View {
     }
 }
 
-/// What a right-tap on the Hydra mark offers, in place: the per-chat switch, on or
-/// off for this chat only. Left-click keeps opening the panel; this only flips the chat.
-private struct HydraSwitchPopover: View {
+/// The Hydra mark's dropdown: the per-chat switch and this thread's working mode, as a
+/// plain menu in BranchMenu's idiom. Left-clicking the mark with nothing out yet and
+/// Hydra off opens it.
+private struct HydraMenu: View {
     @Environment(AppModel.self) private var model
     let thread: ChatThread
-    let isOn: Bool
-    @Binding var isHydraSwitchShown: Bool
 
     var body: some View {
         PopoverMenu {
-            if !model.settings.hydraEnabled {
-                PopoverSectionHeader("Hydra is off in Settings")
-                PopoverItem("Turn Hydra on") {
-                    model.settings.hydraEnabled = true
-                    model.setHydra(true, for: thread.id)
-                    isHydraSwitchShown = false
-                }
-            } else {
-                PopoverSectionHeader(isOn ? "Hydra is on for this chat" : model.hydraIsHeldByMode(thread) ? "Hydra is off in this permission mode" : "Hydra is off for this chat")
-                if model.hydraIsHeldByMode(thread) {
-                    PopoverNote("\(AppModel.hydraModeReason(thread.provider)) Turn Hydra on if that suits you.")
-                }
-                PopoverItem("Turn Hydra on for this chat", isChecked: isOn) {
-                    model.setHydra(true, for: thread.id)
-                    isHydraSwitchShown = false
-                }
-                PopoverItem("Turn Hydra off for this chat", isChecked: !isOn) {
-                    model.setHydra(false, for: thread.id)
-                    isHydraSwitchShown = false
-                }
-                // Where this chat's heads work: nested threads in the chat itself, or the
-                // floating panel. In thread mode the panel surfaces stay out of the chat.
-                PopoverSectionHeader("Where heads work")
-                PopoverItem("Heads in the thread", isChecked: model.isThreadMode(for: thread.id)) {
-                    model.setHydraThreadMode(true, for: thread.id)
-                    isHydraSwitchShown = false
-                }
-                PopoverItem("Heads in the panel", isChecked: !model.isThreadMode(for: thread.id)) {
-                    model.setHydraThreadMode(false, for: thread.id)
-                    isHydraSwitchShown = false
-                }
+            PopoverSectionHeader("Hydra")
+            PopoverItem("Hydra", isChecked: model.hydraIsOn(thread)) {
+                model.setHydra(!model.hydraIsOn(thread), for: thread.id)
+            }
+            PopoverSectionHeader("Working mode")
+            // Single-agent mode: the thread keeps no team; the lead works it in-thread
+            // and the flag simply keeps heads in. The mark and panel surface stay.
+            PopoverItem(
+                "Single agent",
+                detail: "One agent works this thread: no heads, no panels.",
+                isChecked: model.isSingleAgentMode(for: thread.id)
+            ) {
+                model.setSingleAgentMode(!model.isSingleAgentMode(for: thread.id), for: thread.id)
+            }
+            // Heads in the thread: nested threads in the chat itself, instead of the
+            // floating panel. In thread mode the panel surfaces stay out of the chat.
+            PopoverItem(
+                "Heads in thread",
+                detail: "Heads work as nested threads in the sidebar.",
+                isChecked: model.isThreadMode(for: thread.id)
+            ) {
+                model.setHydraThreadMode(!model.isThreadMode(for: thread.id), for: thread.id)
             }
         }
-    }
-}
-
-/// Catches a right-tap, a right-click or a control-click, on the Hydra mark. A
-/// background with no drawing of its own, sized to the button, so the button's
-/// left-click, badge, hover and help text are exactly as they were. It watches the
-/// window's events rather than hanging a recognizer on itself: the SwiftUI button in
-/// front of it claims every hit over the mark, so a recognizer on the background never
-/// saw a click. A secondary click that lands inside this view's frame fires the action
-/// and goes no further; every other event passes untouched. Control-click counts as a
-/// secondary click too.
-private struct HydraRightTap: NSViewRepresentable {
-    var action: () -> Void
-
-    func makeNSView(context: Context) -> HydraRightTapHost {
-        HydraRightTapHost(action: action)
-    }
-
-    func updateNSView(_ nsView: HydraRightTapHost, context: Context) {
-        nsView.action = action
-    }
-}
-
-private final class HydraRightTapHost: NSView {
-    var action: () -> Void
-    private var monitor: Any?
-
-    init(action: @escaping () -> Void) {
-        self.action = action
-        super.init(frame: .zero)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { nil }
-
-    deinit { MainActor.assumeIsolated { removeMonitor() } }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil { removeMonitor() } else { installMonitor() }
-    }
-
-    private func installMonitor() {
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
-            guard let self, self.catches(event) else { return event }
-            self.action()
-            return nil
-        }
-    }
-
-    private func removeMonitor() {
-        guard let monitor else { return }
-        NSEvent.removeMonitor(monitor)
-        self.monitor = nil
-    }
-
-    /// Whether the event is a secondary click on this view: in its window, over its
-    /// frame, and either the right button or the left one with Control held.
-    private func catches(_ event: NSEvent) -> Bool {
-        guard let window, event.window === window, !isHiddenOrHasHiddenAncestor, !bounds.isEmpty else { return false }
-        let isSecondary = event.type == .rightMouseDown || event.modifierFlags.contains(.control)
-        guard isSecondary else { return false }
-        return bounds.contains(convert(event.locationInWindow, from: nil))
     }
 }
 
@@ -339,7 +262,7 @@ private struct HydraIdlePopover: View {
             PopoverDivider()
             PopoverNote("No heads are out yet. Ask for something big enough to split up and this chat sends them out, each with a panel of its own.")
             PopoverDivider()
-            PopoverNote("Right-click the mark to switch Hydra off for this chat.")
+            PopoverNote("Click the mark to open the Hydra menu and switch Hydra off for this chat.")
         }
         .frame(width: 290)
     }
