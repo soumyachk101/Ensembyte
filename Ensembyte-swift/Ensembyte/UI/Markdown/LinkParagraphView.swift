@@ -248,6 +248,15 @@ enum MarkdownLinkOpener {
     static func open(_ url: URL) {
         guard url.scheme == nil, url.host == nil, url.query == nil, url.fragment == nil,
               url.path.hasPrefix("/") else {
+            // Only an explicit, well-formed http/https link is an in-app candidate; the
+            // router takes it when the app has one, and every other scheme keeps the
+            // system's handling. The router is main-actor-only; this caller is an AppKit
+            // delegate on the main thread, so it claims the isolation (the SwiftUI caller
+            // already is on it).
+            if case .success = BrowserURLPolicy.transcriptAddress(url.absoluteString),
+               case true = MainActor.assumeIsolated({ BrowserLinkRouter.shared.handle(url) }) {
+                return
+            }
             NSWorkspace.shared.open(url)
             return
         }

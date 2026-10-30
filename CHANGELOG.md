@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.13] - 2026-10-30
+
+Ensembyte 1.1.13 introduces a native embedded web browser with multi-tab browsing, live timeline artifact cards across all provider sessions, flexible Hydra head workspaces, and comprehensive browser keyboard shortcuts in Ensembyte-swift for macOS.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Native In-App Web Browser (`BrowserCoordinator`, `BrowserSectionView`, `BrowserStore`)**: Full-bleed web browser column beside conversation threads powered by WebKit (`WKWebView`), featuring multi-tab strip controls, live tab switching, and custom glass theme styling.
+- **Live Artifact Cards Across Providers**: Real-time carding for files produced or edited during a turn across ACP, Codex, Command Code, and OpenAI-compatible provider sessions, dynamically updated in place with syntax-tailored code and markdown previews.
+- **Address Bar & Normalization (`BrowserURLPolicy`)**: Address input with automatic scheme normalization (`http://` for local loopback development servers such as `localhost:3000`, `https://` for external web domains) and inline address validation.
+- **Chat Link Routing**: Markdown web links clicked within conversation turns seamlessly open directly inside the in-app browser without leaving the workspace.
+- **Browser Keyboard Shortcuts (`AppShortcut.Section.browser`)**: Added dedicated browser hotkeys (`⇧⌘B` to toggle browser, `⌘L` to focus address bar, `⌘T` for new tab, `⇧⌘W` to close tab, `⌘[` / `⌘]` for history, and `⇧⌘R` to reload).
+- **Flexible Hydra Head Workspaces**: Option to run parallel Hydra heads either directly in the chat timeline or in a floating workspace panel.
+- **Address & URL Security Hardening**: Strict URL scheme policy blocking embedded credentials, invalid escape sequences, and unsupported schemes to prevent link exploits.
+
 ## [1.1.12] - 2026-10-27
 
 Ensembyte 1.1.12 introduces non-interrupting composer follow-up queueing and session launch queue restoration in Ensembyte-swift for macOS, alongside interactive Pull Request review workspaces, native two-way Voice Mode with 3D fluid Thinking Orbs, LaTeX math typesetting, and Mermaid diagram caching in Ensembyte-rust.

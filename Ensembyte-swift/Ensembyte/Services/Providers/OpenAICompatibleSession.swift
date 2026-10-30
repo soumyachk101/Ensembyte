@@ -979,6 +979,7 @@ class OpenAICompatibleSession: ProviderSession {
                     status: .completed,
                     edits: [FileEdit(path: fileTools.displayPath(path), old: "", new: content)]
                 )))
+                emitArtifact(path: path, content: content)
                 return "Wrote \(fileTools.displayPath(path)) (\(content.utf8.count) bytes)."
             } catch {
                 guard !Task.isCancelled, !interrupted else { return "Stopped." }
@@ -1002,6 +1003,7 @@ class OpenAICompatibleSession: ProviderSession {
                     status: .completed,
                     edits: [FileEdit(path: fileTools.displayPath(path), old: old, new: new)]
                 )))
+                emitArtifact(path: path, content: new)
                 return "Edited \(fileTools.displayPath(path))."
             } catch {
                 guard !Task.isCancelled, !interrupted else { return "Stopped." }
@@ -1035,6 +1037,32 @@ class OpenAICompatibleSession: ProviderSession {
     private func declined(_ callID: String) -> String {
         onEvent?(.toolUpdated(id: callID, update: ToolUpdate(output: "The user declined this action.", status: .declined)))
         return "The user declined this action. Ask how to proceed instead of retrying it."
+    }
+
+    /// A finished write or edit carded as the turn's artifact: the content is already in
+    /// hand from the tool call, so no read goes to disk.
+    private func emitArtifact(path: String, content: String) {
+        guard !path.isEmpty else { return }
+        var artifact = Artifact(
+            title: (path as NSString).lastPathComponent,
+            kind: Self.artifactKind(for: path),
+            path: fileTools.displayPath(path)
+        )
+        artifact.content = content
+        onEvent?(.artifact(artifact))
+    }
+
+    /// Source code card as code, markdown as markdown, the rest as files.
+    private static func artifactKind(for path: String) -> Artifact.Kind {
+        let suffix = (path as NSString).pathExtension.lowercased()
+        switch suffix {
+        case "swift", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "rb", "java", "kt", "cpp", "cc", "c", "h", "cs", "sh", "zig", "ex", "exs":
+            return .code
+        case "md", "markdown":
+            return .markdown
+        default:
+            return .file
+        }
     }
 
     /// Whether this kind of tool would ask the user before running. The concurrent

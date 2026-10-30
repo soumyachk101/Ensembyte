@@ -72,6 +72,23 @@ struct AppCommands: Commands {
             Divider()
         }
 
+        CommandGroup(after: .sidebar) {
+            Button("Toggle Browser") { BrowserCoordinator.shared.requestToggle() }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserToggle))
+            Button("Focus Address Bar") { BrowserCoordinator.shared.post(.focusAddress) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserFocusAddress))
+            Button("New Browser Tab") { BrowserCoordinator.shared.post(.newTab) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserNewTab))
+            Button("Close Browser Tab") { BrowserCoordinator.shared.post(.closeTab) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserCloseTab))
+            Button("Back") { BrowserCoordinator.shared.post(.back) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserBack))
+            Button("Forward") { BrowserCoordinator.shared.post(.forward) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserForward))
+            Button("Reload Page") { BrowserCoordinator.shared.post(.reload) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: .browserReload))
+        }
+
         CommandMenu("Thread") {
             Button("Stop") { runtime?.interrupt() }
                 .keyboardShortcut(shortcuts.keyboardShortcut(for: .stopTurn))

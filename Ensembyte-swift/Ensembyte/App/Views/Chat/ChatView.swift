@@ -253,6 +253,16 @@ struct ChatView: View {
                 .animation(switching ? nil : Chrome.panelSlide, value: scene.usage)
             }
             .onGeometryChange(for: CGSize.self, of: { $0.size }) { paneSize = $0 }
+            // The browser section's open-or-toggle requests (see `BrowserCoordinator`): a URL
+            // opens the section on a fresh tab, the toggle flag just flips it.
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name.browserPanelRequested)) { note in
+                if let url = note.userInfo?[BrowserNotificationKey.url] as? URL {
+                    model.browser.openPage(url: url)
+                    withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel = true }
+                } else if note.userInfo?[BrowserNotificationKey.toggle] as? Bool == true {
+                    withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel.toggle() }
+                }
+            }
             // Free-floating panels are kept inside the pane while it shrinks, with no
             // animation; when the resize ends they land docked exactly (see below).
             .onChange(of: paneSize) {
@@ -1288,15 +1298,19 @@ private struct ChatChromeRow: View {
                 }
                 if let thread = model.thread(runtime.threadID) {
                     // The team mark, once Hydra is on in Settings: always active in every
-                    // chat until switched off there. A head leads no team of its own.
+                    // chat until switched off there. A head leads no team of its own. In
+                    // thread-contained mode the eye goes with the panel it hides: the mark
+                    // stays, opening the heads' own threads instead.
                     if model.settings.hydraEnabled, !thread.isHelper {
                         HydraButton(thread: thread, runtime: runtime)
                             .transition(.softAppear)
-                        ChromeCircleButton(
-                            symbol: runtime.isHydraPanelHidden ? "eye.slash" : "eye",
-                            help: runtime.isHydraPanelHidden ? "Show Hydra panel" + ShortcutStore.hint(for: .toggleHydraPanel) : "Hide Hydra panel" + ShortcutStore.hint(for: .toggleHydraPanel)
-                        ) {
-                            withAnimation(Chrome.panelSlide) { runtime.isHydraPanelHidden.toggle() }
+                        if !model.isThreadMode(for: runtime.threadID) {
+                            ChromeCircleButton(
+                                symbol: runtime.isHydraPanelHidden ? "eye.slash" : "eye",
+                                help: runtime.isHydraPanelHidden ? "Show Hydra panel" + ShortcutStore.hint(for: .toggleHydraPanel) : "Hide Hydra panel" + ShortcutStore.hint(for: .toggleHydraPanel)
+                            ) {
+                                withAnimation(Chrome.panelSlide) { runtime.isHydraPanelHidden.toggle() }
+                            }
                         }
                     }
                     PermissionMenu(thread: thread)
@@ -1322,6 +1336,10 @@ private struct ChatChromeRow: View {
                         }
                     }
                     ChromeCapsule {
+                        ChromeIconButton(symbol: "globe", isActive: model.settings.showsBrowserPanel, help: "Browser") {
+                            withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel.toggle() }
+                        }
+                        ChromeDivider()
                         ChromeIconButton(symbol: "terminal", isActive: runtime.isTerminalVisible, help: "Terminal" + ShortcutStore.hint(for: .toggleTerminal)) {
                             runtime.isTerminalVisible.toggle()
                         }

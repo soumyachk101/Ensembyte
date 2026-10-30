@@ -342,6 +342,9 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var detailSize: CGSize = .zero
+    /// The width the browser section held when its edge was grabbed, the anchor every
+    /// drag translation measures against.
+    @State private var browserDragStart: CGFloat = 0
     /// The voice stage's arrival, 0 hidden to 1 covering the chat, and whether it is drawn.
     @State private var voiceReveal: CGFloat = 0
     @State private var voiceStageShown = false
@@ -418,9 +421,39 @@ struct RootView: View {
                 }
             }
             .padding(.leading, settingsShown || (sidebar.isVisible && !onlyFloats) ? 0 : Chrome.sheetInset)
-            .padding(.trailing, Chrome.sheetInset)
+            // When the section sits behind the chat, the column ends at the section's edge,
+            // so the sheet's trailing inset is what separates them.
+            .padding(.trailing, model.settings.showsBrowserPanel && !settingsShown ? 0 : Chrome.sheetInset)
             .padding(.vertical, Chrome.sheetInset)
+
+            // The browser's own column: an opaque section beside the chat, sized by the
+            // persisted width and resized live by its leading edge. Only beside the chat,
+            // never under a settings page.
+            if model.settings.showsBrowserPanel && !settingsShown {
+                BrowserSectionView()
+                    .frame(width: model.settings.browserSectionWidth)
+                    .frame(maxHeight: .infinity)
+                    .padding(.top, Chrome.sheetInset)
+                    .padding(.bottom, Chrome.sheetInset)
+                    .overlay(alignment: .leading) {
+                        // The section's left edge: dragging left widens it, so the handle's
+                        // (window-space) translation is inverted from the sidebar's.
+                        SidebarResizeHandle(
+                            isActive: true,
+                            onBegin: { browserDragStart = model.settings.browserSectionWidth },
+                            onChange: { translation in
+                                model.settings.browserSectionWidth = min(
+                                    960, max(280, browserDragStart - translation))
+                            },
+                            onEnd: { browserDragStart = 0 }
+                        )
+                        .frame(width: SidebarResizeHandle.hitWidth)
+                        .padding(.top, Chrome.trafficLightTop + Chrome.trafficLightDiameter)
+                    }
+                    .transition(.opacity)
+            }
         }
+        .animation(Chrome.panelSlide, value: model.settings.showsBrowserPanel)
         // While the sidebar is hidden, dragging the window's leading edge pulls it back out.
         .overlay(alignment: .leading) {
             SidebarResizeHandle(

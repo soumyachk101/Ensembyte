@@ -2,6 +2,25 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.13] - 2026-10-30
+
+### New features
+- Native In-App Web Browser: Integrated a full-bleed web browser column beside the conversation thread powered by Apple's `WebKit` (`WKWebView`), featuring multi-tab management, tab switching, and custom glass theme styling.
+- Live Artifact Cards Across Providers: Dynamically streams newly written or modified files as interactive preview cards directly in the timeline across ACP, Codex, Command Code, and OpenAI-compatible provider sessions.
+- In-Turn Artifact Upsert: Rewrites the turn's active artifact card in place as files are edited or created, providing instant visual feedback without stacking duplicate rows.
+- Address Bar & Normalization: Built-in address field with automatic scheme normalization (`http://` for local loopback development servers such as `localhost:3000`, `https://` for external web domains) and inline address validation.
+- Chat Link Routing: Markdown web links clicked within conversation turns now seamlessly open directly inside the in-app browser without losing development context.
+- Browser Keyboard Shortcuts: Added a dedicated Browser shortcuts section (`⇧⌘B` to toggle browser, `⌘L` to focus address bar, `⌘T` for new tab, `⇧⌘W` to close tab, `⌘[` / `⌘]` for history, and `⇧⌘R` to reload).
+
+### Bug fixes
+- Strict URL Scheme Policy: Added `BrowserURLPolicy` blocking embedded credentials (`user:pass@host`), invalid escape sequences, and unsupported protocol schemes to protect against link exploits.
+- Loopback Dev Server Detection: Fixed port parsing on bare authority inputs so local development URLs resolve correctly to HTTP loopback rather than failing hostname lookup.
+
+### Refinements
+- Flexible Hydra Head Workspaces: Configure where parallel Hydra heads execute—either directly nested in-chat or organized in a dedicated floating panel.
+- Browser Keyboard Shortcut Customization: Integrated the Browser shortcut command group into Settings with customizable hotkeys and quick reference labels.
+- External Browser Handoff: Added a one-click button in the browser toolbar to instantly open the active page in the macOS system default browser.
+
 ## [1.1.12] - 2026-10-27
 
 ### New features

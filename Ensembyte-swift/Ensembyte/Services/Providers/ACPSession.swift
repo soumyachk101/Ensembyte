@@ -521,7 +521,13 @@ final class ACPSession: ProviderSession {
                 if !steps.isEmpty { onEvent?(.todos(steps)) }
                 return
             }
-            onEvent?(.toolUpdated(id: id, update: makeToolUpdate(update)))
+            let toolUpdate = makeToolUpdate(update)
+            onEvent?(.toolUpdated(id: id, update: toolUpdate))
+            // A finished write or edit carries the file's path and the new content in
+            // its diff blocks; card the newest as the turn's artifact, no disk read.
+            if toolUpdate.status == .completed {
+                emitArtifact(update)
+            }
         case "plan":
             let steps = Self.parseTodoItems(update["entries"])
             onEvent?(.todos(steps))
@@ -694,7 +700,11 @@ final class ACPSession: ProviderSession {
             case "in_progress", "inProgress", "in-progress", "active": .active
             default: .pending
             }
-            return TodoStep(text: text, status: status)
+            var step = TodoStep(text: text, status: status)
+            step.activeForm = item["activeForm"]?.string ?? item["active_form"]?.string ?? item["description"]?.string
+            step.error = item["error"]?.string ?? item["errorMessage"]?.string
+            step.duration = item["duration"]?.double
+            return step
         }
     }
 
@@ -845,6 +855,43 @@ final class ACPSession: ProviderSession {
                 old: block["oldText"]?.string ?? "",
                 new: block["newText"]?.string ?? ""
             )
+        }
+    }
+
+    /// A finished write or edit carded as the turn's artifact: the file's diff block
+    /// already names it and carries its new content, so nothing is read from disk. A
+    /// write or edit is recognized by a diff block in the result; reads carry none.
+    private func emitArtifact(_ update: JSONValue) {
+        let blocks = diffBlocks(update)
+        guard let block = blocks.last(where: { !$0.path.isEmpty }) else { return }
+        var artifact = Artifact(
+            title: (block.path as NSString).lastPathComponent,
+            kind: Self.artifactKind(for: block.path),
+            path: block.path
+        )
+        if !block.new.isEmpty { artifact.content = block.new }
+        onEvent?(.artifact(artifact))
+    }
+
+    /// The update's diff blocks: each file's path, its old text and its new text.
+    private func diffBlocks(_ update: JSONValue) -> [(path: String, old: String, new: String)] {
+        (update["content"]?.array ?? []).compactMap { block -> (path: String, old: String, new: String)? in
+            guard block["type"]?.string == "diff" else { return nil }
+            let path = block["path"]?.string.map { ToolTitles.relativePath($0, to: workingDirectory) } ?? ""
+            return (path: path, old: block["oldText"]?.string ?? "", new: block["newText"]?.string ?? "")
+        }
+    }
+
+    /// Source code card as code, markdown as markdown, the rest as files.
+    private static func artifactKind(for path: String) -> Artifact.Kind {
+        let suffix = (path as NSString).pathExtension.lowercased()
+        switch suffix {
+        case "swift", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "rb", "java", "kt", "cpp", "cc", "c", "h", "cs", "sh", "zig", "ex", "exs":
+            return .code
+        case "md", "markdown":
+            return .markdown
+        default:
+            return .file
         }
     }
 

@@ -240,6 +240,17 @@ private struct HydraSwitchPopover: View {
                     model.setHydra(false, for: thread.id)
                     isHydraSwitchShown = false
                 }
+                // Where this chat's heads work: nested threads in the chat itself, or the
+                // floating panel. In thread mode the panel surfaces stay out of the chat.
+                PopoverSectionHeader("Where heads work")
+                PopoverItem("Heads in the thread", isChecked: model.isThreadMode(for: thread.id)) {
+                    model.setHydraThreadMode(true, for: thread.id)
+                    isHydraSwitchShown = false
+                }
+                PopoverItem("Heads in the panel", isChecked: !model.isThreadMode(for: thread.id)) {
+                    model.setHydraThreadMode(false, for: thread.id)
+                    isHydraSwitchShown = false
+                }
             }
         }
     }

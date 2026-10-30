@@ -102,6 +102,8 @@ enum ProviderEvent: Sendable {
     case planDelta(id: String, text: String)
     case planCompleted(id: String, markdown: String)
     case todos([TodoStep])
+    /// One file the turn's agent produced or changed, carded in the thread.
+    case artifact(Artifact)
     case approval(ApprovalRequest)
     case question(QuestionRequest)
     case requestResolved(id: String)

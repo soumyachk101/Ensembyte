@@ -337,11 +337,18 @@ struct HydraReportRow: View {
                 }
             }
             if let link {
-                Link(destination: link) {
+                Button {
+                    if BrowserURLPolicy.allowedNavigation(link) {
+                        BrowserCoordinator.shared.requestOpen(link)
+                    } else {
+                        NSWorkspace.shared.open(link)
+                    }
+                } label: {
                     Text("Open")
                         .font(.chat(.caption, weight: .semibold))
                         .foregroundStyle(Chrome.secondaryText)
                 }
+                .buttonStyle(.plain)
                 .help("Open in the browser")
             }
         }
@@ -439,10 +446,22 @@ struct BackgroundTasksWorkingRow: View {
     }
 }
 
+/// The finished heads the block names, one report pill each — and, when the thread is in
+/// thread mode, the running ones as live pills beside them: without the floating panel there
+/// is nowhere else in the lead's thread to say what they are doing right now. A live pill
+/// reads its head's own runtime through the model, exactly the way the heads panel does, and
+/// a tap on it opens that head's transcript.
 struct HydraHeadsWorkingRow: View {
     @Environment(AppModel.self) private var model
     let heads: [Int]
     let runtime: ThreadRuntime
+
+    /// One of the lead's heads, by roster index: the live record and its own thread.
+    private struct Head: Identifiable {
+        let info: HydraHeadInfo
+        let threadID: UUID
+        var id: Int { info.index }
+    }
 
     var body: some View {
         // Read through this thread's own cells (`helpers(of:)` holds every unarchived head,
@@ -450,18 +469,34 @@ struct HydraHeadsWorkingRow: View {
         // `model.threads`: a write to some other chat never re-renders these pills.
         let team = model.helpers(of: runtime.threadID)
             .filter(\.isHydraHead)
-        let infos = Dictionary(team.compactMap(\.hydra).map { ($0.index, $0) }, uniquingKeysWith: { first, _ in first })
-        let finished = heads.compactMap { infos[$0] }
+        let heads: [Head] = self.heads.compactMap { index in
+            guard let thread = team.first(where: { $0.hydra?.index == index }), let hydra = thread.hydra else { return nil }
+            return Head(info: hydra, threadID: thread.id)
+        }
+        let threadMode = model.isThreadMode(for: runtime.threadID)
+        // In thread mode no panel exists, so the running heads show here as live pills; in
+        // panel mode they are visible in the panel and only finished ones earn a pill.
+        let running = threadMode ? heads.filter { $0.info.status == .running } : []
+        let finished = heads.filter { $0.info.isFinished }
         // Every pill starts at the same left edge, glyphs in one column, whatever its
         // width: trailing alignment hung each narrower pill off the widest one's right
         // edge, and a head coming or going moved them all.
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(finished, id: \.index) { head in
-                FinishedHeadPill(head: head)
+            ForEach(running) { head in
+                RunningHeadPill(
+                    info: head.info,
+                    live: HydraLiveInfo.shown(head.info, model.existingRuntime(for: head.threadID)),
+                    threadID: head.threadID
+                )
+                .transition(.settleGlide)
+            }
+            ForEach(finished) { head in
+                FinishedHeadPill(head: head.info)
                     .transition(.settleGlide)
             }
         }
-        .animation(.smooth(duration: 0.3), value: finished.map(\.index))
+        .animation(.smooth(duration: 0.3), value: running.map(\.id))
+        .animation(.smooth(duration: 0.3), value: finished.map(\.id))
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, 96)
     }
@@ -469,6 +504,7 @@ struct HydraHeadsWorkingRow: View {
     /// The finished heads whose report has not reached the lead yet: a finished head whose
     /// batch still has a head at work, or — with no batch — a head that finished since the
     /// earliest running head set out, so heads done in an earlier turn stay out. Order is the caller's.
+    @MainActor
     static func finishedHeads(in threads: [ChatThread]) -> [HydraHeadInfo] {
         let infos = threads.compactMap(\.hydra)
         let running = infos.filter { $0.status == .running }
@@ -479,6 +515,62 @@ struct HydraHeadsWorkingRow: View {
             guard let batch = info.batchID else { return (info.finishedAt ?? .distantPast) >= since }
             return running.contains { $0.batchID == batch }
         }
+    }
+}
+
+/// A head still at work, in a thread-mode lead's own timeline: its task, a live status
+/// line read off its runtime the way the heads panel reads it, and a tap to its transcript.
+private struct RunningHeadPill: View {
+    @Environment(AppModel.self) private var model
+    let info: HydraHeadInfo
+    /// The head's record with its runtime's live activity and step count on top.
+    let live: HydraHeadInfo
+    let threadID: UUID
+
+    private var taskLabel: String { info.task.isEmpty ? info.persona.name : info.task }
+
+    var body: some View {
+        let status = Self.statusLine(for: live)
+        Button {
+            model.selectedThreadID = threadID
+        } label: {
+            HStack(spacing: 8) {
+                HydraGlyph(persona: info.persona, size: 18, isRunning: true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: taskLabel)
+                        .font(.chat(.callout, weight: .medium))
+                        .foregroundStyle(Chrome.primaryText.opacity(0.9))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(verbatim: status)
+                        .font(.chat(.caption))
+                        .foregroundStyle(Chrome.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.chat(.caption2, weight: .semibold))
+                    .foregroundStyle(Chrome.secondaryText)
+            }
+            .padding(.leading, TimelineMetrics.pillLeading)
+            .padding(.trailing, TimelineMetrics.pillTrailing)
+            .padding(.vertical, TimelineMetrics.pillVertical)
+            .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: TimelineMetrics.pillRadius, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help("Open \(info.persona.name)'s transcript")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("\(taskLabel), \(status)"))
+    }
+
+    /// The panel's own running words: its state, the live activity note, how many tools
+    /// it has run — the note and the count the panel prints, on one line.
+    private static func statusLine(for live: HydraHeadInfo) -> String {
+        var parts = [HydraStatusText.short(live)]
+        if let activity = live.activity { parts.append(TextCleanup.singleLine(activity, limit: 40)) }
+        if live.toolCalls > 0 { parts.append(live.toolCalls == 1 ? "1 tool" : "\(live.toolCalls) tools") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -1170,9 +1262,16 @@ struct HydraMergeRow: View {
                 }
             }
             if let link = outcome.link {
-                Link(destination: link) {
+                Button {
+                    if BrowserURLPolicy.allowedNavigation(link) {
+                        BrowserCoordinator.shared.requestOpen(link)
+                    } else {
+                        NSWorkspace.shared.open(link)
+                    }
+                } label: {
                     openLabel
                 }
+                .buttonStyle(.plain)
                 .help("Open in the browser")
             }
         }
@@ -1973,7 +2072,7 @@ struct HydraHeadStepsPopover: View {
                 return !message.text.trimmed.isEmpty
             case .assistant(let message):
                 return !message.text.trimmed.isEmpty
-            case .tool, .notice:
+            case .tool, .notice, .artifact:
                 return true
             case .reasoning, .turnEnd, .plan, .todos:
                 return false
@@ -2318,47 +2417,254 @@ struct PlanCard: View {
     }
 }
 
+/// One file, document or code output of the turn, as a badge the plan's badge twins:
+/// the glyph for what it is, its title, and the content one tap away. Code reads in
+/// the card's own code box, markdown in the markdown view, and a file artifact is the
+/// file itself: the preview the attachments show, its size, and the way to the file.
+struct ArtifactCard: View {
+    let artifact: Artifact
+    /// The entry the artifact landed under, when it has one: nothing reads it here yet,
+    /// it rides along for the menu the row's context carries.
+    var entry: TimelineEntry?
+    /// The thread's working directory, to resolve a relative path against.
+    var workingDirectory: String? = nil
+
+    @State private var isShowingArtifact = false
+
+    private var content: String? { artifact.content }
+    /// A relative path, resolved against the working directory.
+    private var path: String {
+        if artifact.path.hasPrefix("/") { return artifact.path }
+        guard let workingDirectory, !artifact.path.hasPrefix("~/") else { return artifact.path }
+        return (workingDirectory as NSString).appendingPathComponent(artifact.path)
+    }
+    /// Whether the file is there, for the size caption and the open and reveal buttons.
+    private var fileExists: Bool { FileManager.default.fileExists(atPath: path) }
+
+    var body: some View {
+        ChatBadge(
+            title: artifact.title,
+            showsChevron: true,
+            isEnabled: true,
+            isPresented: $isShowingArtifact,
+            glyph: {
+                Image(systemName: Self.glyph(for: artifact.kind))
+                    .foregroundStyle(.tint)
+            },
+            detail: {
+                artifactDetail
+            }
+        )
+    }
+
+    /// The popover's body: the content, the size of the file, and its buttons.
+    @ViewBuilder
+    private var artifactDetail: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(verbatim: artifact.title)
+                    .font(.chat(.headline))
+                Spacer()
+                if artifact.kind == .code, let content {
+                    CopyButton(text: content)
+                }
+            }
+            PopoverScroll(maxHeight: 420) {
+                artifactBody
+                    .padding(.horizontal, 16)
+            }
+            HStack(spacing: 8) {
+                if fileExists, let size = PreviewImages.fileSize(path) {
+                    Text(verbatim: size)
+                        .font(.chat(.caption))
+                        .foregroundStyle(Chrome.secondaryText)
+                }
+                if artifact.kind == .code, content != nil {
+                    CopyButton(text: content ?? "")
+                }
+                if fileExists {
+                    Button("Open") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    }
+                    .buttonStyle(.glass)
+                    Button("Reveal") {
+                        Workspace.revealInFinder(path)
+                    }
+                    .buttonStyle(.glass)
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 520)
+    }
+
+    /// The content, as it is: code in the code box, markdown read as markdown, a file
+    /// as the preview its attachments show.
+    @ViewBuilder
+    private var artifactBody: some View {
+        switch artifact.kind {
+        case .code:
+            CodeBlock(language: nil, code: content ?? "")
+        case .markdown:
+            MarkdownView(text: content ?? "").equatable()
+        case .file:
+            AttachmentLargePreview(attachment: PreviewImages.attachment(for: path))
+        }
+    }
+
+    /// What the badge's glyph is: a file that is not code, and nothing else, gets
+    /// the code's chevron.
+    private static func glyph(for kind: Artifact.Kind) -> String {
+        switch kind {
+        case .code: "chevron.left.forwardslash.chevron.right"
+        default: "doc"
+        }
+    }
+}
+
+/// The checklist as a card of its own: a header, a thin bar of how much is done, and the
+/// steps. A step under way says what it is doing rather than what it is, and a step that
+/// failed says why. Past a handful of finished steps the list folds them away behind one
+/// line, so the work still going on stays in view.
+struct TodoCard: View {
+    let steps: [TodoStep]
+
+    /// How many finished steps the card keeps in the open before it folds them away.
+    private static let foldAfter = 6
+
+    /// The finished steps at the head of the list: the ones the fold hides.
+    private var folded: [TodoStep] {
+        var folded: [TodoStep] = []
+        for step in steps {
+            guard step.status == .done else { break }
+            folded.append(step)
+        }
+        return folded
+    }
+    /// Whether the fold is on: more finished steps at the head than the card keeps open.
+    private var isFolded: Bool {
+        folded.count > Self.foldAfter
+    }
+    /// The steps the card shows: the folded ones hidden, everything else in order.
+    private var shown: [TodoStep] {
+        isFolded ? Array(steps.dropFirst(folded.count)) : steps
+    }
+
+    @State private var showsFolded = false
+
+    private var doneCount: Int { steps.count { $0.status == .done } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "checklist")
+                Text("\(doneCount) of \(steps.count) done")
+            }
+            .font(.chat(.caption))
+            .foregroundStyle(Chrome.secondaryText)
+            // A hairline of progress under the header: how much of the list is behind
+            // the reader, out of the whole list.
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Chrome.overlay(0.12))
+                    Capsule()
+                        .fill(Chrome.accent)
+                        .frame(width: proxy.size.width * Self.fraction(done: doneCount, of: steps.count))
+                }
+            }
+            .frame(height: 2)
+            .accessibilityHidden(true)
+            if isFolded, !showsFolded {
+                // The folded steps are gone, not deleted: one line says how many, and
+                // the reader can have them back.
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { showsFolded = true }
+                } label: {
+                    Text("\(folded.count) completed")
+                        .font(.chat(.caption))
+                        .foregroundStyle(Chrome.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .help("Show the completed steps")
+                .accessibilityLabel(Text("Show \(folded.count) completed steps"))
+            } else if isFolded {
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { showsFolded = false }
+                } label: {
+                    Text("Hide completed steps")
+                        .font(.chat(.caption))
+                        .foregroundStyle(Chrome.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .help("Hide the completed steps")
+            }
+            ForEach(Array(shown.enumerated()), id: \.offset) { _, step in
+                stepRow(step)
+            }
+        }
+        .padding(14)
+        .background(.quaternary.opacity(0.32), in: .rect(cornerRadius: TimelineMetrics.pillRadius, style: .continuous))
+        // The card hugs its longest step, like the badges: the row takes the
+        // width (less the badges' trailing room) only to lead-align the card and
+        // give long steps a line to wrap at.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 96)
+        // One checklist per turn: updates rewrite these steps in place, so
+        // checking an item off animates the same list instead of adding a row.
+        .animation(.snappy(duration: 0.2), value: steps)
+        .animation(.snappy(duration: 0.2), value: showsFolded)
+    }
+
+    /// One step: its glyph, its words — what it is doing while it runs — and what went
+    /// wrong under it.
+    private func stepRow(_ step: TodoStep) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: Self.symbol(for: step.status))
+                    .foregroundStyle(step.status == .pending ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
+                Text(verbatim: Self.text(for: step))
+                    .foregroundStyle(step.status == .done ? .secondary : .primary)
+                    .strikethrough(step.status == .done, color: .secondary)
+            }
+            .font(.chat(.callout))
+            if let error = step.error, !error.isEmpty {
+                Text(verbatim: error)
+                    .font(.chat(.caption))
+                    .foregroundStyle(Chrome.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 24)
+            }
+        }
+    }
+
+    /// What a step says: while it is under way, the provider's own words for what it is
+    /// doing; otherwise its plain text.
+    private static func text(for step: TodoStep) -> String {
+        if step.status == .active, let active = step.activeForm, !active.isEmpty { return active }
+        return step.text
+    }
+
+    /// The bar's share: how much is done, out of the whole list. Nothing done is no bar.
+    private static func fraction(done: Int, of total: Int) -> CGFloat {
+        guard total > 0 else { return 0 }
+        return CGFloat(done) / CGFloat(total)
+    }
+
+    static func symbol(for status: TodoStep.Status) -> String {
+        switch status {
+        case .pending: "circle"
+        case .active: "circle.dotted.circle"
+        case .done: "checkmark.circle.fill"
+        }
+    }
+}
+
 struct TodoListRow: View {
     let entry: TimelineEntry
 
     var body: some View {
         if case .todos(let steps) = entry.item.content, !steps.isEmpty {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Image(systemName: "checklist")
-                    Text("\(steps.count { $0.status == .done }) of \(steps.count) done")
-                }
-                .font(.chat(.caption))
-                .foregroundStyle(Chrome.secondaryText)
-                ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: Self.symbol(for: step.status))
-                            .foregroundStyle(step.status == .pending ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
-                        Text(step.text)
-                            .foregroundStyle(step.status == .done ? .secondary : .primary)
-                            .strikethrough(step.status == .done, color: .secondary)
-                    }
-                    .font(.chat(.callout))
-                }
-            }
-            .padding(14)
-            .background(.quaternary.opacity(0.32), in: .rect(cornerRadius: TimelineMetrics.pillRadius, style: .continuous))
-            // The card hugs its longest step, like the badges: the row takes the
-            // width (less the badges' trailing room) only to lead-align the card and
-            // give long steps a line to wrap at.
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.trailing, 96)
-            // One checklist per turn: updates rewrite these steps in place, so
-            // checking an item off animates the same list instead of adding a row.
-            .animation(.snappy(duration: 0.2), value: steps)
-        }
-    }
-
-    private static func symbol(for status: TodoStep.Status) -> String {
-        switch status {
-        case .pending: "circle"
-        case .active: "circle.dotted.circle"
-        case .done: "checkmark.circle.fill"
+            TodoCard(steps: steps)
         }
     }
 }
@@ -2558,6 +2864,9 @@ struct TurnFinishedBlock: View {
                     if case .notice(let notice) = entry.item.content, notice.level != .info {
                         conversation.append(entry)
                     }
+                case .artifact:
+                    // The turn's output: it stays below the steps with the response, like the files.
+                    conversation.append(entry)
                 case .tool:
                     guard case .tool(let call) = entry.item.content else { continue }
                     if call.kind == .agent { headEntries.append(entry) }
@@ -2637,6 +2946,10 @@ struct TurnFinishedBlock: View {
                                 TodoListRow(entry: entry)
                             case .notice:
                                 NoticeRow(entry: entry)
+                            case .artifact:
+                                if case .artifact(let artifact) = entry.item.content {
+                                    ArtifactCard(artifact: artifact, entry: entry, workingDirectory: workingDirectory)
+                                }
                             case .user, .reasoning, .turnEnd:
                                 EmptyView()
                             }
@@ -2659,6 +2972,10 @@ struct TurnFinishedBlock: View {
                             FoldedAnswerView(text: message.text, runtime: runtime)
                         case .plan:
                             PlanCard(entry: entry, runtime: runtime)
+                        case .artifact:
+                            if case .artifact(let artifact) = entry.item.content {
+                                ArtifactCard(artifact: artifact, entry: entry, workingDirectory: workingDirectory)
+                            }
                         default:
                             NoticeRow(entry: entry)
                         }

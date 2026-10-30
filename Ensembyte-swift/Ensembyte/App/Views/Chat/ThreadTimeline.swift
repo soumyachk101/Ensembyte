@@ -116,7 +116,13 @@ struct ThreadTimeline: View, Equatable {
         let since = runtime.isRunning ? runtime.turnStartedAt : nil
         let earlier = since.map { cut in finished.filter { ($0.finishedAt ?? .distantPast) < cut } } ?? []
         let later = finished.filter { head in !earlier.contains { $0.index == head.index } }
-        let pills = HeadPills(earlier: earlier.map(\.index), later: later.map(\.index))
+        // In thread mode the running heads show as live pills on this row, not in a panel,
+        // so their indices travel with the block: otherwise the builder places no row at
+        // all while no head has finished, and the live pills would have nowhere to land.
+        let runningHeadIndices = model.isThreadMode(for: runtime.threadID)
+            ? team.filter { $0.hydra?.status == .running }.compactMap { $0.hydra?.index }
+            : [Int]()
+        let pills = HeadPills(earlier: earlier.map(\.index), later: later.map(\.index) + runningHeadIndices)
         // A backgrounded command still running after the turn ended: kept out of the cache,
         // so the row comes and goes with the list.
         let waiting: [DisplayBlock] = !runtime.isRunning && !runtime.isHydraMerging && !runtime.backgroundTasks.isEmpty
@@ -273,10 +279,17 @@ struct ThreadTimeline: View, Equatable {
         }
         .environment(\.hydraMentionPersonas, hydraMentionPersonas)
         .environment(\.hydraMentionTargets, hydraMentionTargets)
-        // A head's name in the prose opens the head's chat; every other link keeps the
-        // system's handling.
+        // A head's name in the prose opens the head's chat; a web link goes to the
+        // in-app browser; everything else keeps the system's handling.
         .environment(\.openURL, OpenURLAction { url in
-            guard let headID = HydraMentionTarget.threadID(in: url) else { return .systemAction }
+            guard let headID = HydraMentionTarget.threadID(in: url) else {
+                let scheme = url.scheme?.lowercased()
+                if scheme == "http" || scheme == "https" {
+                    BrowserCoordinator.shared.requestOpen(url)
+                    return .handled
+                }
+                return .systemAction
+            }
             model.selectedThreadID = headID
             return .handled
         })
@@ -2580,6 +2593,10 @@ struct TimelineGroupView: View {
             case .plan: PlanCard(entry: entry, runtime: runtime)
             case .todos: TodoListRow(entry: entry)
             case .notice: NoticeRow(entry: entry)
+            case .artifact:
+                if case .artifact(let artifact) = entry.item.content {
+                    ArtifactCard(artifact: artifact, entry: entry, workingDirectory: context.workingDirectory)
+                }
             case .turnEnd:
                 if case .turnEnd(let summary) = entry.item.content {
                     TurnEndRow(summary: summary, hasReply: hasReply)

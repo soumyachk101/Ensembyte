@@ -818,7 +818,11 @@ final class CodexSession: ProviderSession {
                 case "inProgress": .active
                 default: .pending
                 }
-                return TodoStep(text: text, status: status)
+                var item = TodoStep(text: text, status: status)
+                item.activeForm = step["activeForm"]?.string ?? step["active_form"]?.string
+                item.error = step["error"]?.string ?? step["errorMessage"]?.string
+                item.duration = step["duration"]?.double
+                return item
             }
             sink(.todos(steps))
         case "turn/diff/updated":
@@ -1027,6 +1031,14 @@ final class CodexSession: ProviderSession {
                 sink(.toolStarted(id: id, call: call))
                 sink(.toolUpdated(id: id, update: toolUpdate(from: item)))
             }
+            // A finished file change carries each file's path and diff in hand; card
+            // the newest as the turn's artifact without a disk read.
+            if item["type"]?.string == "fileChange",
+               Self.toolStatus(item["status"]?.string, exitCode: nil) == .completed {
+                for artifact in artifacts(fromFileChange: item) {
+                    sink(.artifact(artifact))
+                }
+            }
             // On either target: the payload says whose head it is, whatever thread the
             // server filed the notice under.
             describeHeads(from: item)
@@ -1173,6 +1185,35 @@ final class CodexSession: ProviderSession {
             update.status = Self.toolStatus(rawStatus, exitCode: nil)
         }
         return update
+    }
+
+    /// A finished file change's files, carded as artifacts from what the item already
+    /// carries: each file's path, and its diff as the preview — no disk read.
+    private func artifacts(fromFileChange item: JSONValue) -> [Artifact] {
+        (item["changes"]?.array ?? []).compactMap { (change: JSONValue) -> Artifact? in
+            guard let rawPath = change["path"]?.string, !rawPath.isEmpty else { return nil }
+            let relative = ToolTitles.relativePath(rawPath, to: workingDirectory)
+            var artifact = Artifact(
+                title: (relative as NSString).lastPathComponent,
+                kind: Self.artifactKind(for: relative),
+                path: relative
+            )
+            if let diff = change["diff"]?.string, !diff.isEmpty { artifact.content = diff }
+            return artifact
+        }
+    }
+
+    /// Source code card as code, markdown as markdown, the rest as files.
+    private static func artifactKind(for path: String) -> Artifact.Kind {
+        let suffix = (path as NSString).pathExtension.lowercased()
+        switch suffix {
+        case "swift", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "rb", "java", "kt", "cpp", "cc", "c", "h", "cs", "sh", "zig", "ex", "exs":
+            return .code
+        case "md", "markdown":
+            return .markdown
+        default:
+            return .file
+        }
     }
 
     private static func toolStatus(_ raw: String?, exitCode: Int?) -> ToolCall.Status {

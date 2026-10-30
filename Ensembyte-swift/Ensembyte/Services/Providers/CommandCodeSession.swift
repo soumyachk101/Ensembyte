@@ -385,6 +385,7 @@ final class CommandCodeSession: ProviderSession {
             if !text.isEmpty { update.output = text }
             update.edits = finishEdit(id)
             onEvent?(.toolUpdated(id: id, update: update))
+            emitArtifact(id)
         case "tool_errored":
             guard let id = event["toolCallId"]?.string, toolNames[id] != "todo_write" else { return }
             let error = Self.errorText(event["error"]) ?? "The tool failed."
@@ -536,14 +537,18 @@ final class CommandCodeSession: ProviderSession {
     }
 
     private static func todos(from input: JSONValue) -> [TodoStep] {
-        (input["todos"]?.array ?? []).compactMap { todo in
+        (input["todos"]?.array ?? []).compactMap { todo -> TodoStep? in
             guard let text = todo["content"]?.string ?? todo["text"]?.string ?? todo["title"]?.string else { return nil }
             let status: TodoStep.Status = switch todo["status"]?.string {
             case "completed", "done": .done
             case "in_progress", "active": .active
             default: .pending
             }
-            return TodoStep(text: text, status: status)
+            var step = TodoStep(text: text, status: status)
+            step.activeForm = todo["activeForm"]?.string ?? todo["active_form"]?.string ?? todo["description"]?.string
+            step.error = todo["error"]?.string
+            step.duration = todo["duration"]?.double
+            return step
         }
     }
 
@@ -647,6 +652,46 @@ final class CommandCodeSession: ProviderSession {
         let url = URL(fileURLWithPath: path)
         guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000 else { return nil }
         return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// A finished write or edit carded as the turn's artifact: the content is already
+    /// in hand from the call's input, so no read goes to disk.
+    private func emitArtifact(_ id: String) {
+        guard let name = toolNames[id], let input = toolInputs[id] else { return }
+        let path: String?
+        let content: String?
+        switch name {
+        case "write_file":
+            path = input["file_path"]?.string
+            content = input["content"]?.string
+        case "edit_file":
+            path = input["file_path"]?.string ?? input["path"]?.string
+            content = input["new_string"]?.string ?? input["new_text"]?.string ?? input["new"]?.string
+        default:
+            return
+        }
+        guard let rawPath = path else { return }
+        var artifact = Artifact(
+            title: (rawPath as NSString).lastPathComponent,
+            kind: Self.artifactKind(for: rawPath),
+            path: ToolTitles.relativePath(rawPath, to: workingDirectory)
+        )
+        if let content { artifact.content = content }
+        onEvent?(.artifact(artifact))
+    }
+
+    /// Swift and other source code card as code, markdown carding as markdown,
+    /// the rest as files.
+    private static func artifactKind(for path: String) -> Artifact.Kind {
+        let suffix = (path as NSString).pathExtension.lowercased()
+        switch suffix {
+        case "swift", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "rb", "java", "kt", "cpp", "cc", "c", "h", "cs", "sh", "zig", "ex", "exs":
+            return .code
+        case "md", "markdown":
+            return .markdown
+        default:
+            return .file
+        }
     }
 
     // MARK: - The gate

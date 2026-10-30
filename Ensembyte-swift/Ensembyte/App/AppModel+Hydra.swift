@@ -294,11 +294,13 @@ extension AppModel {
         }
     }
 
-    /// The heads a lead still shows in its panel, in the order they were sent out. Read
-    /// through the parent index and the heads' own cells, so the chat showing them is left
-    /// alone when any other thread changes.
+    /// The heads a lead sent out, in the order they were sent out, in the panel or not:
+    /// room limits, stop/clear and the running-head counts are about the team, not the
+    /// panel, and in thread mode the heads never carry the panel flag. Read through the
+    /// parent index and the heads' own cells, so the chat showing them is left alone when
+    /// any other thread changes.
     func hydraHeads(of parentID: UUID) -> [ChatThread] {
-        panelHeads(of: parentID)
+        hydraTeam(of: parentID)
     }
 
     /// How many of a lead's Ensembyte-run heads are still at work.
@@ -414,6 +416,9 @@ extension AppModel {
                 // switching back to floating mode.
                 if threadMode { $0.foldsHelpers = false }
             }
+            // A panel hidden by the eye button stays out of the chrome row in thread
+            // mode; without a reset it would be unreopenable once the mode flips back.
+            if threadMode { runtime(for: threadID).isHydraPanelHidden = false }
         }
     }
 
@@ -513,7 +518,9 @@ extension AppModel {
             head.speedTier = speed
         }
         head.parentThreadID = parentID
-        head.isInPanel = true
+        // In thread mode a head is a nested thread, never a panel member: the panel
+        // surfaces stay out of the lead's chat entirely.
+        head.isInPanel = !isThreadMode(for: parentID)
         head.worktreePath = sameProject ? parent.worktreePath : nil
         head.branch = sameProject ? parent.branch : nil
         if task.isEmpty {

@@ -21,6 +21,7 @@ struct TimelineItem: Codable, Identifiable, Hashable, Sendable {
         case tool(ToolCall)
         case plan(ProposedPlan)
         case todos([TodoStep])
+        case artifact(Artifact)
         case notice(Notice)
         case turnEnd(TurnSummary)
     }
@@ -234,6 +235,30 @@ struct TodoStep: Codable, Hashable, Sendable {
 
     var text: String
     var status: Status
+    /// What to say while the step is running, when the provider's payload carries it.
+    var activeForm: String? = nil
+    /// The provider's error for a failed step, when its payload carries one.
+    var error: String? = nil
+    /// How long the step took, when the provider's payload times it.
+    var duration: TimeInterval? = nil
+}
+
+/// One file, document or code output of a turn's agent, shown as a card in the thread.
+struct Artifact: Codable, Hashable, Sendable {
+    enum Kind: String, Codable, Hashable, Sendable {
+        case code
+        case markdown
+        case file
+    }
+
+    var title: String
+    var kind: Kind
+    /// The file's path, repository-relative when it sits in the working directory,
+    /// absolute when it does not: attachment paths, not something rewritten here.
+    var path: String
+    /// A local copy of the content for an inline preview, read in when it is already
+    /// on hand. Nil when the provider gave the path but not the bytes.
+    var content: String? = nil
 }
 
 struct Notice: Codable, Hashable, Sendable {

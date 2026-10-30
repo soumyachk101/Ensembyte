@@ -23,6 +23,8 @@ final class AppModel {
     /// The user's MCP connections, handed to every provider session at launch.
     let mcp: MCPStore
     let terminals: TerminalStore
+    /// The app's browser: its open tabs, which one is front, and the commands that move them.
+    let browser: BrowserStore
     let sidebar: SidebarLayout
     /// Picks chats back up once a spent usage limit resets, with the setting on.
     @ObservationIgnored private(set) var autoContinue: AutoContinue!
@@ -148,9 +150,30 @@ final class AppModel {
         providers = ProviderRegistry(settings: settings)
         mcp = MCPStore()
         terminals = TerminalStore()
+        browser = BrowserStore()
         sidebar = SidebarLayout()
         autoContinue = AutoContinue(app: self)
         voice = VoiceController(app: self)
+        observeBrowserCommands()
+        BrowserLinkRouter.shared.handler = { url in
+            BrowserCoordinator.shared.requestOpen(url)
+            return true
+        }
+    }
+
+    /// The commands the browser's own chrome posts: take them up on the front tab.
+    private func observeBrowserCommands() {
+        NotificationCenter.default.addObserver(
+            forName: .browserCommand,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let command = notification.userInfo?["command"] as? String,
+                  let parsed = BrowserCommand(rawValue: command) else { return }
+            MainActor.assumeIsolated {
+                self?.browser.perform(parsed)
+            }
+        }
     }
 
     /// Mirrors a list into its cells: values that changed are written to their cell (and only
@@ -1204,7 +1227,12 @@ final class AppModel {
     @discardableResult
     func spawnSubagent(from parentID: UUID, title: String, prompt: String) -> ChatThread? {
         guard let parent = thread(parentID) else { return nil }
-        if let existing = subagent(of: parentID) {
+        // Thread-mode leads keep helpers as nested threads, not panel members: the panel
+        // query would never find one, so reuse the newest helper thread instead.
+        let existing = isThreadMode(for: parentID)
+            ? helpers(of: parentID).first { !$0.isHydraHead }
+            : subagent(of: parentID)
+        if let existing {
             let runtime = runtime(for: existing.id)
             if runtime.isRunning {
                 runtime.enqueueFollowUp(text: prompt, attachments: [])
@@ -1224,7 +1252,8 @@ final class AppModel {
         )
         thread.speedTier = parent.speedTier
         thread.parentThreadID = parentID
-        thread.isInPanel = true
+        // A thread-mode lead's helper is a nested thread, never a floating panel.
+        thread.isInPanel = !isThreadMode(for: parentID)
         thread.title = title
         thread.hasCustomTitle = true
         threads.append(thread)

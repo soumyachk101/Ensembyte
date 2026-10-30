@@ -127,10 +127,18 @@ enum AppShortcut: String, CaseIterable, Identifiable {
     case toggleActivityView
     case showMainWindow
     case openSettings
+    case browserToggle
+    case browserFocusAddress
+    case browserNewTab
+    case browserCloseTab
+    case browserBack
+    case browserForward
+    case browserReload
 
     enum Section: String, CaseIterable, Identifiable {
         case threads
         case window
+        case browser
 
         var id: String { rawValue }
 
@@ -138,6 +146,7 @@ enum AppShortcut: String, CaseIterable, Identifiable {
             switch self {
             case .threads: "Threads"
             case .window: "Window and panels"
+            case .browser: "Browser"
             }
         }
 
@@ -145,6 +154,7 @@ enum AppShortcut: String, CaseIterable, Identifiable {
             switch self {
             case .threads: "bubble.left.and.bubble.right.fill"
             case .window: "macwindow"
+            case .browser: "safari"
             }
         }
 
@@ -161,6 +171,8 @@ enum AppShortcut: String, CaseIterable, Identifiable {
             .threads
         case .commandPalette, .toggleSidebar, .toggleTerminal, .toggleChanges, .toggleHydraPanel, .toggleActivityView, .showMainWindow, .openSettings:
             .window
+        case .browserToggle, .browserFocusAddress, .browserNewTab, .browserCloseTab, .browserBack, .browserForward, .browserReload:
+            .browser
         }
     }
 
@@ -186,6 +198,13 @@ enum AppShortcut: String, CaseIterable, Identifiable {
         case .toggleActivityView: "Activity view"
         case .showMainWindow: "Show Ensembyte"
         case .openSettings: "Settings"
+        case .browserToggle: "Toggle Browser"
+        case .browserFocusAddress: "Focus Address Bar"
+        case .browserNewTab: "New Browser Tab"
+        case .browserCloseTab: "Close Browser Tab"
+        case .browserBack: "Go Back"
+        case .browserForward: "Go Forward"
+        case .browserReload: "Reload Page"
         }
     }
 
@@ -211,6 +230,13 @@ enum AppShortcut: String, CaseIterable, Identifiable {
         case .toggleActivityView: "Lists every thread by when it was last active."
         case .showMainWindow: "Brings the main window to the front."
         case .openSettings: "Opens Settings, or goes back to your threads."
+        case .browserToggle: "Shows or hides the in-app browser."
+        case .browserFocusAddress: "Puts the caret in the browser's address bar."
+        case .browserNewTab: "Opens a new tab in the browser."
+        case .browserCloseTab: "Closes the browser's current tab."
+        case .browserBack: "Goes back in the browser."
+        case .browserForward: "Goes forward in the browser."
+        case .browserReload: "Reloads the browser's current page."
         }
     }
 
@@ -236,6 +262,14 @@ enum AppShortcut: String, CaseIterable, Identifiable {
         case .toggleActivityView: KeyChord(keyCode: 32, modifiers: [.option, .command])
         case .showMainWindow: KeyChord(keyCode: 29, modifiers: .command)
         case .openSettings: KeyChord(keyCode: 43, modifiers: .command)
+        case .browserToggle: KeyChord(keyCode: 11, modifiers: [.shift, .command])
+        case .browserFocusAddress: KeyChord(keyCode: 37, modifiers: .command)
+        case .browserNewTab: KeyChord(keyCode: 17, modifiers: .command)
+        // ⌘W is "Archive thread" from the start, so the close takes the shift form.
+        case .browserCloseTab: KeyChord(keyCode: 13, modifiers: [.shift, .command])
+        case .browserBack: KeyChord(keyCode: 33, modifiers: .command)
+        case .browserForward: KeyChord(keyCode: 30, modifiers: .command)
+        case .browserReload: KeyChord(keyCode: 15, modifiers: [.shift, .command])
         }
     }
 }

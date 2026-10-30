@@ -13,6 +13,7 @@ final class TimelineEntry: Identifiable {
         case tool
         case plan
         case todos
+        case artifact
         case notice
         case turnEnd
     }
@@ -36,6 +37,7 @@ final class TimelineEntry: Identifiable {
         case .tool: .tool
         case .plan: .plan
         case .todos: .todos
+        case .artifact: .artifact
         case .notice: .notice
         case .turnEnd: .turnEnd
         }
@@ -564,6 +566,9 @@ final class ThreadRuntime {
     /// The row a turn's todo list lives on, so each update finds it without scanning the
     /// timeline.
     @ObservationIgnored private var todosEntryID: String?
+    /// The row a turn's newest artifact lives on, so each update rewrites that one card
+    /// rather than stacking a new row.
+    @ObservationIgnored private var artifactEntryID: String?
     /// Paths this turn has touched so far, kept current as the turn's edits land, so a head
     /// that asks what the turn has already changed is answered from the turn rather than by
     /// walking the timeline. Reset with the turn (see `startTurn`, `install`, `revert`) and
@@ -2642,6 +2647,8 @@ final class ThreadRuntime {
             completePlan(id, markdown: markdown)
         case .todos(let steps):
             upsertTodos(steps)
+        case .artifact(let artifact):
+            upsertArtifact(artifact)
         case .approval(let request):
             approvals.removeAll { $0.id == request.id }
             approvals.append(request)
@@ -4038,6 +4045,51 @@ final class ThreadRuntime {
             append(item)
         }
         scheduleSave()
+    }
+
+    private func upsertArtifact(_ artifact: Artifact) {
+        // One remembered row for the whole turn, rewritten in place as the agent
+        // produces and updates its files, so a turn shows one latest card, not a
+        // stack of them — the same walk `upsertTodos` takes when the row moves.
+        if let id = artifactEntryID, let entry = entryIndex[id], entry.item.turnID == currentTurnID {
+            entry.item.content = .artifact(artifact)
+            saveRevision += 1
+            return
+        }
+        var existing: TimelineEntry?
+        for entry in entries.reversed() {
+            if let turnID = entry.item.turnID, turnID != currentTurnID { break }
+            if entry.item.turnID == currentTurnID, case .artifact = entry.item.content { existing = entry; break }
+        }
+        if let entry = existing {
+            artifactEntryID = entry.id
+            entry.item.content = .artifact(artifact)
+            saveRevision += 1
+        } else {
+            let item = TimelineItem(turnID: turnIDForNewRows, content: .artifact(artifact))
+            artifactEntryID = item.id
+            append(item)
+        }
+        scheduleSave()
+    }
+
+    /// The running turn's todo list, freshest update first: the row is rewritten in
+    /// place as the agent works, and an earlier turn's list stays behind it.
+    var currentTurnTodos: [TodoStep] {
+        for entry in entries.reversed() {
+            if entry.item.turnID != currentTurnID { break }
+            if case .todos(let steps) = entry.item.content { return steps }
+        }
+        return []
+    }
+
+    /// The freshest artifact the running turn has produced; older ones stay in place.
+    var currentTurnArtifact: Artifact? {
+        for entry in entries.reversed() {
+            if entry.item.turnID != currentTurnID { break }
+            if case .artifact(let artifact) = entry.item.content { return artifact }
+        }
+        return nil
     }
 
     private func appendNotice(_ level: Notice.Level, _ message: String) {
