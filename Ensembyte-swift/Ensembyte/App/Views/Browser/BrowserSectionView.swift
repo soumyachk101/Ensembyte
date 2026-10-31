@@ -3,10 +3,16 @@ import SwiftUI
 
 /// The browser as a full-bleed column beside the conversation: a slim header, the tab strip,
 /// the back/forward/reload + address toolbar, and the page below. Sized by its own column,
-/// not by a drag — the handle on its edge lives on the parent. Every page the app has open
-/// lives in the one `BrowserStore` on the model, so it shows the same tabs as the panel.
+/// not by a drag — the handle on its edge lives on the parent. The tabs belong to the open
+/// thread; each thread keeps its own set on the model's `BrowserStore`.
 struct BrowserSectionView: View {
     @Environment(AppModel.self) private var model
+
+    /// The thread whose tabs this section shows: the selected one, or the sidebar's first
+    /// when nothing is selected.
+    private var threadID: UUID {
+        model.selectedThreadID ?? model.sidebarThreads.first?.id ?? UUID()
+    }
 
     var body: some View {
         let store = model.browser
@@ -54,22 +60,20 @@ struct BrowserSectionView: View {
         HStack(spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(store.pageIDs, id: \.self) { id in
-                        if let page = store.pages[id] {
-                            BrowserTab(
-                                page: page,
-                                isActive: id == store.activePageID,
-                                onSelect: { store.selectPage(id) },
-                                onClose: { store.closePage(id) }
-                            )
-                        }
+                    ForEach(store.pages(in: threadID), id: \.id) { page in
+                        BrowserTab(
+                            page: page,
+                            isActive: page.id == store.activePage(in: threadID)?.id,
+                            onSelect: { store.selectPage(page.id, in: threadID) },
+                            onClose: { store.closePage(page.id, in: threadID) }
+                        )
                     }
                 }
                 .padding(.vertical, 2)
             }
             .frame(maxWidth: .infinity)
             ChromeIconButton(symbol: "plus", help: "New tab") {
-                store.openPage(url: nil)
+                store.openPage(url: nil, in: threadID)
             }
         }
         .padding(.horizontal, Chrome.chromeHorizontalPadding)
@@ -80,7 +84,7 @@ struct BrowserSectionView: View {
     /// history and reload controls stand down when there is nothing to act on; the address
     /// field always has room, and a small "Go" surfaces while it differs from what loaded.
     private func toolbar(_ store: BrowserStore) -> some View {
-        let page = store.activePage
+        let page = store.activePage(in: threadID)
         let hasURL = page?.state.url != nil
         return HStack(spacing: 6) {
             ChromeIconButton(symbol: "arrow.left", isEnabled: page?.state.canBack ?? false, help: "Go back") {
@@ -95,7 +99,7 @@ struct BrowserSectionView: View {
             addressField(page)
                 .frame(maxWidth: .infinity)
             ChromeIconButton(symbol: "arrow.up.forward", isEnabled: hasURL, help: "Open in default browser") {
-                model.browser.activePage?.openInDefaultBrowser()
+                model.browser.activePage(in: threadID)?.openInDefaultBrowser()
             }
         }
         .padding(.horizontal, Chrome.chromeHorizontalPadding)
@@ -156,7 +160,7 @@ struct BrowserSectionView: View {
     /// A bad address, under the toolbar, in the danger tone.
     @ViewBuilder
     private func validationStrip(_ store: BrowserStore) -> some View {
-        if let message = store.activePage?.validationMessage {
+        if let message = store.activePage(in: threadID)?.validationMessage {
             Text(verbatim: message)
                 .font(.system(size: 11))
                 .foregroundStyle(Chrome.danger)
@@ -171,7 +175,7 @@ struct BrowserSectionView: View {
     @ViewBuilder
     private var pageBody: some View {
         let store = model.browser
-        if let page = store.activePage {
+        if let page = store.activePage(in: threadID) {
             if let error = page.state.error {
                 errorState(page: page, error: error)
             } else if page.state.url == nil {
@@ -184,7 +188,7 @@ struct BrowserSectionView: View {
             // No tabs at all: open an empty one, so the strip and the field have a home.
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onAppear { model.browser.openPage(url: nil) }
+                .onAppear { model.browser.openPage(url: nil, in: threadID) }
         }
     }
 

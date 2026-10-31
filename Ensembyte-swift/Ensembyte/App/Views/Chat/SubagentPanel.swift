@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Every floating panel of a chat, for its place in a corner's stack.
 enum FloatingPanelID: Hashable {
-    case subagent, hydra, popped, usage, auto(UUID)
+    case subagent, hydra, popped, usage, artifact, todo, auto(UUID)
 }
 
 /// The side of the chat column a docked panel sits on.

@@ -171,7 +171,9 @@ final class AppModel {
             guard let command = notification.userInfo?["command"] as? String,
                   let parsed = BrowserCommand(rawValue: command) else { return }
             MainActor.assumeIsolated {
-                self?.browser.perform(parsed)
+                // The commands act on the open thread's front tab.
+                guard let self, let thread = self.selectedThreadID else { return }
+                self.browser.perform(parsed, in: thread)
             }
         }
     }

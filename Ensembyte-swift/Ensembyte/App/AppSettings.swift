@@ -195,8 +195,6 @@ final class AppSettings {
         static let sidebarPanelSize = "sidebarPanelSize"
         static let usagePanelDock = "usagePanelDock"
         static let usagePanelHeight = "usagePanelHeight"
-        static let showsBrowserPanel = "showsBrowserPanel"
-        static let browserPanelDock = "browserPanelDock"
         static let browserSectionWidth = "browserSectionWidth"
         static let hydraPairs = "hydraPairs"
         static let hasSeenTour = "hasSeenTour"
@@ -742,18 +740,6 @@ final class AppSettings {
         }
     }
 
-    /// The app's one browser panel, beside the conversation while it is on (see
-    /// `Notification.Name.browserPanelRequested`): the request's toggle and the panel's
-    /// own close mark all set it, so it stays across threads.
-    var showsBrowserPanel: Bool {
-        didSet { defaults.set(showsBrowserPanel, forKey: Key.showsBrowserPanel) }
-    }
-
-    /// The corner the browser panel is docked in, where it was last dragged.
-    var browserPanelDock: PanelDockCorner {
-        didSet { defaults.set(browserPanelDock.rawValue, forKey: Key.browserPanelDock) }
-    }
-
     /// The width of the browser's window section, as its leading edge was last dragged to.
     var browserSectionWidth: CGFloat {
         didSet { defaults.set(Double(browserSectionWidth), forKey: Key.browserSectionWidth) }
@@ -850,8 +836,6 @@ final class AppSettings {
         }
         usagePanelDock = defaults.string(forKey: Key.usagePanelDock).flatMap(PanelDockCorner.init(rawValue:)) ?? .bottomLeading
         usagePanelHeight = defaults.object(forKey: Key.usagePanelHeight).flatMap { $0 as? Double }.map { CGFloat($0) }
-        showsBrowserPanel = defaults.object(forKey: Key.showsBrowserPanel) as? Bool ?? false
-        browserPanelDock = defaults.string(forKey: Key.browserPanelDock).flatMap(PanelDockCorner.init(rawValue:)) ?? .topLeading
         browserSectionWidth = defaults.object(forKey: Key.browserSectionWidth).flatMap { $0 as? Double }.map { CGFloat($0) } ?? 440
         hydraPairs = Self.load([Lenient<HydraPair>].self, forKey: Key.hydraPairs)?.compactMap(\.value) ?? []
     }

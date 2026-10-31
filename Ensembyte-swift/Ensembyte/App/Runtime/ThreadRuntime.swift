@@ -279,15 +279,18 @@ final class ThreadRuntime {
     var subagentPanelDock: PanelDockCorner = .bottomTrailing
     /// The same for the Hydra panel.
     var hydraPanelDock: PanelDockCorner = .bottomTrailing
-    /// The tabs of this thread's task section, the Todos list and the Artifacts list.
-    enum TaskSectionTab: Equatable {
-        case todos
-        case artifacts
-    }
-    /// Whether this thread's task section is open under the conversation.
-    var isTaskSectionVisible = false
-    /// Which tab of the task section is showing.
-    var taskSectionTab: TaskSectionTab = .todos
+    /// Whether this thread's floating Artifacts panel is open: the panel takes over
+    /// the files the agent edits. Session-only.
+    var isArtifactPanelVisible = false
+    /// The corner the Artifacts panel docks to.
+    var artifactPanelDock: PanelDockCorner = .topTrailing
+    /// Whether this thread's floating Todos panel is open. Session-only.
+    var isTodoPanelVisible = false
+    /// The corner the Todos panel docks to.
+    var todoPanelDock: PanelDockCorner = .topLeading
+    /// Whether the browser section is open for this thread. Session-only: switching to
+    /// another thread or project does not carry it over, so each thread starts with it off.
+    var isBrowserSectionVisible = false
     /// The head whose timeline the Hydra panel shows.
     var hydraSelectedHeadID: UUID?
     /// The head popped out of the Hydra panel into a second panel of its own, if any, and

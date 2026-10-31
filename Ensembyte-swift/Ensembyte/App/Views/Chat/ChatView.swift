@@ -23,6 +23,8 @@ struct ChatView: View {
     @State private var hydraDrag = PanelDragState()
     @State private var poppedDrag = PanelDragState()
     @State private var usageDrag = PanelDragState()
+    @State private var artifactDrag = PanelDragState()
+    @State private var todoDrag = PanelDragState()
     /// The automatic panels never move (their spot is the layout's), so one resting
     /// drag state serves them all.
     @State private var autoDrag = PanelDragState()
@@ -48,6 +50,8 @@ struct ChatView: View {
     private var isMovingAPanel: Bool {
         subagentDrag.position != nil || hydraDrag.position != nil
             || poppedDrag.position != nil || usageDrag.position != nil
+            || artifactDrag.position != nil
+            || todoDrag.position != nil
             || autoDrags.values.contains { $0.position != nil }
     }
     /// When the team's panel came on screen, and whether it is lingering past its heads.
@@ -153,19 +157,6 @@ struct ChatView: View {
                     newThreadPrompt(projectName: project?.name, lift: composerLift, scene: scene, slides: scene.isMeasured && !liveResize.isActive && !holds && !switching)
                 }
             }
-            .overlay(alignment: .top) {
-                PaneTopVeil(model: scrollChrome)
-            }
-            .overlay(alignment: .top) {
-                ChatChromeRow(
-                    runtime: runtime,
-                    scrollChrome: scrollChrome,
-                    title: title,
-                    project: project,
-                    directory: directory,
-                    git: git
-                )
-            }
             .overlay(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
                     // Not before the pane has a size: the panel's spot comes from it.
@@ -252,15 +243,34 @@ struct ChatView: View {
                 }
                 .animation(switching ? nil : Chrome.panelSlide, value: scene.usage)
             }
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    if scene.showsArtifact {
+                        artifactPanel(scene: scene)
+                    }
+                }
+                .animation(switching ? nil : Chrome.panelSlide, value: scene.showsArtifact)
+            }
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    if scene.showsTodo {
+                        todoPanel(scene: scene)
+                    }
+                }
+                .animation(switching ? nil : Chrome.panelSlide, value: scene.showsTodo)
+            }
             .onGeometryChange(for: CGSize.self, of: { $0.size }) { paneSize = $0 }
             // The browser section's open-or-toggle requests (see `BrowserCoordinator`): a URL
-            // opens the section on a fresh tab, the toggle flag just flips it.
+            // opens the section on a fresh tab, the toggle flag just flips it. The flag is
+            // per-thread now, so a link-open or ⌘⇧B affects only this thread's section.
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name.browserPanelRequested)) { note in
                 if let url = note.userInfo?[BrowserNotificationKey.url] as? URL {
-                    model.browser.openPage(url: url)
-                    withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel = true }
+                    // Fired while this chat's runtime is alive, so it lands on this
+                    // thread's tabs, which a thread switch will discard on its own.
+                    model.browser.openPage(url: url, in: runtime.threadID)
+                    withAnimation(Chrome.panelSlide) { runtime.isBrowserSectionVisible = true }
                 } else if note.userInfo?[BrowserNotificationKey.toggle] as? Bool == true {
-                    withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel.toggle() }
+                    withAnimation(Chrome.panelSlide) { runtime.isBrowserSectionVisible.toggle() }
                 }
             }
             // Free-floating panels are kept inside the pane while it shrinks, with no
@@ -273,6 +283,8 @@ struct ChatView: View {
                 hydraDrag.reclamp(in: layout)
                 poppedDrag.reclamp(in: layout)
                 usageDrag.reclamp(in: layout)
+                artifactDrag.reclamp(in: layout)
+                todoDrag.reclamp(in: layout)
                 for drag in autoDrags.values { drag.reclamp(in: layout) }
             }
             // A sidebar or terminal-divider drag reshapes the pane per frame the way a
@@ -289,19 +301,30 @@ struct ChatView: View {
                 hydraDrag.reclamp(in: scene.layout)
                 poppedDrag.reclamp(in: scene.layout)
                 usageDrag.reclamp(in: scene.layout)
+                artifactDrag.reclamp(in: scene.layout)
+                todoDrag.reclamp(in: scene.layout)
                 for drag in autoDrags.values { drag.reclamp(in: scene.layout) }
             }
             .onChange(of: scene.autoPopped.map(\.id), initial: true) { _, ids in
                 for id in ids where autoDrags[id] == nil { autoDrags[id] = PanelDragState() }
                 for id in autoDrags.keys where !ids.contains(id) { autoDrags[id] = nil }
             }
+            .overlay(alignment: .top) {
+                PaneTopVeil(model: scrollChrome)
+            }
+            .overlay(alignment: .top) {
+                ChatChromeRow(
+                    runtime: runtime,
+                    scrollChrome: scrollChrome,
+                    title: title,
+                    project: project,
+                    directory: directory,
+                    git: git
+                )
+            }
 
             if runtime.isTerminalVisible {
                 TerminalPanel(runtime: runtime, directory: directory)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if runtime.isTaskSectionVisible {
-                ThreadTaskSection(runtime: runtime) { withAnimation(Chrome.panelSlide) { runtime.isTaskSectionVisible = false } }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -315,7 +338,6 @@ struct ChatView: View {
         .transition(.identity)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { columnHeight = $0 }
         .animation(switching ? nil : Chrome.panelSlide, value: runtime.isTerminalVisible)
-        .animation(switching ? nil : Chrome.panelSlide, value: runtime.isTaskSectionVisible)
         // A merge or pull request link in this chat can hand its request to a helper, which
         // opens in the panel and lands it on the same provider and model as this thread.
         .environment(\.mergeRequestTarget, MergeRequestTarget(chatID: runtime.threadID) { link in
@@ -332,6 +354,9 @@ struct ChatView: View {
         // (`columnHeight`, `paneSize`, `composerAreaHeight`) are the pane's, not the
         // thread's, and stay.
         .onChange(of: runtime.threadID) {
+            // Leaving a thread discards that thread's browser tabs: they never carry
+            // over into the thread or project opened next.
+            let previous = sceneThreadID
             sceneThreadID = runtime.threadID
             hydraLingerTask?.cancel()
             hydraLingers = false
@@ -341,9 +366,12 @@ struct ChatView: View {
             hydraDrag = PanelDragState()
             poppedDrag = PanelDragState()
             usageDrag = PanelDragState()
+            artifactDrag = PanelDragState()
+            todoDrag = PanelDragState()
             autoDrag = PanelDragState()
             autoDrags = [:]
             panelResize = PanelResizeState()
+            if let previous { model.browser.resetThread(previous) }
         }
         .onAppear { sceneThreadID = runtime.threadID }
         .onChange(of: isNewThread, initial: true) { old, new in
@@ -682,6 +710,63 @@ struct ChatView: View {
         )
     }
 
+    /// The artifact panel: the files the agent edits, floating over the conversation; the
+    /// todo panel's to-do list stands beside it.
+    private func artifactPanel(scene: PanelScene) -> some View {
+        let slot = scene.slots[.artifact] ?? PanelScene.PanelSlot(corner: runtime.artifactPanelDock, below: 0, lift: 0)
+        let rest = Self.rest(for: slot, scene: scene)
+        let size = scene.layout.panelSize
+        return PlacedPanel(drag: artifactDrag, rest: rest, size: size, content: ArtifactPanel(
+            runtime: runtime,
+            size: size,
+            onDrag: { translation in
+                let position = artifactDrag.move(by: translation, from: rest, in: scene.layout)
+                dock(.artifact, \.artifactPanelDock, nearest: position, scene: scene)
+                reorder(.artifact, at: position, corner: runtime.artifactPanelDock, scene: scene)
+            },
+            onDragEnd: {
+                if let heading = artifactDrag.release() {
+                    dock(.artifact, \.artifactPanelDock, nearest: heading, scene: scene)
+                    reorder(.artifact, at: heading, corner: runtime.artifactPanelDock, scene: scene)
+                }
+            },
+            dismiss: {
+                withAnimation(Chrome.panelSlide) {
+                    runtime.isArtifactPanelVisible = false
+                }
+            }
+        )
+        .transition(Self.panelTransition), resize: resizer(for: slot.corner, scene: scene), isResizing: panelsHeld)
+    }
+
+    /// The todo panel: the thread's to-do list, floating over the conversation.
+    private func todoPanel(scene: PanelScene) -> some View {
+        let slot = scene.slots[.todo] ?? PanelScene.PanelSlot(corner: runtime.todoPanelDock, below: 0, lift: 0)
+        let rest = Self.rest(for: slot, scene: scene)
+        let size = scene.layout.panelSize
+        return PlacedPanel(drag: todoDrag, rest: rest, size: size, content: TodoPanel(
+            runtime: runtime,
+            size: size,
+            onDrag: { translation in
+                let position = todoDrag.move(by: translation, from: rest, in: scene.layout)
+                dock(.todo, \.todoPanelDock, nearest: position, scene: scene)
+                reorder(.todo, at: position, corner: runtime.todoPanelDock, scene: scene)
+            },
+            onDragEnd: {
+                if let heading = todoDrag.release() {
+                    dock(.todo, \.todoPanelDock, nearest: heading, scene: scene)
+                    reorder(.todo, at: heading, corner: runtime.todoPanelDock, scene: scene)
+                }
+            },
+            dismiss: {
+                withAnimation(Chrome.panelSlide) {
+                    runtime.isTodoPanelVisible = false
+                }
+            }
+        )
+        .transition(Self.panelTransition), resize: resizer(for: slot.corner, scene: scene), isResizing: panelsHeld)
+    }
+
     /// The usage panel's grips: its width is the panels' shared width, its height its own
     /// (see `AppSettings.usagePanelHeight`); a double-click puts it back to fitting its rows.
     private func usageResizer(for corner: PanelDockCorner, scene: PanelScene, size: CGSize, minimum: CGFloat) -> PanelResize {
@@ -830,6 +915,10 @@ struct ChatView: View {
             if runtime.hydraPoppedPanelDock != corner { runtime.hydraPoppedPanelDock = corner }
         case .usage:
             if model.settings.usagePanelDock != corner { model.settings.usagePanelDock = corner }
+        case .artifact:
+            if runtime.artifactPanelDock != corner { runtime.artifactPanelDock = corner }
+        case .todo:
+            if runtime.todoPanelDock != corner { runtime.todoPanelDock = corner }
         case .auto(let head):
             if runtime.hydraAutoPanelDocks[head] != corner { runtime.hydraAutoPanelDocks[head] = corner }
         }
@@ -1034,6 +1123,8 @@ private struct PanelScene {
     let showsHydra: Bool
     let showsPopped: Bool
     let showsUsage: Bool
+    let showsArtifact: Bool
+    let showsTodo: Bool
     let isHydraDocked: Bool
     /// The sides with a panel docked on them, in a fixed order, as the key for the slides
     /// that make room: it changes with a dock, never with a measurement.
@@ -1060,6 +1151,8 @@ private struct PanelScene {
         showsHydra = geometry.showsHydra
         showsPopped = geometry.showsPopped
         showsUsage = geometry.showsUsage
+        showsArtifact = geometry.showsArtifact
+        showsTodo = geometry.showsTodo
         isHydraDocked = geometry.isHydraDocked
         dockedSides = geometry.dockedSides
         layout = geometry.layout
@@ -1079,6 +1172,8 @@ private struct PanelScene {
         let showsHydra: Bool
         let showsPopped: Bool
         let showsUsage: Bool
+        let showsArtifact: Bool
+        let showsTodo: Bool
         let isHydraDocked: Bool
         let dockedSides: [PanelDockSide]
         let reserve: PanelReserve
@@ -1097,6 +1192,8 @@ private struct PanelScene {
         let showsHydra = (!members.heads.isEmpty || holdsHydra) && isMeasured && !model.isThreadMode(for: runtime.threadID)
         let showsPopped = members.popped != nil && showsHydra
         let showsUsage = members.usage != nil && isMeasured
+        let showsArtifact = runtime.isArtifactPanelVisible && isMeasured
+        let showsTodo = runtime.isTodoPanelVisible && isMeasured
         let isHydraDocked = showsHydra
         let helperShowsProgress = members.subagent?.isHydraHead ?? true
         let compact = !model.settings.hydraShowsHeadDetails && helperShowsProgress && (showsHydra || members.subagent != nil)
@@ -1110,6 +1207,8 @@ private struct PanelScene {
         if isHydraDocked { placed.append((.hydra, runtime.hydraPanelDock)) }
         if showsPopped { placed.append((.popped, runtime.hydraPoppedPanelDock)) }
         if showsUsage { placed.append((.usage, model.settings.usagePanelDock)) }
+        if showsArtifact { placed.append((.artifact, runtime.artifactPanelDock)) }
+        if showsTodo { placed.append((.todo, runtime.todoPanelDock)) }
         let usageCorner = model.settings.usagePanelDock
         var usageHeight: CGFloat?
         if showsUsage {
@@ -1212,6 +1311,8 @@ private struct PanelScene {
             showsHydra: showsHydra,
             showsPopped: showsPopped,
             showsUsage: showsUsage,
+            showsArtifact: showsArtifact,
+            showsTodo: showsTodo,
             isHydraDocked: isHydraDocked,
             dockedSides: dockedSides,
             reserve: reserve,
@@ -1351,8 +1452,8 @@ private struct ChatChromeRow: View {
                     // label row can't bump this icon row's height (a title control in a
                     // capsule drags the whole capsule's height up with it).
                     ChromeCapsule {
-                        ChromeIconButton(symbol: "globe", isActive: model.settings.showsBrowserPanel, help: "Browser") {
-                            withAnimation(Chrome.panelSlide) { model.settings.showsBrowserPanel.toggle() }
+                        ChromeIconButton(symbol: "globe", isActive: runtime.isBrowserSectionVisible, help: "Browser" + ShortcutStore.hint(for: .browserToggle)) {
+                            withAnimation(Chrome.panelSlide) { runtime.isBrowserSectionVisible.toggle() }
                         }
                         ChromeDivider()
                         ChromeIconButton(symbol: "terminal", isActive: runtime.isTerminalVisible, help: "Terminal" + ShortcutStore.hint(for: .toggleTerminal)) {
@@ -1365,11 +1466,11 @@ private struct ChatChromeRow: View {
                     }
                     ChromeCapsule {
                         ChromeTextMenu(symbol: "checklist", title: "Panels", help: "Tasks and Artifacts panels") {
-                            PopoverItem("Todos", isChecked: runtime.isTaskSectionVisible && runtime.taskSectionTab == .todos) {
-                                withAnimation(Chrome.panelSlide) { runtime.taskSectionTab = .todos; runtime.isTaskSectionVisible = true }
+                            PopoverItem("Todos", isChecked: runtime.isTodoPanelVisible) {
+                                withAnimation(Chrome.panelSlide) { runtime.isTodoPanelVisible = true }
                             }
-                            PopoverItem("Artifacts", isChecked: runtime.isTaskSectionVisible && runtime.taskSectionTab == .artifacts) {
-                                withAnimation(Chrome.panelSlide) { runtime.taskSectionTab = .artifacts; runtime.isTaskSectionVisible = true }
+                            PopoverItem("Artifacts", isChecked: runtime.isArtifactPanelVisible) {
+                                withAnimation(Chrome.panelSlide) { runtime.isArtifactPanelVisible = true }
                             }
                         }
                     }

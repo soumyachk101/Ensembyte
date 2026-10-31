@@ -2,6 +2,19 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.15] - 2026-10-31
+
+### New features
+- Floating HUD Panels (Independent Artifacts & Todos): Split task and artifact inspection into two independent, drag-and-dock HUD windows with automatic scene collision avoidance and window clamping.
+- Artifact Floating Panel (`ArtifactPanel`): Draggable inspector for generated files, diffs, Markdown docs, and image outputs.
+- Todo Floating Panel (`TodoPanel`): Draggable interactive checklist displaying live `.todos` tasks with quick checkboxes and status indicators.
+- Per-Thread WebKit Browser Isolation: Browser visibility and multi-tab state are now scoped per thread; switching threads preserves or discards tabs cleanly without cross-thread contamination.
+- Direct Markdown Link Interception: Web and localhost links in agent responses open directly in the active thread's browser section.
+
+### Refinements
+- Streamlined Top Chrome Hierarchy: Removed redundant top veil overlay constraints to improve scroll rendering and eliminate visual stacking artifacts.
+- Responsive Panel Clamping: Free-floating HUD panels dynamically re-clamp to visible window boundaries on resize.
+
 ## [1.1.14] - 2026-10-30
 
 ### New features

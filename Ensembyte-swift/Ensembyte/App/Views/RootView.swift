@@ -360,6 +360,10 @@ struct RootView: View {
         // the chat rather than the toolbar popover; only-floating drops the column altogether.
         let onlyFloats = model.settings.sidebarFloats && model.settings.sidebarOnlyFloats
         let floats = model.settings.sidebarFloats && (onlyFloats || !sidebar.isVisible) && !settingsShown
+        // The section follows the open thread's own runtime, not a global flag, so it
+        // stays closed in a thread whose flag was never flipped and reopens where it
+        // was left. No thread selected means no runtime to observe, hence off.
+        let browserSectionOn = model.selectedThreadID.map { model.runtime(for: $0).isBrowserSectionVisible } ?? false
         HStack(spacing: 0) {
             ZStack(alignment: .leading) {
                 // The rows are laid out at the sidebar's width once, and the slide moves the clip
@@ -423,13 +427,13 @@ struct RootView: View {
             .padding(.leading, settingsShown || (sidebar.isVisible && !onlyFloats) ? 0 : Chrome.sheetInset)
             // When the section sits behind the chat, the column ends at the section's edge,
             // so the sheet's trailing inset is what separates them.
-            .padding(.trailing, model.settings.showsBrowserPanel && !settingsShown ? 0 : Chrome.sheetInset)
+            .padding(.trailing, browserSectionOn && !settingsShown ? 0 : Chrome.sheetInset)
             .padding(.vertical, Chrome.sheetInset)
 
             // The browser's own column: an opaque section beside the chat, sized by the
             // persisted width and resized live by its leading edge. Only beside the chat,
             // never under a settings page.
-            if model.settings.showsBrowserPanel && !settingsShown {
+            if browserSectionOn && !settingsShown {
                 BrowserSectionView()
                     .frame(width: model.settings.browserSectionWidth)
                     .frame(maxHeight: .infinity)
@@ -453,7 +457,7 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
-        .animation(Chrome.panelSlide, value: model.settings.showsBrowserPanel)
+        .animation(Chrome.panelSlide, value: browserSectionOn)
         // While the sidebar is hidden, dragging the window's leading edge pulls it back out.
         .overlay(alignment: .leading) {
             SidebarResizeHandle(

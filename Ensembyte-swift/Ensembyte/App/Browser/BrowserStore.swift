@@ -92,59 +92,92 @@ final class BrowserPageModel: Identifiable {
     }
 }
 
-/// The app's browser: its open tabs, which one is front, and the commands that move them.
+/// The app's browser: the open tabs per thread, which one is front in each, and the
+/// commands that move them.
 @MainActor
 @Observable
 final class BrowserStore {
-    var pageIDs: [UUID] = []
-    var activePageID: UUID?
+    /// The open tabs per thread, in order.
+    var pageIDs: [UUID: [UUID]] = [:]
+    /// The front tab per thread: nil where the thread has no tabs.
+    var activePageID: [UUID: UUID?] = [:]
+    /// The pages across every thread: a web view outlives its view, so a page is only
+    /// dropped when its thread's tab closes.
     var pages: [UUID: BrowserPageModel] = [:]
 
-    var activePage: BrowserPageModel? {
-        activePageID.flatMap { pages[$0] }
-    }
-
-    /// Opens a tab at `url` (blank when nil) and brings it to the front.
+    /// Opens a tab at `url` in `thread` (blank when nil) and brings it to the front. A
+    /// request that lands on a thread already showing a tab loads into that tab instead
+    /// of piling up: the front page keeps the front.
     @discardableResult
-    func openPage(url: URL?) -> BrowserPageModel {
+    func openPage(url: URL?, in thread: UUID) -> BrowserPageModel {
+        if let url, let active = activePage(in: thread) {
+            active.load(url)
+            return active
+        }
         let model = BrowserPageModel()
         pages[model.id] = model
-        pageIDs.append(model.id)
-        activePageID = model.id
+        pageIDs[thread, default: []].append(model.id)
+        activePageID[thread] = model.id
         if let url { model.load(url) }
         return model
     }
 
-    func closePage(_ id: UUID) {
-        guard let index = pageIDs.firstIndex(where: { $0 == id }) else { return }
+    func closePage(_ id: UUID, in thread: UUID) {
+        let ids = pageIDs[thread] ?? []
+        guard let index = ids.firstIndex(where: { $0 == id }) else { return }
         pages[id]?.page.stop()
         pages[id] = nil
-        pageIDs.remove(at: index)
-        if activePageID == id {
-            activePageID = index < pageIDs.count ? pageIDs[index] : pageIDs.last
+        var remaining = ids
+        remaining.remove(at: index)
+        if remaining.isEmpty {
+            pageIDs[thread] = nil
+            activePageID[thread] = nil
+        } else {
+            pageIDs[thread] = remaining
+            if activePageID[thread] == id {
+                activePageID[thread] = index < remaining.count ? remaining[index] : remaining.last
+            }
         }
     }
 
-    func selectPage(_ id: UUID) {
-        guard pages[id] != nil else { return }
-        activePageID = id
+    func selectPage(_ id: UUID, in thread: UUID) {
+        guard pages[id] != nil, (pageIDs[thread] ?? []).contains(id) else { return }
+        activePageID[thread] = id
     }
 
-    /// Does a command against the front tab; a new tab starts when none is open.
-    func perform(_ command: BrowserCommand) {
+    func activePage(in thread: UUID) -> BrowserPageModel? {
+        (activePageID[thread] ?? nil).flatMap { pages[$0] }
+    }
+
+    func pages(in thread: UUID) -> [BrowserPageModel] {
+        (pageIDs[thread] ?? []).compactMap { pages[$0] }
+    }
+
+    /// Closes every tab of `thread`, stopping their web views and dropping the models.
+    func resetThread(_ thread: UUID) {
+        for id in pageIDs[thread] ?? [] {
+            pages[id]?.page.stop()
+            pages[id] = nil
+        }
+        pageIDs[thread] = nil
+        activePageID[thread] = nil
+    }
+
+    /// Does a command against the thread's front tab; a new tab starts when it has none.
+    func perform(_ command: BrowserCommand, in thread: UUID) {
         switch command {
         case .newTab:
-            openPage(url: nil)
+            openPage(url: nil, in: thread)
         case .focusAddress:
-            activePage?.focusAddress()
+            activePage(in: thread)?.focusAddress()
         case .closeTab:
-            if let page = activePage { closePage(page.id) }
+            if let page = activePage(in: thread) { closePage(page.id, in: thread) }
         case .back:
-            activePage?.goBack()
+            activePage(in: thread)?.goBack()
         case .forward:
-            activePage?.goForward()
+            activePage(in: thread)?.goForward()
         case .reload:
-            activePage?.reload()
+            activePage(in: thread)?.reload()
         }
     }
 }

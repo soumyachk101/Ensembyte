@@ -1,231 +1,29 @@
 import AppKit
 import SwiftUI
 
-/// The thread's to-dos and artifacts as a fixed bottom section: a tab row over one
-/// content area, each tab reading its list live — the to-do list from the thread's
-/// `.todos` entries, the files the agent produced from `changeStats` — so the
-/// section keeps moving as the agent works. The chrome is the terminal section's:
-/// rounded top corners, an opaque surface, a hairline on the edge, and no drag
-/// handles.
-struct ThreadTaskSection: View {
+/// The thread's artifacts as a floating glass panel: the files the agent edits,
+/// each with its additions and deletions, the same list and detail recipe as
+/// the pane's Artifacts tab took. Tapping a file opens its content — the diff
+/// for a code file, a preview for an image, the rendered markdown for a
+/// document — and tapping it again folds it back to the list. The list reads
+/// `changeStats` live; the selection and detail are view-local, so a panel
+/// that closes or switches threads starts clean. The strip along the top is
+/// the handle, with the title at its left and the close button at its right.
+struct ArtifactPanel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
     let runtime: ThreadRuntime
-    let close: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
-        }
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Chrome.overlay(0.1))
-                .frame(height: 1)
-        }
-        // Rounded top corners like the terminal's sheet, over an opaque surface
-        // that carries the content, the browser section's recipe.
-        .background {
-            UnevenRoundedRectangle(
-                topLeadingRadius: Chrome.sheetCornerRadius,
-                topTrailingRadius: Chrome.sheetCornerRadius,
-                style: .continuous
-            )
-            .fill(Chrome.glassTint)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text("Thread tasks and artifacts"))
-    }
-
-    /// The tab row: a tab per list, the close mark at the right. The padding and
-    /// height mirror the terminal section's header row.
-    private var header: some View {
-        HStack(spacing: 6) {
-            tabButton(.todos, symbol: "checklist", title: "Todos")
-            tabButton(.artifacts, symbol: "shippingbox", title: "Artifacts")
-            Spacer(minLength: 0)
-            ChromeCircleButton(symbol: "xmark", help: "Close") {
-                close()
-            }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 38)
-    }
-
-    private func tabButton(_ tab: ThreadRuntime.TaskSectionTab, symbol: String, title: String) -> some View {
-        let isActive = runtime.taskSectionTab == tab
-        return Button {
-            runtime.taskSectionTab = tab
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                Text(verbatim: title)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 26)
-            .foregroundStyle(isActive ? Chrome.primaryText : Chrome.secondaryText)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(isActive ? Chrome.accent.opacity(0.14) : Color.clear)
-            }
-            .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(title))
-        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        Group {
-            switch runtime.taskSectionTab {
-            case .todos:
-                TodosTab(runtime: runtime)
-            case .artifacts:
-                ArtifactsTab(runtime: runtime)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-/// The Todos tab: the thread's to-do list read live — a progress line over the
-/// checklist, the step under way in its own row, the done steps checked and
-/// struck through.
-private struct TodosTab: View {
-    let runtime: ThreadRuntime
-
-    /// The most recent non-empty `.todos` entry of this thread. The entries array and
-    /// each entry's `item` are observed, so the tab redraws whenever the agent rewrites
-    /// the checklist.
-    private var steps: [TodoStep] {
-        runtime.entries.reversed()
-            .compactMap { entry -> [TodoStep] in
-                if case .todos(let todoSteps) = entry.item.content { todoSteps } else { [] }
-            }
-            .first(where: { !$0.isEmpty }) ?? []
-    }
-
-    var body: some View {
-        Group {
-            if steps.isEmpty {
-                emptyState
-            } else {
-                taskList
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "checklist")
-                .font(.system(size: 22))
-                .foregroundStyle(Chrome.secondaryText)
-                .frame(width: 44, height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Chrome.overlay(0.05))
-                )
-            Text("No tasks yet")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Chrome.primaryText)
-            Text("The agent's to-do list appears here as it works.")
-                .font(.system(size: 12))
-                .foregroundStyle(Chrome.secondaryText)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var taskList: some View {
-        let done = steps.count { $0.status == .done }
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("\(done) of \(steps.count) done")
-                .font(.system(size: 12))
-                .foregroundStyle(Chrome.secondaryText)
-            ProgressView(value: Double(done), total: Double(max(1, steps.count)))
-                .tint(Chrome.accent)
-            ScrollView {
-                VStack(spacing: 2) {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
-                        stepRow(step)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
-        .padding(.horizontal, Chrome.chromeHorizontalPadding)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-    }
-
-    /// One step: its glyph, its words — what it is doing while it runs — and the spinner
-    /// on the step that is under way.
-    private func stepRow(_ step: TodoStep) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: Self.symbol(for: step.status))
-                .font(.system(size: 12))
-                .foregroundStyle(Self.iconColor(for: step.status))
-            Text(verbatim: Self.text(for: step))
-                .font(.system(size: 12.5))
-                .foregroundStyle(Chrome.primaryText)
-                .strikethrough(step.status == .done, color: .secondary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if step.status == .active {
-                MiniSpinner()
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background {
-            if step.status == .active {
-                Capsule().fill(Chrome.accent.opacity(0.14))
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            Text("\(Self.text(for: step)), \(step.status == .done ? "done" : (step.status == .active ? "in progress" : "not started"))")
-        )
-    }
-
-    /// The step's words: while it is under way, the provider's own words for what it is
-    /// doing; otherwise its plain text.
-    private static func text(for step: TodoStep) -> String {
-        if step.status == .active, let active = step.activeForm, !active.isEmpty { return active }
-        return step.text
-    }
-
-    private static func symbol(for status: TodoStep.Status) -> String {
-        switch status {
-        case .pending: "circle"
-        case .active: "circle.dotted.circle"
-        case .done: "checkmark.circle.fill"
-        }
-    }
-
-    private static func iconColor(for status: TodoStep.Status) -> Color {
-        switch status {
-        case .pending: Chrome.secondaryText
-        case .active: Chrome.accent
-        case .done: Chrome.success
-        }
-    }
-}
-
-/// The Artifacts tab: the files the agent produced, each with its additions and
-/// deletions. Tapping a file opens its content — the diff for a code file, a
-/// preview for an image, the rendered markdown for a document — and tapping it
-/// again folds it back to the list. The list reads `changeStats` live.
-private struct ArtifactsTab: View {
-    @Environment(AppModel.self) private var model
-    let runtime: ThreadRuntime
+    let size: CGSize
+    /// The pointer's travel since the handle was grabbed.
+    let onDrag: (CGSize) -> Void
+    let onDragEnd: () -> Void
+    let dismiss: () -> Void
 
     @State private var selectedPath: String?
     @State private var detail: ArtifactDetail?
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: HydraPanel.cornerRadius, style: .continuous)
         let summary = runtime.changeStats
         Group {
             if let summary, !summary.files.isEmpty {
@@ -239,12 +37,37 @@ private struct ArtifactsTab: View {
                         }
                     }
                     .padding(.horizontal, Chrome.chromeHorizontalPadding)
-                    .padding(.top, 8)
                     .padding(.bottom, 12)
                 }
             } else {
                 emptyState
             }
+        }
+        .padding(.top, HydraPanel.stripHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Artifacts"))
+        .overlay(alignment: .top) {
+            strip
+        }
+        .frame(width: size.width, height: size.height)
+        .background {
+            // The helper panel's recipe: one glass surface, a scrim for the text over
+            // whatever the panel floats above, and the theme's tint.
+            let isDark = colorScheme == .dark
+            shape
+                .fill(.clear)
+                .glassEffect(.regular, in: shape)
+                .overlay {
+                    shape.fill(Chrome.glassTint.opacity(isDark ? 0.22 : 0.16))
+                }
+        }
+        .clipShape(shape)
+        // The scrim sits under the glass and carries the panel's shadow, drawn once.
+        .background {
+            let isDark = colorScheme == .dark
+            shape
+                .fill((isDark ? Color.black : Color.white).opacity(0.3))
+                .shadow(color: .black.opacity(isDark ? 1 : 0.65), radius: 28, y: 10)
         }
     }
 
@@ -328,6 +151,42 @@ private struct ArtifactsTab: View {
         Text(verbatim: text)
             .font(.system(size: 11, design: .monospaced).monospacedDigit())
             .foregroundStyle(color)
+    }
+
+    /// The handle across the top: the title at the left, the close button at the
+    /// right, and the room between them drags the panel.
+    private var strip: some View {
+        HStack(alignment: .top, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "shippingbox")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Chrome.secondaryText)
+                Text("Artifacts")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Chrome.primaryText.opacity(0.92))
+            }
+            .padding(.horizontal, Chrome.capsuleHorizontalPadding)
+            .frame(height: Chrome.capsuleContentHeight)
+            .padding(.vertical, Chrome.capsuleVerticalPadding)
+            .fixedSize()
+            .chromeGlassCapsule()
+            // The title is a label, not a control, so it drags the panel too.
+            .overlay {
+                PanelDragHandle(onDrag: onDrag, onDragEnd: onDragEnd)
+            }
+            .padding(.top, Chrome.chromeTopPadding)
+            .padding(.leading, Chrome.chromeHorizontalPadding)
+            PanelDragHandle(onDrag: onDrag, onDragEnd: onDragEnd)
+                .frame(maxWidth: .infinity)
+                .frame(height: HydraPanel.stripHeight)
+                .help("Drag to move")
+                .accessibilityLabel(Text("Drag to move"))
+            ChromeCircleButton(symbol: "xmark", help: "Close the artifacts panel") {
+                dismiss()
+            }
+            .padding(.top, Chrome.chromeTopPadding)
+            .padding(.trailing, Chrome.chromeHorizontalPadding)
+        }
     }
 
     // MARK: Detail

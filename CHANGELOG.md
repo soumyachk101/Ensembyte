@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.15] - 2026-10-31
+
+Ensembyte 1.1.15 introduces independent floating HUD panels for Artifacts and Todos, per-thread WebKit browser isolation with smart chat link interception, and streamlined window chrome in Ensembyte-swift for macOS.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Independent Floating HUD Panels (`ArtifactPanel`, `TodoPanel`)**: Split inspection into two dedicated, draggable HUD windows with collision avoidance, dock-snapping, and automatic boundary clamping.
+- **Dedicated Artifact Floating Panel**: Floating inspector for generated files, syntax-highlighted code diff hunks, Markdown documentation, and image previews.
+- **Dedicated Todo Floating Panel**: Floating interactive checklist tracking live `.todos` tasks in real time with quick completion toggles.
+- **Per-Thread WebKit Browser Isolation**: Tab sessions and browser visibility are scoped per thread, preserving browsing contexts and eliminating cross-thread tab leakage.
+- **Direct Markdown Link Routing**: Links clicked in agent turns route directly into the docked in-app WebKit browser.
+- **Streamlined Top Chrome Layout**: Removed redundant top veil overlay constraints for smoother scrolling and cleaner visual layering.
+
 ## [1.1.14] - 2026-10-30
 
 Ensembyte 1.1.14 brings three flexible thread working modes (Single agent, Heads in panel, and Heads in thread), interactive docked thread task and artifact panels, and header overflow layout resilience to Ensembyte-swift for macOS.
