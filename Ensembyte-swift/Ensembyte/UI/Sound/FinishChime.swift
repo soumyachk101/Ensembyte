@@ -39,7 +39,7 @@ struct Chime {
 extension Chime: Hashable {
     // A chime is what it plays: the cache keys off the whole recipe, so two chimes that
     // differ in any number get distinct sounds.
-    static func == (lhs: Chime, rhs: Chime) -> Bool {
+    nonisolated static func == (lhs: Chime, rhs: Chime) -> Bool {
         lhs.notes.count == rhs.notes.count
             && zip(lhs.notes, rhs.notes).allSatisfy {
                 $0.frequency == $1.frequency && $0.onset == $1.onset && $0.level == $1.level
@@ -53,7 +53,7 @@ extension Chime: Hashable {
             && lhs.restartsOnReplay == rhs.restartsOnReplay
     }
 
-    func hash(into hasher: inout Hasher) {
+    nonisolated func hash(into hasher: inout Hasher) {
         for note in notes {
             hasher.combine(note.frequency)
             hasher.combine(note.onset)
