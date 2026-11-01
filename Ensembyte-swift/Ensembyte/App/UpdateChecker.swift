@@ -213,13 +213,13 @@ final class UpdateChecker {
         var request = URLRequest(url: Self.apiURL)
         request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        if let token = GitHubAuth.resolveToken(), !token.isEmpty {
+        if let token = GitHubAuth.cachedToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            if status == 404 && GitHubAuth.resolveToken() == nil {
+            if status == 404 && GitHubAuth.cachedToken() == nil {
                 throw UpdateError.needsToken
             }
             throw UpdateError.badResponse(status)
@@ -245,7 +245,7 @@ final class UpdateChecker {
         var request = URLRequest(url: Self.latestAPIURL)
         request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        if let token = GitHubAuth.resolveToken(), !token.isEmpty {
+        if let token = GitHubAuth.cachedToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let (data, response) = try await session.data(for: request)
@@ -288,7 +288,7 @@ final class UpdateChecker {
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
         request.setValue("Ensembyte/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
-        if let token = GitHubAuth.resolveToken(), !token.isEmpty {
+        if let token = GitHubAuth.cachedToken(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         guard let (_, response) = try? await session.data(for: request),

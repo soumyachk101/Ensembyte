@@ -9,19 +9,28 @@ struct BrowserSectionView: View {
     @Environment(AppModel.self) private var model
 
     /// The thread whose tabs this section shows: the selected one, or the sidebar's first
-    /// when nothing is selected.
-    private var threadID: UUID {
-        model.selectedThreadID ?? model.sidebarThreads.first?.id ?? UUID()
+    /// when nothing is selected; nil when there is no thread at all, in which case the
+    /// section shows a placeholder instead of opening pages under a fabricated key (a
+    /// `resetThread` could never have found those orphans).
+    private var threadID: UUID? {
+        model.selectedThreadID ?? model.sidebarThreads.first?.id
     }
 
     var body: some View {
         let store = model.browser
+        let threadID = threadID
         VStack(spacing: 0) {
             header
-            tabStrip(store)
-            toolbar(store)
-            validationStrip(store)
-            pageBody
+            if let threadID {
+                tabStrip(store, in: threadID)
+                toolbar(store, in: threadID)
+                validationStrip(store, in: threadID)
+                pageBody(store, in: threadID)
+            } else {
+                // No thread owns the browser: an empty page, not a fabricated one.
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // An opaque base: the theme's surface carries the web content and the empty states
@@ -56,7 +65,7 @@ struct BrowserSectionView: View {
     }
 
     /// One row per open page, in the store's own order, with a `+` that opens an empty page.
-    private func tabStrip(_ store: BrowserStore) -> some View {
+    private func tabStrip(_ store: BrowserStore, in threadID: UUID) -> some View {
         HStack(spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
@@ -83,7 +92,7 @@ struct BrowserSectionView: View {
     /// Back and forward, reload, the address field, and "open in the default browser". The
     /// history and reload controls stand down when there is nothing to act on; the address
     /// field always has room, and a small "Go" surfaces while it differs from what loaded.
-    private func toolbar(_ store: BrowserStore) -> some View {
+    private func toolbar(_ store: BrowserStore, in threadID: UUID) -> some View {
         let page = store.activePage(in: threadID)
         let hasURL = page?.state.url != nil
         return HStack(spacing: 6) {
@@ -159,7 +168,7 @@ struct BrowserSectionView: View {
 
     /// A bad address, under the toolbar, in the danger tone.
     @ViewBuilder
-    private func validationStrip(_ store: BrowserStore) -> some View {
+    private func validationStrip(_ store: BrowserStore, in threadID: UUID) -> some View {
         if let message = store.activePage(in: threadID)?.validationMessage {
             Text(verbatim: message)
                 .font(.system(size: 11))
@@ -173,8 +182,7 @@ struct BrowserSectionView: View {
     /// The page: its web view when something loaded, the empty state when it has nothing to
     /// show yet, and the error state when the last load failed.
     @ViewBuilder
-    private var pageBody: some View {
-        let store = model.browser
+    private func pageBody(_ store: BrowserStore, in threadID: UUID) -> some View {
         if let page = store.activePage(in: threadID) {
             if let error = page.state.error {
                 errorState(page: page, error: error)

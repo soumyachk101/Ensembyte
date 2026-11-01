@@ -635,10 +635,10 @@ private struct HydraShimmer: ViewModifier {
             content
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
                 .overlay {
-                    // Thirty frames a second is enough for a band this soft, a quarter of the
-                    // display's rate; and it holds still while the reader scrolls anywhere, so
-                    // the mask pass below never lands on a scrolled frame.
-                    TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: ScrollActivity.shared.isScrolling)) { context in
+                    // Fifteen frames a second is enough for a band this soft; and it holds
+                    // still while the reader scrolls anywhere, so the mask pass below never
+                    // lands on a scrolled frame.
+                    TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: ScrollActivity.shared.isScrolling)) { context in
                         let phase = CGFloat(context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.sweep) / Self.sweep)
                         Color.clear
                             .overlay(alignment: .leading) {
@@ -2522,12 +2522,19 @@ struct ArtifactCard: View {
     }
 }
 
-/// The checklist as a card of its own: a header, a thin bar of how much is done, and the
-/// steps. A step under way says what it is doing rather than what it is, and a step that
-/// failed says why. Past a handful of finished steps the list folds them away behind one
-/// line, so the work still going on stays in view.
+/// The checklist as a card of its own: a 'Tasks' header that says how much is done and
+/// how long the work has run, and the steps under it. A step under way says what it is
+/// doing rather than what it is, its row opens on the sub-activity it is running, and a
+/// step that failed says why. Past a handful of finished steps the list folds them away
+/// behind one line, so the work still going on stays in view.
 struct TodoCard: View {
-    let steps: [TodoStep]
+    let list: TodoList
+    /// When the card's row was written: the anchor the header's elapsed time counts from
+    /// while the turn still runs.
+    let startedAt: Date
+    /// The thread's timeline: the running-tool line reads off the last `.tool` entry
+    /// still in flight, so the card follows the agent's work past the step's words.
+    let runtime: ThreadRuntime
 
     /// How many finished steps the card keeps in the open before it folds them away.
     private static let foldAfter = 6
@@ -2535,7 +2542,7 @@ struct TodoCard: View {
     /// The finished steps at the head of the list: the ones the fold hides.
     private var folded: [TodoStep] {
         var folded: [TodoStep] = []
-        for step in steps {
+        for step in list.items {
             guard step.status == .done else { break }
             folded.append(step)
         }
@@ -2547,59 +2554,53 @@ struct TodoCard: View {
     }
     /// The steps the card shows: the folded ones hidden, everything else in order.
     private var shown: [TodoStep] {
-        isFolded ? Array(steps.dropFirst(folded.count)) : steps
+        isFolded ? Array(list.items.dropFirst(folded.count)) : list.items
     }
 
+    /// The chevron's fold: the card collapses to its header alone.
+    @State private var isCollapsed = false
     @State private var showsFolded = false
+    /// The rows the reader opened on their own: keys per step, so a row stays open
+    /// across the in-place rewrites of the list.
+    @State private var expandedKeys: Set<String> = []
 
-    private var doneCount: Int { steps.count { $0.status == .done } }
+    private var doneCount: Int { list.items.count { $0.status == .done } }
+
+    /// The active step's row key: that row opens on its own, showing the sub-activity
+    /// it is running. A settled list has no active step, so its rows open and close
+    /// the way the reader leaves them.
+    private var activeKey: String? {
+        guard let index = list.items.firstIndex(where: { $0.status == .active }) else { return nil }
+        return TodoStep.rowKeys(for: list.items)[index]
+    }
+
+    /// The header's elapsed time, read as of a moment: what it counts to changes as the
+    /// card settles, so the caller passes the moment it drew from.
+    private func elapsedLabel(at date: Date) -> String? {
+        if list.settled {
+            let measured = list.items.compactMap(\.duration).reduce(0, +)
+            return measured > 0 ? RelativeTime.duration(measured) : nil
+        }
+        return RelativeTime.duration(max(0, date.timeIntervalSince(startedAt)))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Image(systemName: "checklist")
-                Text("\(doneCount) of \(steps.count) done")
-            }
-            .font(.chat(.caption))
-            .foregroundStyle(Chrome.secondaryText)
-            // A hairline of progress under the header: how much of the list is behind
-            // the reader, out of the whole list.
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Chrome.overlay(0.12))
-                    Capsule()
-                        .fill(Chrome.accent)
-                        .frame(width: proxy.size.width * Self.fraction(done: doneCount, of: steps.count))
+            header
+            if !isCollapsed {
+                if isFolded, !showsFolded {
+                    foldButton(shows: true)
+                } else if isFolded {
+                    foldButton(shows: false)
                 }
-            }
-            .frame(height: 2)
-            .accessibilityHidden(true)
-            if isFolded, !showsFolded {
-                // The folded steps are gone, not deleted: one line says how many, and
-                // the reader can have them back.
-                Button {
-                    withAnimation(.snappy(duration: 0.2)) { showsFolded = true }
-                } label: {
-                    Text("\(folded.count) completed")
-                        .font(.chat(.caption))
-                        .foregroundStyle(Chrome.secondaryText)
+                // Rows are keyed by their own step rather than their offset: updates rewrite
+                // the card's steps in place, and a stable key keeps a step's row — its
+                // animation — the same view across the rewrite.
+                let keys = TodoStep.rowKeys(for: shown)
+                ForEach(shown.indices, id: \.self) { i in
+                    stepRow(shown[i], key: keys[i])
+                        .id(keys[i])
                 }
-                .buttonStyle(.plain)
-                .help("Show the completed steps")
-                .accessibilityLabel(Text("Show \(folded.count) completed steps"))
-            } else if isFolded {
-                Button {
-                    withAnimation(.snappy(duration: 0.2)) { showsFolded = false }
-                } label: {
-                    Text("Hide completed steps")
-                        .font(.chat(.caption))
-                        .foregroundStyle(Chrome.secondaryText)
-                }
-                .buttonStyle(.plain)
-                .help("Hide the completed steps")
-            }
-            ForEach(Array(shown.enumerated()), id: \.offset) { _, step in
-                stepRow(step)
             }
         }
         .padding(14)
@@ -2610,44 +2611,173 @@ struct TodoCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, 96)
         // One checklist per turn: updates rewrite these steps in place, so
-        // checking an item off animates the same list instead of adding a row.
-        .animation(.snappy(duration: 0.2), value: steps)
+        // checking an item off animates its row. The rewrites climb `revision` even
+        // when only one step flips, so driving on it settles the flip where it
+        // landed instead of churning the whole card on every rewrite.
+        .animation(.snappy(duration: 0.2), value: list.revision)
+        .animation(.snappy(duration: 0.2), value: isCollapsed)
         .animation(.snappy(duration: 0.2), value: showsFolded)
+        .animation(.snappy(duration: 0.2), value: expandedKeys)
     }
 
-    /// One step: its glyph, its words — what it is doing while it runs — and what went
-    /// wrong under it.
-    private func stepRow(_ step: TodoStep) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    /// The header alone: 'Tasks', how much of the list is done, how long the work has
+    /// run, and the chevron that folds the list away to this line.
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Tasks")
+                .font(.chat(.callout, weight: .medium))
+            Text("\(doneCount) of \(list.items.count) done")
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.secondaryText)
+            Spacer(minLength: 8)
+            if !list.settled {
+                // While the card still works, its age ticks: one second is the
+                // whole the label can read at a glance. Once the turn settles, the
+                // measured time below takes over and the timer is off.
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    if let elapsed = elapsedLabel(at: context.date) {
+                        Text(verbatim: elapsed)
+                            .font(.chat(.caption))
+                            .foregroundStyle(Chrome.secondaryText)
+                    }
+                }
+            } else if let elapsed = elapsedLabel(at: .now) {
+                Text(verbatim: elapsed)
+                    .font(.chat(.caption))
+                    .foregroundStyle(Chrome.secondaryText)
+            }
+            Button {
+                isCollapsed.toggle()
+            } label: {
+                Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                    .font(.chat(.caption))
+                    .foregroundStyle(Chrome.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .help(isCollapsed ? "Expand the tasks" : "Collapse the tasks")
+            .accessibilityLabel(Text(isCollapsed ? "Expand the tasks" : "Collapse the tasks"))
+        }
+    }
+
+    /// The fold's own line, standing in for the finished steps it hides: the reader can
+    /// have them back.
+    private func foldButton(shows: Bool) -> some View {
+        Button {
+            showsFolded = shows
+        } label: {
+            Text(shows ? "\(folded.count) completed" : "Hide completed steps")
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.secondaryText)
+        }
+        .buttonStyle(.plain)
+        .help(shows ? "Show the completed steps" : "Hide the completed steps")
+        .accessibilityLabel(Text(shows ? "Show \(folded.count) completed steps" : "Hide the completed steps"))
+    }
+
+    /// One step: its glyph, its words — what it is doing while it runs — its measured
+    /// time, and the chevron that opens the row's detail.
+    private func stepRow(_ step: TodoStep, key: String) -> some View {
+        let isOpen = key == activeKey || expandedKeys.contains(key)
+        return VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: Self.symbol(for: step.status))
                     .foregroundStyle(step.status == .pending ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
                 Text(verbatim: Self.text(for: step))
                     .foregroundStyle(step.status == .done ? .secondary : .primary)
                     .strikethrough(step.status == .done, color: .secondary)
+                Spacer(minLength: 8)
+                if let duration = step.duration {
+                    Text(verbatim: RelativeTime.duration(duration))
+                        .font(.chat(.caption))
+                        .foregroundStyle(Chrome.secondaryText)
+                }
+                Button {
+                    if expandedKeys.contains(key) { expandedKeys.remove(key) }
+                    else { expandedKeys.insert(key) }
+                } label: {
+                    Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                        .font(.chat(.caption))
+                        .foregroundStyle(Chrome.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .help(isOpen ? "Collapse the step" : "Expand the step")
             }
             .font(.chat(.callout))
-            if let error = step.error, !error.isEmpty {
-                Text(verbatim: error)
-                    .font(.chat(.caption))
-                    .foregroundStyle(Chrome.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 24)
+            if isOpen {
+                stepDetail(step)
             }
         }
     }
 
+    /// What an open row shows under its line: the sub-activity running under the step
+    /// that is under way, its measured time, and what went wrong when a step failed.
+    @ViewBuilder
+    private func stepDetail(_ step: TodoStep) -> some View {
+        if let sub = Self.activeForm(of: step) {
+            HStack(spacing: 6) {
+                MiniSpinner(cellSize: 2.2)
+                Text(verbatim: sub)
+                Spacer(minLength: 8)
+                if let duration = step.duration {
+                    Text(verbatim: RelativeTime.duration(duration))
+                }
+            }
+            .font(.chat(.caption))
+            .foregroundStyle(Chrome.secondaryText)
+            .padding(.leading, 24)
+        }
+        if step.status == .active, let tool = runningTool {
+            toolLine(tool)
+        }
+        if let error = step.error, !error.isEmpty {
+            Text(verbatim: error)
+                .font(.chat(.caption))
+                .foregroundStyle(Chrome.danger)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 24)
+        }
+    }
+
+    /// The tool the agent is running right now: the thread's newest timeline entry
+    /// still in flight. The card's body reads this, and the read is on
+    /// `runtime.entries`, so a tool's starting or finishing redraws the row.
+    private var runningTool: ToolCall? {
+        for entry in runtime.entries.reversed() {
+            if case .tool(let call) = entry.item.content, call.status == .running {
+                return call
+            }
+        }
+        return nil
+    }
+
+    /// The in-flight tool's own line: what it is running, worded the way a tool's row
+    /// says it, and how long it has run — ticking while it works.
+    private func toolLine(_ tool: ToolCall) -> some View {
+        HStack(spacing: 6) {
+            MiniSpinner(cellSize: 2.2)
+            Text(verbatim: ToolPresentation.label(for: tool))
+            Spacer(minLength: 8)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(verbatim: RelativeTime.duration(max(0, context.date.timeIntervalSince(tool.startedAt))))
+            }
+        }
+        .font(.chat(.caption))
+        .foregroundStyle(Chrome.secondaryText)
+        .padding(.leading, 36)
+    }
+
     /// What a step says: while it is under way, the provider's own words for what it is
     /// doing; otherwise its plain text.
-    private static func text(for step: TodoStep) -> String {
+    static func text(for step: TodoStep) -> String {
         if step.status == .active, let active = step.activeForm, !active.isEmpty { return active }
         return step.text
     }
 
-    /// The bar's share: how much is done, out of the whole list. Nothing done is no bar.
-    private static func fraction(done: Int, of total: Int) -> CGFloat {
-        guard total > 0 else { return 0 }
-        return CGFloat(done) / CGFloat(total)
+    /// What a step's row runs under while it is the one under way: its sub-activity,
+    /// when the provider's payload carries one.
+    static func activeForm(of step: TodoStep) -> String? {
+        guard step.status == .active else { return nil }
+        return step.activeForm
     }
 
     static func symbol(for status: TodoStep.Status) -> String {
@@ -2661,10 +2791,44 @@ struct TodoCard: View {
 
 struct TodoListRow: View {
     let entry: TimelineEntry
+    let runtime: ThreadRuntime
 
     var body: some View {
-        if case .todos(let steps) = entry.item.content, !steps.isEmpty {
-            TodoCard(steps: steps)
+        if case .todos(let list) = entry.item.content, !list.items.isEmpty {
+            TodoCard(list: list, startedAt: entry.item.date, runtime: runtime)
+        }
+    }
+}
+
+/// The at-a-glance indicator of what is happening now, sitting just above the
+/// composer's input: the step in flight with the list's done fraction, read off the
+/// same `todos` the card and the panel show. No step in flight — or a settled
+/// turn, which has none — hides the pill.
+struct ActiveTodoPill: View {
+    let runtime: ThreadRuntime
+
+    private var state: (text: String, fraction: String)? {
+        let list = runtime.todos
+        guard !list.settled,
+              let index = list.items.firstIndex(where: { $0.status == .active })
+        else { return nil }
+        let done = list.items.count { $0.status == .done }
+        return (TodoCard.text(for: list.items[index]), "\(done)/\(list.items.count)")
+    }
+
+    var body: some View {
+        if let state {
+            HStack(spacing: 6) {
+                MiniSpinner(cellSize: 2.2)
+                Text(verbatim: state.text)
+                Text(state.fraction)
+                    .foregroundStyle(Chrome.secondaryText)
+            }
+            .font(.chat(.caption))
+            .foregroundStyle(Chrome.secondaryText)
+            .padding(.horizontal, Chrome.capsuleHorizontalPadding)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Chrome.accent.opacity(0.14)))
         }
     }
 }
@@ -2943,7 +3107,7 @@ struct TurnFinishedBlock: View {
                             case .plan:
                                 PlanCard(entry: entry, runtime: runtime)
                             case .todos:
-                                TodoListRow(entry: entry)
+                                TodoListRow(entry: entry, runtime: runtime)
                             case .notice:
                                 NoticeRow(entry: entry)
                             case .artifact:
@@ -2953,7 +3117,7 @@ struct TurnFinishedBlock: View {
                             case .user, .reasoning, .turnEnd:
                                 EmptyView()
                             }
-                        case .work(let id, let entries, _):
+                        case .work(let id, let entries, _, _):
                             ActivityGroup(id: id, entries: entries, runtime: runtime, workingDirectory: workingDirectory)
                         case .heads:
                             // Never among the steps: the heads list below shows them.

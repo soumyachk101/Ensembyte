@@ -42,6 +42,10 @@ final class AppModel {
     }
     @ObservationIgnored private var threadStorage: [ChatThread] = []
     private(set) var threadsRevision: UInt64 = 0
+    /// The overview's agent-activity groups, cached per library revision (`AppModel+Hydra`
+    /// computes and stores them; a stored slot lives here because extensions may not carry
+    /// storage).
+    @ObservationIgnored var hydraActivityGroupsCache: (revision: UInt64, groups: [HydraActivityGroup])?
     private(set) var threads: [ChatThread] {
         get {
             _ = threadsRevision
@@ -133,6 +137,10 @@ final class AppModel {
     @ObservationIgnored private var idleSessionStops: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var lastLibrarySave: ContinuousClock.Instant?
+    /// The observer behind the browser commands: a token, not the handler that captures
+    /// `self` — with the class as the object, removing the observer at the last release
+    /// is all it takes for the loop to end; the token outlives nothing.
+    @ObservationIgnored nonisolated(unsafe) private var browserCommandsObserver: NSObjectProtocol?
     /// The repeating merge sweep started at bootstrap. A chat whose automatic merge never
     /// got its moment while the app stayed open (a report batch left half-finished, a
     /// dialog never answered, a turn that ended in a way the trigger skipped) would sit on
@@ -161,9 +169,19 @@ final class AppModel {
         }
     }
 
+    deinit {
+        hydraMergeSweepTask?.cancel()
+        toastTask?.cancel()
+        saveTask?.cancel()
+        for task in idleSessionStops.values { task.cancel() }
+        if let observer = browserCommandsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
     /// The commands the browser's own chrome posts: take them up on the front tab.
     private func observeBrowserCommands() {
-        NotificationCenter.default.addObserver(
+        browserCommandsObserver = NotificationCenter.default.addObserver(
             forName: .browserCommand,
             object: nil,
             queue: .main
@@ -927,6 +945,9 @@ final class AppModel {
         for helper in helpers(of: id) { archive(helper.id) }
         if selectedThreadID == id { selectNeighbor(of: id) }
         existingRuntime(for: id)?.stopSession()
+        // The thread leaves the list, so its web views stop and its tabs are dropped: the
+        // models would otherwise sit in the store forever, unreached by a column switch.
+        browser.resetThread(id)
         releaseHydraCopy(of: id)
         updateThread(id) {
             $0.isArchived = true
@@ -969,7 +990,7 @@ final class AppModel {
             }
         }
         updateDockBadge()
-        if sounds, settings.settleSound { SettleChime.play() }
+        if sounds, settings.settleSound { Chime.settle.play() }
         // A settled thread stays settled across relaunch: write now, not on the debounce.
         saveLibrary()
     }
@@ -1288,7 +1309,19 @@ final class AppModel {
         runtimes[thread.id]?.cancelPersistence()
         runtimes[thread.id]?.stopSession()
         runtimes[thread.id] = nil
+        // The released runtime's last-access mark and its head's door-retry count go with
+        // it: neither is read again for a thread that is gone, and both would otherwise sit
+        // in their tables for the rest of the app's life.
+        runtimeLastAccess[thread.id] = nil
+        hydraHeadRetries[thread.id] = nil
+        // A pending limit-resume and a live voice call both point at the thread by id;
+        // drop them here so neither outlives the deletion.
+        autoContinue.cancel(thread.id)
+        if voice.threadID == thread.id { voice.end() }
         terminals.closeAll(for: thread.id)
+        // The thread is being deleted, so its browser pages stop and are dropped: the
+        // models would otherwise sit in the store forever, unreached by a column switch.
+        browser.resetThread(thread.id)
         if deletingDocument { Storage.deleteDocument(thread.id) }
     }
 
@@ -1419,7 +1452,7 @@ final class AppModel {
         // A stop the user asked for needs no chime; the agent finishing on its own gets one,
         // whether or not the thread is in view.
         let chimed = settings.chimeWhenFinished && status != .interrupted
-        if chimed { FinishChime.play() }
+        if chimed { Chime.finish.play() }
         guard !isVisible, settings.notifyWhenFinished, let thread = thread(id) else { return }
         let body = switch status {
         case .completed: "Finished."

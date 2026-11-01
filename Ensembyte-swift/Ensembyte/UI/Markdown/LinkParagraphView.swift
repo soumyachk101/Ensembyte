@@ -107,6 +107,36 @@ struct LinkParagraphView: NSViewRepresentable {
     /// the font manager, and a streaming link paragraph rebuilds its string every flush.
     @MainActor private static var fonts: [CGFloat: (base: NSFont, bold: NSFont, italic: NSFont, mono: NSFont)] = [:]
 
+    /// What one built run depends on: its text, which of the four faces it wears,
+    /// whether it links, and whether its favicon was cached when it was built. Two
+    /// builds that agree on these, run by run, agree on the attributed string.
+    private struct RunKey: Equatable {
+        let text: String
+        let font: UInt8
+        let link: URL?
+        let hasFavicon: Bool
+    }
+
+    /// A paragraph's last build, kept so the next flush starts from it: the stable
+    /// prefix of runs is reused whole, and only the changed tail is rebuilt. A full
+    /// rebuild happens when a run other than the trailing ones changed.
+    private struct AttributedBuild {
+        var source: String
+        var pointSize: CGFloat
+        var dimmed: Bool
+        var mentionNames: [String]
+        var targets: [String: HydraMentionTarget]
+        var keys: [RunKey]
+        var attributed: NSAttributedString
+    }
+
+    /// One entry per paragraph, newest last: a flush reuses the build before it. The
+    /// count mirrors the streaming slots, so a lead and the heads streaming beside it
+    /// keep their prefixes.
+    @MainActor private static var buildCache: [String: AttributedBuild] = [:]
+    @MainActor private static var buildOrder: [String] = []
+    private static let buildLimit = 48
+
     @MainActor
     static func attributed(source: String, pointSize: CGFloat, dimmed: Bool, streaming: Bool = false, mentions: [HydraPersona] = [], targets: [String: HydraMentionTarget] = [:]) -> NSAttributedString {
         let pretty = RichLink.prettyAttributed(source, streaming: streaming)
@@ -119,7 +149,18 @@ struct LinkParagraphView: NSViewRepresentable {
             return set
         }()
         let textColor = dimmed ? NSColor.secondaryLabelColor : NSColor.labelColor
-        let out = NSMutableAttributedString()
+        let mentionNames = mentions.map(\.name)
+
+        // The per-run descriptors, up front: cheap to make, and they are what the
+        // reuse check compares.
+        struct Spec {
+            let text: String
+            let font: NSFont
+            let link: URL?
+            let hasFavicon: Bool
+            let key: RunKey
+        }
+        var specs: [Spec] = []
         for run in pretty.runs {
             let string = String(pretty[run.range].characters)
             guard !string.isEmpty else { continue }
@@ -131,8 +172,44 @@ struct LinkParagraphView: NSViewRepresentable {
                 if intent.contains(.emphasized) { font = italic }
                 if intent.contains(.stronglyEmphasized) { font = bold }
             }
-            if let url = run.link {
-                if let host = url.host?.lowercased(),
+            let url = run.link
+            let hasFavicon = {
+                guard let url, let host = url.host?.lowercased() else { return false }
+                return FaviconCache.cached(host: host) != nil
+            }()
+            let fontTag: UInt8 = {
+                if font === mono { return 1 }
+                var tag: UInt8 = 0
+                if intent.contains(.emphasized) { tag |= 2 }
+                if intent.contains(.stronglyEmphasized) { tag |= 4 }
+                return tag
+            }()
+            specs.append(Spec(text: string, font: font, link: url, hasFavicon: hasFavicon,
+                              key: RunKey(text: string, font: fontTag, link: url, hasFavicon: hasFavicon)))
+        }
+        let keys = specs.map(\.key)
+
+        // Reuse: the most recent build of the same source (a revision bump) or the
+        // previous flush of this paragraph, whose source is a strict prefix of this
+        // one. Its whole attributed string stands for the stable prefix of runs;
+        // only the changed tail gets rebuilt here.
+        let previous = lookupBuild(prefixOf: source, pointSize: pointSize, dimmed: dimmed, mentionNames: mentionNames, targets: targets)
+        let reuseFrom: Int
+        if let previous, previous.keys.count <= keys.count,
+           Array(keys.prefix(previous.keys.count)) == previous.keys {
+            reuseFrom = previous.keys.count
+        } else {
+            reuseFrom = 0
+        }
+
+        let out = NSMutableAttributedString()
+        if reuseFrom > 0, let attributed = previous?.attributed {
+            out.append(NSAttributedString(attributedString: attributed))
+        }
+        for spec in specs[reuseFrom...] {
+            if let url = spec.link {
+                if spec.hasFavicon,
+                   let host = url.host?.lowercased(),
                    let icon = FaviconCache.cached(host: host) {
                     let attachment = NSTextAttachment()
                     attachment.image = icon
@@ -144,36 +221,51 @@ struct LinkParagraphView: NSViewRepresentable {
                     ]))
                 }
                 // Colour and underline come from the view's `linkTextAttributes`.
-                out.append(NSAttributedString(string: string, attributes: [
-                    .font: font,
+                out.append(NSAttributedString(string: spec.text, attributes: [
+                    .font: spec.font,
                     .link: url,
                 ]))
             } else {
-                appendProse(string, font: font, color: textColor, base: base, bold: bold, mentions: mentions, targets: targets, into: out)
+                appendProse(spec.text, font: spec.font, color: textColor, base: base, bold: bold, mentions: mentions, targets: targets, into: out)
             }
         }
+
+        store(build: AttributedBuild(source: source, pointSize: pointSize, dimmed: dimmed, mentionNames: mentionNames, targets: targets, keys: keys, attributed: out), under: source)
         return out
     }
 
-    @MainActor private static var dragonCache: [String: NSImage] = [:]
+    /// The build to start from: the same source, or the most recent one whose source is
+    /// a strict prefix of it -- the previous flush of this paragraph. Another paragraph's
+    /// source will not be this one's prefix, so the scan stops early in practice.
+    @MainActor
+    private static func lookupBuild(prefixOf source: String, pointSize: CGFloat, dimmed: Bool, mentionNames: [String], targets: [String: HydraMentionTarget]) -> AttributedBuild? {
+        for entry in buildOrder.reversed() {
+            guard let build = buildCache[entry] else { continue }
+            guard build.pointSize == pointSize, build.dimmed == dimmed,
+                  build.mentionNames == mentionNames, build.targets == targets else { continue }
+            if entry == source { return build }
+            guard entry.count < source.count, source.hasPrefix(entry) else { continue }
+            return build
+        }
+        return nil
+    }
+
+    @MainActor
+    private static func store(build: AttributedBuild, under source: String) {
+        buildCache[source] = build
+        if !buildOrder.contains(source) { buildOrder.append(source) }
+        while buildOrder.count > buildLimit {
+            let dropped = buildOrder.removeFirst()
+            buildCache[dropped] = nil
+        }
+    }
 
     private static func nsColor(_ persona: HydraPersona) -> NSColor {
         NSColor(red: Double((persona.hex >> 16) & 0xFF) / 255, green: Double((persona.hex >> 8) & 0xFF) / 255, blue: Double(persona.hex & 0xFF) / 255, alpha: 1)
     }
 
     @MainActor private static func dragonImage(_ persona: HydraPersona, size: CGFloat) -> NSImage {
-        let key = persona.asset + "@" + String(format: "%06X", persona.hex) + "@\(size)"
-        if let cached = dragonCache[key] { return cached }
-        let tint = nsColor(persona)
-        let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            let source = NSImage(named: persona.asset)
-            source?.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-            tint.set()
-            rect.fill(using: .sourceAtop)
-            return true
-        }
-        dragonCache[key] = image
-        return image
+        GlyphCache.tinted(named: persona.asset, tint: nsColor(persona), size: size)
     }
 
     @MainActor private static func appendProse(_ string: String, font: NSFont, color: NSColor, base: NSFont, bold: NSFont, mentions: [HydraPersona], targets: [String: HydraMentionTarget], into out: NSMutableAttributedString) {

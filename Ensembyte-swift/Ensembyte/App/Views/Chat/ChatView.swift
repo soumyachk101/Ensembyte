@@ -24,7 +24,6 @@ struct ChatView: View {
     @State private var poppedDrag = PanelDragState()
     @State private var usageDrag = PanelDragState()
     @State private var artifactDrag = PanelDragState()
-    @State private var todoDrag = PanelDragState()
     /// The automatic panels never move (their spot is the layout's), so one resting
     /// drag state serves them all.
     @State private var autoDrag = PanelDragState()
@@ -35,25 +34,6 @@ struct ChatView: View {
     @State private var usageContentHeight: CGFloat?
     /// One grip held at a time, whichever panel it is on.
     @State private var panelResize = PanelResizeState()
-    /// Whether a panel is under the pointer right now, on any of the drag states above.
-    ///
-    /// While one is, the conversation stops answering hit tests. Every pointer move during
-    /// a drag is a hover event, and SwiftUI answers one by walking the responder tree and
-    /// rendering the view graph again — through the timeline, which is the largest tree in
-    /// the window. With several panels open that walk is what makes a drag stutter: a spin
-    /// report taken mid-drag spends 326 of 364 samples under NSHostingView.layout(), most
-    /// of it in ViewGraphRootValueUpdater.render, reached from
-    /// EventBindingManager.enqueueHoverUpdateIfNeeded.
-    ///
-    /// Nothing in the conversation needs to answer a hover while a panel is being moved,
-    /// so for the length of the drag it does not.
-    private var isMovingAPanel: Bool {
-        subagentDrag.position != nil || hydraDrag.position != nil
-            || poppedDrag.position != nil || usageDrag.position != nil
-            || artifactDrag.position != nil
-            || todoDrag.position != nil
-            || autoDrags.values.contains { $0.position != nil }
-    }
     /// When the team's panel came on screen, and whether it is lingering past its heads.
     /// Heads that go out and fall at the door leave the panel within a frame or two of
     /// its arrival, and a panel that flashed on and straight off again read as a glitch:
@@ -127,8 +107,15 @@ struct ChatView: View {
             .equatable()
             // Hover costs a responder walk and a render of this whole tree; a panel being
             // dragged sends one per pointer move and needs none of them (see
-            // `isMovingAPanel`).
-            .allowsHitTesting(!isMovingAPanel)
+            // `MovingPanelGate`).
+            .modifier(MovingPanelGate(
+                subagentDrag: subagentDrag,
+                hydraDrag: hydraDrag,
+                poppedDrag: poppedDrag,
+                usageDrag: usageDrag,
+                artifactDrag: artifactDrag,
+                autoDrags: autoDrags
+            ))
             // The conversation rises into place as the box docks under it, and sinks away as
             // the box leaves for a new thread's centre (see `ComposerDock`).
             .opacity(showsTranscript ? 1 : 0)
@@ -251,14 +238,6 @@ struct ChatView: View {
                 }
                 .animation(switching ? nil : Chrome.panelSlide, value: scene.showsArtifact)
             }
-            .overlay(alignment: .topLeading) {
-                ZStack(alignment: .topLeading) {
-                    if scene.showsTodo {
-                        todoPanel(scene: scene)
-                    }
-                }
-                .animation(switching ? nil : Chrome.panelSlide, value: scene.showsTodo)
-            }
             .onGeometryChange(for: CGSize.self, of: { $0.size }) { paneSize = $0 }
             // The browser section's open-or-toggle requests (see `BrowserCoordinator`): a URL
             // opens the section on a fresh tab, the toggle flag just flips it. The flag is
@@ -284,7 +263,6 @@ struct ChatView: View {
                 poppedDrag.reclamp(in: layout)
                 usageDrag.reclamp(in: layout)
                 artifactDrag.reclamp(in: layout)
-                todoDrag.reclamp(in: layout)
                 for drag in autoDrags.values { drag.reclamp(in: layout) }
             }
             // A sidebar or terminal-divider drag reshapes the pane per frame the way a
@@ -302,7 +280,6 @@ struct ChatView: View {
                 poppedDrag.reclamp(in: scene.layout)
                 usageDrag.reclamp(in: scene.layout)
                 artifactDrag.reclamp(in: scene.layout)
-                todoDrag.reclamp(in: scene.layout)
                 for drag in autoDrags.values { drag.reclamp(in: scene.layout) }
             }
             .onChange(of: scene.autoPopped.map(\.id), initial: true) { _, ids in
@@ -367,7 +344,6 @@ struct ChatView: View {
             poppedDrag = PanelDragState()
             usageDrag = PanelDragState()
             artifactDrag = PanelDragState()
-            todoDrag = PanelDragState()
             autoDrag = PanelDragState()
             autoDrags = [:]
             panelResize = PanelResizeState()
@@ -463,6 +439,19 @@ struct ChatView: View {
             .overlay(alignment: .top) {
                 JumpToLatestButton(scrollState: scrollState)
             }
+            // The at-a-glance indicator of the step in flight, just above the box's
+            // input: pinned to the area's bottom edge the way the jump button is, a
+            // little further up. The pill hides itself when nothing is in flight, and
+            // the settle that clears the active step is a rewrite of its own, so the
+            // appearance tracks `revision` like the panel's rows do.
+            .overlay(alignment: .bottom) {
+                ActiveTodoPill(runtime: runtime)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 46)
+                    .frame(height: 0, alignment: .bottom)
+                    .transition(.softAppear)
+            }
+            .animation(Chrome.panelSlide, value: runtime.todos.revision)
             .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { composerAreaHeight = $0 }
             .onChange(of: composerAreaHeight) { oldValue, newValue in
                 guard newValue > oldValue + 0.5, !liveResize.isActive, oldValue > 0 else { return }
@@ -739,34 +728,6 @@ struct ChatView: View {
         .transition(Self.panelTransition), resize: resizer(for: slot.corner, scene: scene), isResizing: panelsHeld)
     }
 
-    /// The todo panel: the thread's to-do list, floating over the conversation.
-    private func todoPanel(scene: PanelScene) -> some View {
-        let slot = scene.slots[.todo] ?? PanelScene.PanelSlot(corner: runtime.todoPanelDock, below: 0, lift: 0)
-        let rest = Self.rest(for: slot, scene: scene)
-        let size = scene.layout.panelSize
-        return PlacedPanel(drag: todoDrag, rest: rest, size: size, content: TodoPanel(
-            runtime: runtime,
-            size: size,
-            onDrag: { translation in
-                let position = todoDrag.move(by: translation, from: rest, in: scene.layout)
-                dock(.todo, \.todoPanelDock, nearest: position, scene: scene)
-                reorder(.todo, at: position, corner: runtime.todoPanelDock, scene: scene)
-            },
-            onDragEnd: {
-                if let heading = todoDrag.release() {
-                    dock(.todo, \.todoPanelDock, nearest: heading, scene: scene)
-                    reorder(.todo, at: heading, corner: runtime.todoPanelDock, scene: scene)
-                }
-            },
-            dismiss: {
-                withAnimation(Chrome.panelSlide) {
-                    runtime.isTodoPanelVisible = false
-                }
-            }
-        )
-        .transition(Self.panelTransition), resize: resizer(for: slot.corner, scene: scene), isResizing: panelsHeld)
-    }
-
     /// The usage panel's grips: its width is the panels' shared width, its height its own
     /// (see `AppSettings.usagePanelHeight`); a double-click puts it back to fitting its rows.
     private func usageResizer(for corner: PanelDockCorner, scene: PanelScene, size: CGSize, minimum: CGFloat) -> PanelResize {
@@ -917,8 +878,6 @@ struct ChatView: View {
             if model.settings.usagePanelDock != corner { model.settings.usagePanelDock = corner }
         case .artifact:
             if runtime.artifactPanelDock != corner { runtime.artifactPanelDock = corner }
-        case .todo:
-            if runtime.todoPanelDock != corner { runtime.todoPanelDock = corner }
         case .auto(let head):
             if runtime.hydraAutoPanelDocks[head] != corner { runtime.hydraAutoPanelDocks[head] = corner }
         }
@@ -927,6 +886,30 @@ struct ChatView: View {
     private static func rest(for slot: PanelScene.PanelSlot, scene: PanelScene) -> CGPoint {
         let stacked = scene.docks.stacked(slot.corner, below: slot.below, slots: scene.slotsOnSide[slot.corner.side] ?? 1, layout: scene.layout)
         return CGPoint(x: stacked.x, y: slot.corner.isTop ? stacked.y + slot.lift : stacked.y - slot.lift)
+    }
+}
+
+/// While a panel is under the pointer the conversation stops answering hit tests (see
+/// `PanelDragState`'s `position`): every pointer move during a drag is a hover event, and
+/// SwiftUI answers one by walking the responder tree and rendering the view graph again —
+/// through the timeline, which is the largest tree in the window. This gate keeps that
+/// observation to itself: a drag write re-runs only this modifier, never the column
+/// around the panels.
+@MainActor
+private struct MovingPanelGate: ViewModifier {
+    let subagentDrag: PanelDragState
+    let hydraDrag: PanelDragState
+    let poppedDrag: PanelDragState
+    let usageDrag: PanelDragState
+    let artifactDrag: PanelDragState
+    let autoDrags: [UUID: PanelDragState]
+
+    func body(content: Content) -> some View {
+        let moving = subagentDrag.position != nil || hydraDrag.position != nil
+            || poppedDrag.position != nil || usageDrag.position != nil
+            || artifactDrag.position != nil
+            || autoDrags.values.contains { $0.position != nil }
+        return content.allowsHitTesting(!moving)
     }
 }
 
@@ -1124,7 +1107,6 @@ private struct PanelScene {
     let showsPopped: Bool
     let showsUsage: Bool
     let showsArtifact: Bool
-    let showsTodo: Bool
     let isHydraDocked: Bool
     /// The sides with a panel docked on them, in a fixed order, as the key for the slides
     /// that make room: it changes with a dock, never with a measurement.
@@ -1152,7 +1134,6 @@ private struct PanelScene {
         showsPopped = geometry.showsPopped
         showsUsage = geometry.showsUsage
         showsArtifact = geometry.showsArtifact
-        showsTodo = geometry.showsTodo
         isHydraDocked = geometry.isHydraDocked
         dockedSides = geometry.dockedSides
         layout = geometry.layout
@@ -1173,7 +1154,6 @@ private struct PanelScene {
         let showsPopped: Bool
         let showsUsage: Bool
         let showsArtifact: Bool
-        let showsTodo: Bool
         let isHydraDocked: Bool
         let dockedSides: [PanelDockSide]
         let reserve: PanelReserve
@@ -1193,7 +1173,6 @@ private struct PanelScene {
         let showsPopped = members.popped != nil && showsHydra
         let showsUsage = members.usage != nil && isMeasured
         let showsArtifact = runtime.isArtifactPanelVisible && isMeasured
-        let showsTodo = runtime.isTodoPanelVisible && isMeasured
         let isHydraDocked = showsHydra
         let helperShowsProgress = members.subagent?.isHydraHead ?? true
         let compact = !model.settings.hydraShowsHeadDetails && helperShowsProgress && (showsHydra || members.subagent != nil)
@@ -1208,7 +1187,6 @@ private struct PanelScene {
         if showsPopped { placed.append((.popped, runtime.hydraPoppedPanelDock)) }
         if showsUsage { placed.append((.usage, model.settings.usagePanelDock)) }
         if showsArtifact { placed.append((.artifact, runtime.artifactPanelDock)) }
-        if showsTodo { placed.append((.todo, runtime.todoPanelDock)) }
         let usageCorner = model.settings.usagePanelDock
         var usageHeight: CGFloat?
         if showsUsage {
@@ -1312,7 +1290,6 @@ private struct PanelScene {
             showsPopped: showsPopped,
             showsUsage: showsUsage,
             showsArtifact: showsArtifact,
-            showsTodo: showsTodo,
             isHydraDocked: isHydraDocked,
             dockedSides: dockedSides,
             reserve: reserve,
@@ -1466,9 +1443,6 @@ private struct ChatChromeRow: View {
                     }
                     ChromeCapsule {
                         ChromeTextMenu(symbol: "checklist", title: "Panels", help: "Tasks and Artifacts panels") {
-                            PopoverItem("Todos", isChecked: runtime.isTodoPanelVisible) {
-                                withAnimation(Chrome.panelSlide) { runtime.isTodoPanelVisible = true }
-                            }
                             PopoverItem("Artifacts", isChecked: runtime.isArtifactPanelVisible) {
                                 withAnimation(Chrome.panelSlide) { runtime.isArtifactPanelVisible = true }
                             }
@@ -1852,6 +1826,8 @@ private struct CommitSheet: View {
     @State private var isGenerating = false
     @State private var isCommitting = false
     @State private var pushesAfterCommit = false
+    @State private var isLoadingChanges = false
+    @State private var loadError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1866,6 +1842,18 @@ private struct CommitSheet: View {
                 .frame(maxHeight: 110)
                 .padding(10)
                 .background(Chrome.overlay(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+            } else if let error = loadError {
+                Text(verbatim: error)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Chrome.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Chrome.overlay(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+            } else if isLoadingChanges {
+                ProgressView()
+                    .controlSize(.small)
+                    .padding(10)
+                    .background(Chrome.overlay(0.05), in: .rect(cornerRadius: 12, style: .continuous))
             }
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $message)
@@ -1886,6 +1874,9 @@ private struct CommitSheet: View {
                 // Nothing writes the message with text generation off or its provider signed
                 // out, so the button says where to turn it on instead of doing nothing.
                 let canGenerate = model.textEngine(preferring: runtime.thread?.provider) != nil
+                // Nothing generates from: while the working changes are still reading, or
+                // they failed, there is no diff to write a message from.
+                let changesReady = loadError == nil && !isLoadingChanges
                 Button {
                     Task { await generate() }
                 } label: {
@@ -1901,7 +1892,7 @@ private struct CommitSheet: View {
                     }
                 }
                 .buttonStyle(.glass)
-                .disabled(isGenerating || !canGenerate)
+                .disabled(isGenerating || !canGenerate || !changesReady)
                 .help(canGenerate ? "Write a commit message from these changes" : "Turn on text generation in Settings > Source control")
                 Toggle("Push after committing", isOn: $pushesAfterCommit)
                     .toggleStyle(.checkbox)
@@ -1910,15 +1901,26 @@ private struct CommitSheet: View {
                     .buttonStyle(.glass)
                 Button("Commit") { Task { await commit() } }
                     .buttonStyle(.glassProminent)
-                    .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCommitting)
+                    .disabled(
+                        message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || isCommitting
+                            || loadError != nil
+                            || isLoadingChanges
+                    )
             }
         }
         .padding(20)
         .frame(width: 560)
         .task {
-            let changes = await Git(directory).workingChanges()
-            summary = changes.summary
-            if message.isEmpty { await generate(changes: changes) }
+            isLoadingChanges = true
+            defer { isLoadingChanges = false }
+            do {
+                let changes = try await Git(directory).fetchWorkingChanges()
+                summary = changes.summary
+                if message.isEmpty { await generate(changes: changes) }
+            } catch {
+                loadError = error.localizedDescription
+            }
         }
     }
 

@@ -64,9 +64,11 @@ CLAUDE.md
 # Website (managed and deployed directly via Vercel CLI, not tracked in repo)
 website/
 website_try/
+Website-try/
 website_html/
 gulugulu/
 plans/
+veylqorix-website/
 
 # Local mascot scratch
 Make-Your-Own-Mascot.pdf

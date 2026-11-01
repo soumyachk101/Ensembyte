@@ -284,10 +284,15 @@ final class ThreadRuntime {
     var isArtifactPanelVisible = false
     /// The corner the Artifacts panel docks to.
     var artifactPanelDock: PanelDockCorner = .topTrailing
-    /// Whether this thread's floating Todos panel is open. Session-only.
-    var isTodoPanelVisible = false
-    /// The corner the Todos panel docks to.
-    var todoPanelDock: PanelDockCorner = .topLeading
+    /// The thread's to-do list: the items, when the last rewrite landed, and whether the
+    /// turn settled them. Rewritten in place as the agent works; `revision` climbs with
+    /// every rewrite so a row animation keyed to it settles on the flip itself, not a
+    /// whole-list churn.
+    var todos: TodoList = .init()
+    /// The thread's most recent to-do list, updated in place as the agent rewrites it,
+    /// so a floating panel can read it without walking the whole timeline. Mirrors
+    /// `todos.items` wherever it is set.
+    var latestTodos: [TodoStep] = []
     /// Whether the browser section is open for this thread. Session-only: switching to
     /// another thread or project does not carry it over, so each thread starts with it off.
     var isBrowserSectionVisible = false
@@ -575,6 +580,9 @@ final class ThreadRuntime {
     @ObservationIgnored private var latestTree: String?
     /// Bumped by anything that could write a file: a command starting, a tool that edits.
     @ObservationIgnored private var treeEpoch = 0
+    /// The turn `todos` and its remembered row were last written for, so a rewrite
+    /// carrying an older turn's list is dropped instead of clobbering the running one.
+    @ObservationIgnored private var todosTurnID: UUID?
     /// The row a turn's todo list lives on, so each update finds it without scanning the
     /// timeline.
     @ObservationIgnored private var todosEntryID: String?
@@ -631,23 +639,29 @@ final class ThreadRuntime {
             // Writes are atomic and a read waits for queued ones, so a file that still will
             // not read after a few tries is damaged. Waiting on it for good left the chat
             // blank and a send hanging; it is set aside instead, never saved over.
-            var decoded = prefetched ?? Storage.readRecentDocument(threadID)?.document
+            var decoded = prefetched
+            if decoded == nil {
+                // The read is queued behind in-flight writes, so a file that still will not
+                // read after a few tries is damaged. Waiting on it for good left the chat
+                // blank and a send hanging; it is set aside instead, never saved over.
+                decoded = (await Storage.readRecentDocument(threadID))?.document
+            }
             var tries = 0
             while decoded == nil && tries < 3 && FileManager.default.fileExists(atPath: Storage.threadURL(threadID).path) && !Task.isCancelled {
                 tries += 1
                 try? await Task.sleep(for: .seconds(2))
-                decoded = Storage.readRecentDocument(threadID)?.document
+                decoded = (await Storage.readRecentDocument(threadID))?.document
             }
             guard !Task.isCancelled else { return }
             var keptAt: URL?
-            if decoded == nil { keptAt = Storage.setAside(threadID, moving: true) }
+            if decoded == nil { keptAt = await Storage.setAside(threadID, moving: true) }
             let recent = decoded ?? ThreadDocument(threadID: threadID)
             if prefetched == nil { await self.install(recent, prepared: true) }
             let loaded = Set(recent.turns.map(\.id))
             let remaining = (recent.turnIndex ?? []).filter { !loaded.contains($0.id) }
             if !remaining.isEmpty {
                 for attempt in 0..<3 where !Task.isCancelled {
-                    if let older = Storage.readTurns(threadID, references: remaining)?.document {
+                    if let older = (await Storage.readTurns(threadID, references: remaining))?.document {
                         await self.finishLoad(older)
                         return
                     }
@@ -656,7 +670,7 @@ final class ThreadRuntime {
                 guard !Task.isCancelled else { return }
                 // The newer turns carry on; the next save prunes the turns its head no longer
                 // lists, so the whole thread is copied aside first.
-                keptAt = Storage.setAside(threadID, moving: false)
+                keptAt = await Storage.setAside(threadID, moving: false)
                 await self.completeHistoryLoad(unreadable: keptAt, partly: true)
             } else {
                 await self.completeHistoryLoad(unreadable: keptAt, partly: false)
@@ -706,6 +720,17 @@ final class ThreadRuntime {
             }
         }
         entries = loaded + entries
+        // The panel reads `latestTodos` (maintained live by `upsertTodos`), but a
+        // restored thread's list came back as entries, not events: seed it from the
+        // freshest non-empty list so the panel matches the timeline's todo rows. A row
+        // stored by an earlier build is a bare array, not a `TodoList`; the entry keeps
+        // that shape, and the seed wraps it.
+        for entry in entries.reversed() {
+            guard case .todos(let list) = entry.item.content, !list.items.isEmpty else { continue }
+            todos = list
+            latestTodos = list.items
+            break
+        }
         // A card left in its sent state by a quit mid-hold goes now: its heads went out long ago.
         for entry in loaded {
             guard case .assistant(var message) = entry.item.content, HydraPrompts.hasSentDelegationBlock(in: message.text) else { continue }
@@ -1334,6 +1359,12 @@ final class ThreadRuntime {
         currentTurnID = turn.id
         currentProviderDiff = nil
         currentProviderAnchor = nil
+        // A new turn is a new plan: the mirror and its owner are cleared so the turn's
+        // first list starts fresh rather than merging into the settled one behind it, and
+        // a late rewrite of the finished turn's list is dropped against the new owner.
+        todos = .init()
+        latestTodos = []
+        todosTurnID = nil
         append(userItem)
         phase = .starting
         turnStartedAt = .now
@@ -2879,6 +2910,7 @@ final class ThreadRuntime {
             if let providerDiff { $0.providerDiff = providerDiff }
             if let providerAnchor { $0.providerAnchor = providerAnchor }
         }
+        settleTodos(status, turnID: turnID)
         if let providerAnchor, thread?.providerResumeAt != nil {
             app?.updateThread(threadID) { $0.providerResumeAt = providerAnchor }
         }
@@ -3698,7 +3730,11 @@ final class ThreadRuntime {
         existing.kind = call.kind
         // Edits count once, when they first land on the call.
         let landed = !call.edits.isEmpty && existing.edits.isEmpty ? call.edits.count : 0
-        if !call.edits.isEmpty { existing.edits = call.edits }
+        if !call.edits.isEmpty, existing.edits != call.edits {
+            existing.edits = call.edits
+            // A mid-turn edit landing is what the artifact panel keys its live refresh on.
+            diffRevision += 1
+        }
         if existing.status == .running, call.status != .running { existing.finish(call.status) }
         entry.item.content = .tool(existing)
         saveRevision += 1
@@ -3738,7 +3774,10 @@ final class ThreadRuntime {
         var landed = 0
         if let edits = update.edits, !edits.isEmpty {
             if call.edits.isEmpty { landed = edits.count }
+            let previous = call.edits
             call.edits = Self.capped(edits)
+            // A mid-turn edit landing is what the artifact panel keys its live refresh on.
+            if call.edits != previous { diffRevision += 1 }
         }
         if let output = update.output { call.setOutput(output) }
         if let exitCode = update.exitCode { call.exitCode = exitCode }
@@ -3866,6 +3905,9 @@ final class ThreadRuntime {
         // A provider that did report its edits keeps them.
         guard call.edits.allSatisfy({ $0.diff == nil }) else { return }
         call.edits = edits
+        // Command-settled edits are what a shell-editing agent lands here: the artifact
+        // panel refreshes on the revision, so a command writing files updates it live.
+        diffRevision += 1
         CheckoutClaims.claim(paths, root: repositoryRoot.path, owner: owner)
         if entry.turnID == currentTurnID { recordCurrentTurnEdits(edits) }
         entry.item.content = .tool(call)
@@ -4049,12 +4091,59 @@ final class ThreadRuntime {
         }
     }
 
-    private func upsertTodos(_ steps: [TodoStep]) {
+    private func upsertTodos(_ incoming: [TodoStep]) {
+        // The mirror belongs to the turn that last wrote it, so a replayed or head event
+        // carrying an old turn's list cannot clobber the panel of the turn running now.
+        // With no current turn, a write falls back to accepting, as before.
+        if let currentTurnID, let written = todosTurnID, written != currentTurnID { return }
+        todosTurnID = currentTurnID
+        // A list the provider keys by id is merged into the remembered one: a step it
+        // updates keeps its row in place, an id it adds comes in provider order, and an
+        // id that vanished from the resend goes — the provider's list stays the source of
+        // truth. A list with no ids keys onto nothing and is taken whole, the overwrite
+        // it always was.
+        let merged: [TodoStep]
+        if incoming.contains(where: { $0.id != nil }) {
+            var indexByID: [String: Int] = [:]
+            for (index, step) in todos.items.enumerated() where step.id != nil {
+                indexByID[step.id!] = index
+            }
+            var result: [TodoStep] = []
+            for step in incoming {
+                // The step the provider's list still carries: its remembered row, updated
+                // in place, or the new step as it came.
+                if let id = step.id, let index = indexByID[id] {
+                    var updated = todos.items[index]
+                    updated.status = step.status
+                    updated.activeForm = step.activeForm
+                    updated.error = step.error
+                    updated.duration = step.duration
+                    result.append(updated)
+                } else {
+                    result.append(step)
+                }
+            }
+            // Ids that vanished from the resend drop, the overwrite they were; the ones
+            // without an id cannot be tracked against the resend and stay, in place.
+            let resent = Set(incoming.compactMap(\.id))
+            for step in todos.items where step.id == nil || resent.contains(step.id!) {
+                if step.id == nil { result.append(step) }
+            }
+            merged = result
+        } else {
+            merged = incoming
+        }
+        var list = todos
+        list.items = merged
+        list.settled = false
+        list.revision += 1
+        todos = list
+        latestTodos = merged
         // The row is remembered rather than searched for: a turn rewrites its list many
         // times, and the timeline behind it can hold thousands of rows. Without it, the
         // running turn's entries are the last ones, and an earlier turn ends the walk.
         if let id = todosEntryID, let entry = entryIndex[id], entry.item.turnID == currentTurnID {
-            entry.item.content = .todos(steps)
+            entry.item.content = .todos(list)
             saveRevision += 1
             return
         }
@@ -4065,13 +4154,34 @@ final class ThreadRuntime {
         }
         if let entry = existing {
             todosEntryID = entry.id
-            entry.item.content = .todos(steps)
+            entry.item.content = .todos(list)
             saveRevision += 1
-        } else if !steps.isEmpty {
-            let item = TimelineItem(turnID: turnIDForNewRows, content: .todos(steps))
+        } else if !merged.isEmpty {
+            let item = TimelineItem(turnID: turnIDForNewRows, content: .todos(list))
             todosEntryID = item.id
             append(item)
         }
+        scheduleSave()
+    }
+
+    /// Closes the turn's to-do list the way the turn did: a completion lands the steps that
+    /// were still under way, and a stop or failure puts them back to pending, so neither
+    /// leaves a step frozen at `active`. Fires only when the settled turn is the one the
+    /// remembered list and its row belong to: a settle of an older turn finds a mismatched
+    /// row id and leaves the newer list alone.
+    private func settleTodos(_ status: TurnStatus, turnID: UUID) {
+        guard let id = todosEntryID, let entry = entryIndex[id], entry.item.turnID == turnID else { return }
+        guard !todos.settled else { return }
+        var list = todos
+        for index in list.items.indices where list.items[index].status == .active {
+            list.items[index].status = status == .completed ? .done : .pending
+        }
+        list.settled = true
+        list.revision += 1
+        todos = list
+        latestTodos = list.items
+        entry.item.content = .todos(list)
+        saveRevision += 1
         scheduleSave()
     }
 
@@ -4106,7 +4216,7 @@ final class ThreadRuntime {
     var currentTurnTodos: [TodoStep] {
         for entry in entries.reversed() {
             if entry.item.turnID != currentTurnID { break }
-            if case .todos(let steps) = entry.item.content { return steps }
+            if case .todos(let list) = entry.item.content { return list.items }
         }
         return []
     }
@@ -4339,19 +4449,19 @@ private extension TimelineItem.Content {
     mutating func appendStreamed(_ text: String, kind: ThreadRuntime.DeltaKind) -> Bool {
         switch (kind, self) {
         case (.message, .assistant(var message)):
-            self = .todos([])
+            self = .todos(TodoList())
             message.text += text
             self = .assistant(message)
         case (.reasoning, .reasoning(var block)):
-            self = .todos([])
+            self = .todos(TodoList())
             block.text += text
             self = .reasoning(block)
         case (.toolOutput, .tool(var call)):
-            self = .todos([])
+            self = .todos(TodoList())
             call.appendOutput(text)
             self = .tool(call)
         case (.plan, .plan(var plan)):
-            self = .todos([])
+            self = .todos(TodoList())
             plan.markdown += text
             self = .plan(plan)
         default:
@@ -4419,6 +4529,11 @@ extension ThreadRuntime {
             saveRevision += 1
         }
         currentTurnID = turn.id
+        // A new turn is a new plan, as `startTurn`'s: the mirror and its owner start fresh
+        // and a late rewrite of the finished turn's list is dropped against the new owner.
+        todos = .init()
+        latestTodos = []
+        todosTurnID = nil
         hydraCurrentTurnTouchedPaths = Set(touchedPaths)
         phase = .running
         turnStartedAt = .now

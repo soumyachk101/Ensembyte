@@ -506,7 +506,7 @@ private final class Downloader: NSObject, URLSessionDownloadDelegate, @unchecked
         defer { session.finishTasksAndInvalidate() }
         self.destination = destination
 
-        let token = GitHubAuth.resolveToken()
+        let token = GitHubAuth.cachedToken()
         let effectiveURL: URL
         if let token, !token.isEmpty, let assetURL {
             effectiveURL = assetURL

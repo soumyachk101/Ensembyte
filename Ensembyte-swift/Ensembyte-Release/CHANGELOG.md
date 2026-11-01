@@ -2,6 +2,21 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.16] - 2026-11-01
+
+### New features
+- Interactive Timeline Tasks (`TodoCard`): Upgraded timeline checklist with dynamic progress calculation, elapsed execution time counter, and live in-flight agent tool tracking.
+- Intelligent Task Folding & State Retention: Automatically folds completed steps past 6 items to keep active work in focus, preserving expanded row states during live list rewrites.
+- Hydra Multi-Agent Activity Overviews (`HydraActivityGroup`): High-efficiency grouped view of lead threads and active subagent heads with automatic status sorting.
+- High-DPI Glyph Caching (`GlyphCache`): Unified multi-scale caching for template and tinted dragon head glyphs across Markdown and AppKit link paragraphs.
+
+### Architecture & Performance
+- Async Non-Blocking Storage: Deserializes thread documents, turn records, and continuations on background queues (`readDocument`, `readRecentDocument`, `readTurns`), eliminating MainActor UI freezes.
+- Strict Layered Attachment Bridge: Moved composer attachment bindings to `Storage+Attachments.swift` in the App layer to enforce one-way architecture boundaries.
+- Boundary-Safe Git Patch Truncation: Diff patches truncate strictly at top-level file boundaries (`diff --git `), preventing malformed hunk generation.
+- Background GitHub Token Warming: Main-thread safe authentication cache lookups with asynchronous background token resolution (`warmCache`, `cachedToken`).
+- WebKit Tab Power Management: Auto-pauses and resumes in-flight web tab loads when browser panels are hidden or restored.
+
 ## [1.1.15] - 2026-10-31
 
 ### New features

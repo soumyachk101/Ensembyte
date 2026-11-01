@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.16] - 2026-11-01
+
+Ensembyte 1.1.16 brings interactive timeline task tracking with live in-flight tool following, non-blocking asynchronous storage serialization, Hydra multi-agent activity overviews, high-DPI glyph caching, and background GitHub credential warming in Ensembyte-swift for macOS.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Interactive Timeline Tasks (`TodoCard`)**: Fully redesigned timeline task checklist featuring dynamic progress tracking, live turn elapsed timers, and active in-flight tool call following.
+- **Intelligent Task Folding**: Automatically folds completed steps past 6 items to keep running tasks in focus while preserving row disclosure states across list updates.
+- **Hydra Multi-Agent Activity Overviews (`HydraActivityGroup`)**: Grouped overview of lead threads and active subagent heads with automatic status sorting and idle watchdog state pruning.
+- **High-DPI Glyph Cache (`GlyphCache`)**: Centralized multi-scale caching and rasterization for inline template and tinted dragon head glyphs across Markdown and AppKit link paragraphs.
+- **Async Non-Blocking Storage**: Deserializes thread documents, turn records, and continuations on background queues (`readDocument`, `readRecentDocument`, `readTurns`), eliminating MainActor UI stalls.
+- **Clean Layered Attachment Bridge**: Relocated composer attachment binding logic to `Storage+Attachments.swift` in the App layer, strictly preserving one-way architecture layering.
+- **Safe Patch Truncation & Git Lane Discipline**: Working tree diff patches truncate strictly at file boundaries (`diff --git `), and mutating subcommands (`commit`, `clean`) are classified into dedicated checkpoint lanes.
+- **Main-Thread Safe GitHub Auth**: Asynchronous background token warming (`warmCache`) and instant cache lookups (`cachedToken`) prevent UI freezing when resolving credentials.
+- **WebKit Tab Power Management**: Auto-pauses and resumes in-flight web tab loads when browser panels are hidden or restored.
+
 ## [1.1.15] - 2026-10-31
 
 Ensembyte 1.1.15 introduces independent floating HUD panels for Artifacts and Todos, per-thread WebKit browser isolation with smart chat link interception, and streamlined window chrome in Ensembyte-swift for macOS.

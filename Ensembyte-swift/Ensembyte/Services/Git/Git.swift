@@ -35,7 +35,16 @@ enum GitLane: Hashable, Sendable {
         case "fetch", "push", "pull", "clone", "worktree": .long
         case "write-tree", "commit-tree", "update-ref", "read-tree", "hash-object": .checkpoint
         case "add", "update-index", "rm": environment["GIT_INDEX_FILE"] != nil ? .checkpoint : .read
-        default: .read
+        // Mutating subcommands map to the lane that matches their cost: `commit` and
+        // `clean` run git hooks and can be slow, so they hold the checkpoint bound;
+        // the others are quick and read-lane admission is fine.
+        case "commit", "clean": .checkpoint
+        case "checkout", "restore", "switch", "merge", "rebase", "stash": .read
+        default:
+            // Flags can precede the subcommand (`git -C dir commit`), so the caller
+            // already skips leading options; anything still unrecognized stays on
+            // .read so the bound only limits it, not admits it over other reads.
+            .read
         }
     }
 }
@@ -249,7 +258,30 @@ struct Git: Sendable {
     func workingChanges() async -> (summary: String, patch: String) {
         let summary = (try? await output(["status", "--short"])) ?? ""
         var patch = (try? await output(["diff", "HEAD", "--no-ext-diff"])) ?? ""
-        if patch.utf8.count > 40_000 { patch = String(patch.prefix(40_000)) }
+        if patch.utf8.count > 40_000 {
+            // Truncate only between top-level file diffs. A patch cut mid-hunk fails
+            // silently on a later `apply`, so rewind to the last `diff --git ` line
+            // start inside the kept prefix. A file whose own diff exceeds the whole
+            // limit has no boundary to rewind to, and keeps the plain prefix as before.
+            let kept = String(patch.prefix(40_000))
+            // Keep up to the start of the file whose diff got cut, so nothing past the
+            // cut is mid-hunk. If no boundary is inside the prefix, the first file's own
+            // diff exceeds the whole limit and the plain prefix is kept.
+            if let boundary = kept.ranges(of: "\ndiff --git ").last {
+                patch = String(kept[..<boundary.lowerBound])
+            } else {
+                patch = kept
+            }
+        }
+        return (summary, patch)
+    }
+
+    /// The throwing twin of `workingChanges()`: a caller that can tell the user what went
+    /// wrong reports it instead of showing a blank sheet, so it throws when either read
+    /// fails rather than folding both into an empty pair.
+    func fetchWorkingChanges() async throws -> (summary: String, patch: String) {
+        let summary = try await output(["status", "--short"])
+        let patch = try await output(["diff", "HEAD", "--no-ext-diff"])
         return (summary, patch)
     }
 
@@ -359,15 +391,7 @@ struct Git: Sendable {
     /// deletions included: what one thread's work amounts to, with nothing else that
     /// happens to be uncommitted alongside it.
     func captureTree(paths: [String]) async throws -> String {
-        let fileManager = FileManager.default
-        let index = fileManager.temporaryDirectory.appendingPathComponent("ensembyte-code-index-\(UUID().uuidString)")
-        defer { try? fileManager.removeItem(at: index) }
-        let environment = ["GIT_INDEX_FILE": index.path]
-        if await hasCommits() { try Self.check(await run(["read-tree", "HEAD"], environment: environment, lane: .checkpoint)) }
-        try Self.check(await run(["add", "-A", "--ignore-errors", "--pathspec-from-file=-", "--pathspec-file-nul"], environment: environment, input: Self.nulSeparated(paths), timeout: 300, lane: .checkpoint))
-        let tree = try await run(["write-tree"], environment: environment, lane: .checkpoint)
-        try Self.check(tree)
-        return tree.trimmedOutput
+        try await captureTree(pathspec: paths)
     }
 
     /// The team's `paths` on top of `base`, a commit the checkout's `head` is an ancestor
@@ -691,6 +715,14 @@ struct Git: Sendable {
     /// The working tree as a tree object: a cheap before/after marker for a
     /// diff, with no commit and nothing referenced. Respects .gitignore.
     func captureTree() async throws -> String {
+        try await captureTree(pathspec: nil)
+    }
+
+    /// The scratch-index scaffold every capture builds on: a throwaway `GIT_INDEX_FILE`
+    /// that starts from the real index's stat cache where one exists, else from a
+    /// `read-tree` of HEAD, and is then written out. With a `pathspec`, only those paths
+    /// (with `--ignore-errors`) are added; without, the whole tree.
+    private func captureTree(pathspec: [String]?) async throws -> String {
         let fileManager = FileManager.default
         let index = fileManager.temporaryDirectory.appendingPathComponent("ensembyte-code-index-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: index) }
@@ -702,7 +734,11 @@ struct Git: Sendable {
         } else if await hasCommits() {
             try Self.check(await run(["read-tree", "HEAD"], environment: environment, lane: .checkpoint))
         }
-        try Self.check(await run(["add", "-A", "--", "."], environment: environment, timeout: 300, lane: .checkpoint))
+        if let pathspec {
+            try Self.check(await run(["add", "-A", "--ignore-errors", "--pathspec-from-file=-", "--pathspec-file-nul"], environment: environment, input: Self.nulSeparated(pathspec), timeout: 300, lane: .checkpoint))
+        } else {
+            try Self.check(await run(["add", "-A", "--", "."], environment: environment, timeout: 300, lane: .checkpoint))
+        }
         let tree = try await run(["write-tree"], environment: environment, lane: .checkpoint)
         try Self.check(tree)
         return tree.trimmedOutput
@@ -913,6 +949,9 @@ struct Git: Sendable {
         let data = Data(patch.utf8)
         let plain = try await run(["apply", "--binary", "--whitespace=nowarn", "-"], input: data)
         if plain.succeeded { return [] }
+        // The original failure, surfaced alongside whatever the fallback adds: a failure
+        // while building the fallback index must not replace it with the only error.
+        let originalFailure = plain.failureMessage
 
         // The three-way merge works through an index that matches the working tree, so
         // it gets a throwaway one that does, and the real index never changes.
@@ -925,14 +964,18 @@ struct Git: Sendable {
         } else if await hasCommits() {
             try Self.check(await run(["read-tree", "HEAD"], environment: environment, lane: .checkpoint))
         }
-        try Self.check(await run(["add", "-A", "--", "."], environment: environment, timeout: 300, lane: .checkpoint))
+        do {
+            try Self.check(await run(["add", "-A", "--", "."], environment: environment, timeout: 300, lane: .checkpoint))
+        } catch {
+            throw ShellError("The patch did not apply directly (\(originalFailure)) and the three-way fallback could not stage the working tree (\(error.localizedDescription)).")
+        }
         let merged = try await run(["apply", "--3way", "--binary", "--whitespace=nowarn", "-"], environment: environment, input: data, lane: .checkpoint)
         if merged.succeeded { return [] }
         // "U path" names each file left with markers; without one, nothing was applied.
         let conflicts = merged.errorOutput.split(separator: "\n").compactMap { line -> String? in
             line.hasPrefix("U ") ? String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces) : nil
         }
-        guard !conflicts.isEmpty else { throw ShellError(merged.failureMessage) }
+        guard !conflicts.isEmpty else { throw ShellError("The patch did not apply directly (\(originalFailure)) and the three-way merge failed (\(merged.failureMessage)).") }
         return conflicts
     }
 }

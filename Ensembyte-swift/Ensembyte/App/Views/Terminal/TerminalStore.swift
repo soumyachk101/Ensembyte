@@ -19,7 +19,9 @@ final class TerminalSession: Identifiable {
         self.directory = directory
         self.title = title
         view = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 640, height: 240))
-        view.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        // The user's configured terminal font, so a prompt's Nerd Font glyphs render instead
+        // of empty boxes; it falls back to the system mono when none is set (see TerminalFont).
+        view.font = TerminalFont.preferred()
         view.optionAsMetaKey = true
         let bridge = TerminalBridge(session: self)
         self.bridge = bridge

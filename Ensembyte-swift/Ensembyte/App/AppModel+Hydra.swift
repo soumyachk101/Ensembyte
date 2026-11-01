@@ -112,9 +112,19 @@ private enum HydraTreeCache {
 /// open with why.
 @MainActor
 private enum HydraWatchdog {
-    /// How often it looks, and how long a head is quiet before it is called thinking,
-    /// then stalled.
+    /// Drops remembered state for the heads that are not in `ids` (the running roster at
+    /// the last look): a head that finished, was stopped or was deleted would otherwise sit
+    /// in every table for the rest of the app's life, and each table would grow with the
+    /// team's work instead of staying bounded by the heads at work.
+    static func prune(ids: Set<UUID>) {
+        toolCounts = toolCounts.filter { ids.contains($0.key) }
+        labelled.formIntersection(ids)
+        stalledHeadIDs.formIntersection(ids)
+    }
+
+    /// How often it looks.
     static let tick: Duration = .seconds(30)
+    /// How long a head is quiet before it is called thinking, then stalled.
     static let thinkingAfter: TimeInterval = 180
     static let stalledAfter: TimeInterval = 600
 
@@ -338,6 +348,48 @@ extension AppModel {
         children(of: parentID)
             .filter { !$0.isArchived && $0.isHydraHead }
             .sorted { ($0.hydra?.index ?? 0) < ($1.hydra?.index ?? 0) }
+    }
+
+    /// One group of the Agent Activity overview: a lead thread and the ids of the heads it
+    /// has sent out, in the order they went. The overview's view builds a head's record
+    /// from the id, so a write to one head costs that head's cell, not the library.
+    struct HydraActivityGroup: Identifiable {
+        let threadID: UUID
+        let threadTitle: String
+        let headIDs: [UUID]
+        /// Whether one of the heads is at work, for the sort: working groups stand ahead.
+        let anyHeadRunning: Bool
+
+        var id: UUID { threadID }
+    }
+
+    /// The overview's groups, the way the overview shows them: leads with at least one
+    /// head, working ones first, then title. The scan of the library is done once per
+    /// revision of it and cached; re-renders on one head's write read the cache instead
+    /// of walking every thread and team again.
+    func hydraActivityGroups() -> [HydraActivityGroup] {
+        let revision = threadsRevision
+        if let cached = hydraActivityGroupsCache, cached.revision == revision {
+            return cached.groups
+        }
+        var groups: [HydraActivityGroup] = []
+        for thread in threads {
+            guard !thread.isHydraHead else { continue }
+            let heads = hydraTeam(of: thread.id).filter { $0.hydra != nil }
+            guard !heads.isEmpty else { continue }
+            groups.append(HydraActivityGroup(
+                threadID: thread.id,
+                threadTitle: thread.title.isEmpty ? "Untitled thread" : thread.title,
+                headIDs: heads.map(\.id),
+                anyHeadRunning: heads.contains { $0.hydra?.status == .running }
+            ))
+        }
+        groups.sort { a, b in
+            if a.anyHeadRunning != b.anyHeadRunning { return a.anyHeadRunning }
+            return a.threadTitle.localizedStandardCompare(b.threadTitle) == .orderedAscending
+        }
+        hydraActivityGroupsCache = (revision, groups)
+        return groups
     }
 
     /// The names of a lead's Ensembyte-run heads still at work, other than `excluding`.
@@ -1130,11 +1182,13 @@ extension AppModel {
     /// One look at the heads: the label goes on and comes off, a stalled head is stopped.
     private func watchHydraHeads() {
         var toolCounts: [UUID: Int] = [:]
+        var running: Set<UUID> = []
         for head in threads where head.isHydraHead && head.hydra?.kind == .ensembyte && head.hydra?.status == .running {
             guard let headRuntime = existingRuntime(for: head.id), headRuntime.isRunning else { continue }
             let idle = headRuntime.hydraIdleSeconds
             let tools = headRuntime.hydraToolCalls
             toolCounts[head.id] = tools
+            running.insert(head.id)
             if idle >= HydraWatchdog.stalledAfter, headRuntime.hydraEditCount == 0, HydraWatchdog.toolCounts[head.id] == tools {
                 HydraWatchdog.stalledHeadIDs.insert(head.id)
                 HydraWatchdog.labelled.remove(head.id)
@@ -1152,7 +1206,9 @@ extension AppModel {
             }
         }
         HydraWatchdog.toolCounts = toolCounts
-        HydraWatchdog.labelled.formIntersection(toolCounts.keys)
+        // Heads that stopped running between looks (finished, stopped, deleted) leave
+        // every table with the roster this look measured.
+        HydraWatchdog.prune(ids: running)
     }
 
     /// Heads whose copies are gone from disk (deleted by hand, say) work in the checkout

@@ -1,7 +1,6 @@
 import AppKit
 import ImageIO
 import Synchronization
-import SwiftUI
 import UniformTypeIdentifiers
 
 /// Just enough of a stored thread to read the files a forwarded continuation points at:
@@ -83,61 +82,106 @@ enum Storage {
         turnsURL(threadID).appendingPathComponent("\(turnID.uuidString).json")
     }
 
+    /// Must not be called from the main actor: it blocks the calling thread behind the
+    /// slowest in-flight write on the queue. Await `readDocument(_:)` instead.
     nonisolated static func readDocument(_ id: UUID) -> (document: ThreadDocument, cost: Int)? {
-        readDocument(id, recentOnly: false)
-    }
-
-    nonisolated static func readRecentDocument(_ id: UUID) -> (document: ThreadDocument, cost: Int)? {
-        readDocument(id, recentOnly: true)
-    }
-
-    private nonisolated static func readDocument(_ id: UUID, recentOnly: Bool) -> (document: ThreadDocument, cost: Int)? {
         DiskWriter.shared.readSynchronously {
-            guard let data = try? Data(contentsOf: threadURL(id)),
-                  var document = try? JSONDecoder.storage.decode(ThreadDocument.self, from: data) else { return nil }
-            var cost = data.count
-            if let index = document.turnIndex {
-                let count = max(0, 6 - document.turns.count)
-                let requested = recentOnly ? Array(index.suffix(count)) : index
-                guard let stored = readTurnsUnlocked(id, references: requested) else { return nil }
-                document.items = stored.document.items + document.items
-                document.turns = stored.document.turns + document.turns
-                document.itemPositions = (document.itemPositions ?? [:]).merging(stored.document.itemPositions ?? [:]) { _, new in new }
-                cost += stored.cost
-                sortItems(&document)
-            }
-            document.items = document.items.filter { !$0.isEmptyReasoning }.map(\.cleanedOfEmDashes)
-            return (document, cost)
+            readDocumentUnlocked(id, recentOnly: false)
         }
     }
 
+    /// The awaited twin of `readDocument(_:)`: it queues behind in-flight writes instead of
+    /// blocking the thread that asks, so a main-actor caller is not held by a slow encode.
+    nonisolated static func readDocument(_ id: UUID, recent: Bool = false) async -> (document: ThreadDocument, cost: Int)? {
+        await DiskWriter.shared.read {
+            readDocumentUnlocked(id, recentOnly: recent)
+        }
+    }
+
+    /// Must not be called from the main actor: it blocks the calling thread behind the
+    /// slowest in-flight write on the queue. Await `readRecentDocument(_:)` instead.
+    nonisolated static func readRecentDocument(_ id: UUID) -> (document: ThreadDocument, cost: Int)? {
+        DiskWriter.shared.readSynchronously {
+            readDocumentUnlocked(id, recentOnly: true)
+        }
+    }
+
+    /// The awaited twin of `readRecentDocument(_:)`: it queues behind in-flight writes
+    /// instead of blocking the thread that asks.
+    nonisolated static func readRecentDocument(_ id: UUID) async -> (document: ThreadDocument, cost: Int)? {
+        await DiskWriter.shared.read {
+            readDocumentUnlocked(id, recentOnly: true)
+        }
+    }
+
+    private static func readDocumentUnlocked(_ id: UUID, recentOnly: Bool) -> (document: ThreadDocument, cost: Int)? {
+        guard let data = try? Data(contentsOf: threadURL(id)),
+              var document = try? JSONDecoder.storage.decode(ThreadDocument.self, from: data) else { return nil }
+        var cost = data.count
+        if let index = document.turnIndex {
+            let count = max(0, 6 - document.turns.count)
+            let requested = recentOnly ? Array(index.suffix(count)) : index
+            guard let stored = readTurnsUnlocked(id, references: requested) else { return nil }
+            document.items = stored.document.items + document.items
+            document.turns = stored.document.turns + document.turns
+            document.itemPositions = (document.itemPositions ?? [:]).merging(stored.document.itemPositions ?? [:]) { _, new in new }
+            cost += stored.cost
+            sortItems(&document)
+        }
+        document.items = document.items.filter { !$0.isEmptyReasoning }.map(\.cleanedOfEmDashes)
+        return (document, cost)
+    }
+
+    /// Must not be called from the main actor: it blocks the calling thread behind the
+    /// slowest in-flight write on the queue. Await `readTurns(_:references:)` instead.
     nonisolated static func readTurns(_ id: UUID, references: [ThreadTurnReference]) -> (document: ThreadDocument, cost: Int)? {
         DiskWriter.shared.readSynchronously { readTurnsUnlocked(id, references: references) }
+    }
+
+    /// The awaited twin of `readTurns(_:references:)`: it queues behind in-flight writes
+    /// instead of blocking the thread that asks.
+    nonisolated static func readTurns(_ id: UUID, references: [ThreadTurnReference]) async -> (document: ThreadDocument, cost: Int)? {
+        await DiskWriter.shared.read { readTurnsUnlocked(id, references: references) }
     }
 
     /// Puts a thread's files that would not read somewhere a save can never reach: moved
     /// when nothing of the thread could be read, copied when only older turns failed (the
     /// newer ones are in use, and the next save prunes what its head no longer lists).
     /// Returns the folder, or nil when there was nothing to keep or it could not be made.
+    ///
+    /// Must not be called from the main actor: it blocks the calling thread behind the
+    /// slowest in-flight write on the queue. Await `setAside(_:moving:)` instead.
     nonisolated static func setAside(_ id: UUID, moving: Bool) -> URL? {
         DiskWriter.shared.readSynchronously {
-            let manager = FileManager.default
-            let sources = [threadURL(id), turnsURL(id)].filter { manager.fileExists(atPath: $0.path) }
-            guard !sources.isEmpty else { return nil }
-            let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-")
-            let folder = threadsDirectory.appendingPathComponent("Unreadable", isDirectory: true)
-                .appendingPathComponent("\(id.uuidString) \(stamp)", isDirectory: true)
-            do {
-                try manager.createDirectory(at: folder, withIntermediateDirectories: true)
-                for source in sources {
-                    let target = folder.appendingPathComponent(source.lastPathComponent)
-                    if moving { try manager.moveItem(at: source, to: target) } else { try manager.copyItem(at: source, to: target) }
-                }
-                return folder
-            } catch {
-                NSLog("Ensembyte could not set aside %@: %@", id.uuidString, error.localizedDescription)
-                return nil
+            setAsideUnlocked(id, moving: moving)
+        }
+    }
+
+    /// The awaited twin of `setAside(_:moving:)`: it queues behind in-flight writes
+    /// instead of blocking the thread that asks.
+    nonisolated static func setAside(_ id: UUID, moving: Bool) async -> URL? {
+        await DiskWriter.shared.read {
+            setAsideUnlocked(id, moving: moving)
+        }
+    }
+
+    private static func setAsideUnlocked(_ id: UUID, moving: Bool) -> URL? {
+        let manager = FileManager.default
+        let sources = [threadURL(id), turnsURL(id)].filter { manager.fileExists(atPath: $0.path) }
+        guard !sources.isEmpty else { return nil }
+        let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-")
+        let folder = threadsDirectory.appendingPathComponent("Unreadable", isDirectory: true)
+            .appendingPathComponent("\(id.uuidString) \(stamp)", isDirectory: true)
+        do {
+            try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+            for source in sources {
+                let target = folder.appendingPathComponent(source.lastPathComponent)
+                if moving { try manager.moveItem(at: source, to: target) } else { try manager.copyItem(at: source, to: target) }
             }
+            return folder
+        } catch {
+            NSLog("Ensembyte could not set aside %@: %@", id.uuidString, error.localizedDescription)
+            return nil
         }
     }
 
@@ -164,17 +208,36 @@ enum Storage {
         document.items.sort { (positions[$0.id] ?? 0) < (positions[$1.id] ?? 0) }
     }
 
+    /// Must not be called from the main actor: it blocks the calling thread behind the
+    /// slowest in-flight write on the queue. Await `deleteDocument(_:)` instead.
     static func deleteDocument(_ id: UUID) {
         deleteDocuments([id])
+    }
+
+    /// The awaited twin of `deleteDocument(_:)`: it queues the removal instead of blocking
+    /// the thread that asks, so a main-actor caller is not held by a slow encode elsewhere.
+    nonisolated static func deleteDocument(_ id: UUID) async {
+        await deleteDocuments([id])
     }
 
     /// Deletes several threads' files in one hop to the writer, so a bulk delete waits for
     /// the queued saves once rather than once per thread. A save of a thread may still be
     /// on its way to the writer; the removal takes its place, so the thread never comes back.
+    ///
+    /// Must not be called from the main actor: it blocks the calling thread behind the
+    /// slowest in-flight write on the queue. Await `deleteDocuments(_:)` instead.
     static func deleteDocuments(_ ids: [UUID]) {
         guard !ids.isEmpty else { return }
         for id in ids { DocumentPrefetch.shared.forget(id) }
         DiskWriter.shared.removeSynchronously(ids.flatMap { [threadURL($0), turnsURL($0)] })
+    }
+
+    /// The awaited twin of `deleteDocuments(_:)`: it queues the removal behind in-flight
+    /// writes instead of blocking the thread that asks.
+    nonisolated static func deleteDocuments(_ ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
+        for id in ids { DocumentPrefetch.shared.forget(id) }
+        await DiskWriter.shared.remove(ids.flatMap { [threadURL($0), turnsURL($0)] })
     }
 
     /// Copies a file into app storage so a message keeps its attachment after the original moves.
@@ -236,25 +299,12 @@ enum Storage {
     /// How many files a message carries.
     static let attachmentLimit = 8
 
-    /// Imports what a drop, paste, picker or downloads pick handed over and appends the
-    /// results, in that order, to the attachments. The free slots are counted here, so the
-    /// call returns before any byte is copied, and counted again when the copies land,
-    /// since more may have been attached meanwhile: anything past the limit by then is
-    /// removed again. The copies and transcodes run off the main actor; a dropped video
-    /// or a pasted screenshot never stalls the composer.
-    @MainActor @discardableResult
-    static func attach(_ sources: [AttachmentSource], to attachments: Binding<[Attachment]>) -> Task<Void, Never>? {
-        let batch = Array(sources.prefix(max(0, attachmentLimit - attachments.wrappedValue.count)))
-        guard !batch.isEmpty else { return nil }
-        return Task.detached(priority: .userInitiated) {
-            let imported = batch.compactMap(importSource)
-            let kept = await MainActor.run {
-                let room = max(0, attachmentLimit - attachments.wrappedValue.count)
-                attachments.wrappedValue.append(contentsOf: imported.prefix(room))
-                return room
-            }
-            for orphan in imported.dropFirst(kept) { try? FileManager.default.removeItem(at: orphan.url) }
-        }
+    /// Imports what a drop, paste, picker or downloads pick handed over and returns the
+    /// results, in that order, plain values the caller adds to its own attachments. The
+    /// copies and transcodes run off the main actor; a dropped video or a pasted
+    /// screenshot never stalls the composer.
+    static func importSources(_ sources: [AttachmentSource]) -> [Attachment] {
+        sources.compactMap(importSource)
     }
 
     /// A file the user picked, dropped or pasted, copied into app storage: folders are
@@ -278,6 +328,9 @@ enum Storage {
                 png = CGImageSourceCreateWithData(data as CFData, nil).flatMap { transcode($0, to: .png) }
             }
             guard let png else { return nil }
+            // The on-disk file is UUID-named (as `importAttachment` names every file), so the
+            // orphan sweep's reap regex matches it and deletes it once unreferenced; the
+            // human-readable "Pasted image.png" survives only as the display `name`.
             return try? importAttachment(data: png, name: "Pasted image.png", fileExtension: "png")
         }
     }
@@ -540,15 +593,6 @@ final class DiskWriter: Sendable {
         }
     }
 
-    func writeSynchronously<Value: Encodable & Sendable>(_ value: Value, to url: URL) {
-        let completions = pending.withLock { $0.removeValue(forKey: url)?.completions ?? [] }
-        queue.sync {
-            let size = write(value, to: url)
-            if let size { sizes.withLock { $0[url] = size } }
-            for completion in completions { completion(size != nil) }
-        }
-    }
-
     /// A provider-history action must not proceed if its recovery state cannot save.
     /// Awaited rather than run with `queue.sync`: the caller is the main actor, and a
     /// whole-library write queued behind other documents would hold the app still.
@@ -576,6 +620,8 @@ final class DiskWriter: Sendable {
         removeSynchronously([url])
     }
 
+    /// Must not be called from the main actor: it blocks behind the slowest in-flight
+    /// write on the queue; await `remove` instead.
     func removeSynchronously(_ urls: [URL]) {
         let threadCompletions = pendingThreads.withLock { pending in
             urls.flatMap { pending.removeValue(forKey: $0)?.completions ?? [] }
@@ -590,8 +636,51 @@ final class DiskWriter: Sendable {
         }
     }
 
+    /// Must not be called from the main actor: it blocks behind the slowest in-flight
+    /// write on the queue, and only the `read` variant below is safe to await there.
     func readSynchronously<Value>(_ read: () -> Value) -> Value {
         queue.sync(execute: read)
+    }
+
+    /// The awaited twin of `readSynchronously`: it queues behind in-flight writes instead
+    /// of blocking the thread that asks, so a main-actor caller is not held by a slow
+    /// encode elsewhere.
+    func read<Value>(_ read: @escaping @Sendable () -> Value) async -> Value {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: read())
+            }
+        }
+    }
+
+    /// The awaited twin of `removeSynchronously`: it queues the removal instead of
+    /// blocking the thread that asks.
+    func remove(_ urls: [URL]) async {
+        let threadCompletions = pendingThreads.withLock { pending in
+            urls.flatMap { pending.removeValue(forKey: $0)?.completions ?? [] }
+        }
+        let completions = pending.withLock { pending in
+            urls.flatMap { pending.removeValue(forKey: $0)?.completions ?? [] }
+        }
+        await withCheckedContinuation { continuation in
+            queue.async {
+                for url in urls { try? FileManager.default.removeItem(at: url) }
+                for completion in threadCompletions { completion(false) }
+                for completion in completions { completion(false) }
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Must not be called from the main actor: it blocks behind the slowest in-flight
+    /// write on the queue, and `writeOrThrow` is the awaited form of it.
+    func writeSynchronously<Value: Encodable & Sendable>(_ value: Value, to url: URL) {
+        let completions = pending.withLock { $0.removeValue(forKey: url)?.completions ?? [] }
+        queue.sync {
+            let size = write(value, to: url)
+            if let size { sizes.withLock { $0[url] = size } }
+            for completion in completions { completion(size != nil) }
+        }
     }
 
     /// Returns once every write queued so far has landed, so a read that follows sees them.

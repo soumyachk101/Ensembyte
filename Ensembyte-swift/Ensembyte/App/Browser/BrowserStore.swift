@@ -29,6 +29,10 @@ final class BrowserPageModel: Identifiable {
     /// The tab's host: the WKWebView and its navigation delegate.
     @ObservationIgnored let page: BrowserPage
 
+    /// The section was closed while this tab was still loading, so it was stopped and
+    /// its load has to be retried when the section comes back.
+    @ObservationIgnored var wasPaused = false
+
     /// The address field's keyboard: it takes the focus and the selection when the
     /// tab is asked to focus it.
     @ObservationIgnored let addressField = BrowserAddressController()
@@ -161,6 +165,24 @@ final class BrowserStore {
         }
         pageIDs[thread] = nil
         activePageID[thread] = nil
+    }
+
+    /// Stops the thread's loading web views so a hidden section stops burning a live load;
+    /// the tabs stay open.
+    func pause(in thread: UUID) {
+        for page in pages(in: thread) where page.state.loading {
+            page.page.stop()
+            page.wasPaused = true
+        }
+    }
+
+    /// Resumes a paused thread: only the tabs `pause` stopped are reloaded, so a settled
+    /// tab is left exactly where it was.
+    func resume(in thread: UUID) {
+        for page in pages(in: thread) where page.wasPaused {
+            page.wasPaused = false
+            page.reload()
+        }
     }
 
     /// Does a command against the thread's front tab; a new tab starts when it has none.

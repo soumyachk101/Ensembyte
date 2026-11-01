@@ -109,11 +109,11 @@ extension TourCaptures {
             + "{\"task\": \"" + tasks[2] + "\", \"prompt\": \"Take screenshots for every page.\"}]\n"
             + bq
         let answer = TimelineItem(turnID: turn.id, date: turn.startedAt.addingTimeInterval(10), content: .assistant(AssistantMessage(text: assistantText)))
-        let checklist = TimelineItem(turnID: turn.id, date: turn.startedAt.addingTimeInterval(11), content: .todos([
+        let checklist = TimelineItem(turnID: turn.id, date: turn.startedAt.addingTimeInterval(11), content: .todos(TodoList(items: [
             TodoStep(text: "Port the slideshow to the app's glass", status: .done),
             TodoStep(text: "Write the six pages and wire the Help menu", status: .done),
             TodoStep(text: "Photograph every page over its backdrop", status: .active),
-        ]))
+        ])))
         let names = ["Hank", "Walter", "Ada"]
         var tools: [TimelineItem] = []
         for index in 0..<3 {

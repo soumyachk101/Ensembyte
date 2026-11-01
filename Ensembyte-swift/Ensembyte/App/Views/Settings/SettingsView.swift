@@ -457,7 +457,7 @@ private struct GeneralSettingsPage: View {
                 }
                 // Switching it on plays the chime once, so you hear what you are getting.
                 .onChange(of: settings.chimeWhenFinished) { _, isOn in
-                    if isOn { FinishChime.play() }
+                    if isOn { Chime.finish.play() }
                 }
                 ChromeRowDivider()
                 ChromeRow(title: "Confirm before deleting threads") {
@@ -500,7 +500,7 @@ private struct GeneralSettingsPage: View {
                 }
                 // Switching it on plays the note once, so you hear what you are getting.
                 .onChange(of: settings.settleSound) { _, isOn in
-                    if isOn { SettleChime.play() }
+                    if isOn { Chime.settle.play() }
                 }
                 .disabled(settings.threadFinishAction != .settle)
                 .opacity(settings.threadFinishAction == .settle ? 1 : 0.5)

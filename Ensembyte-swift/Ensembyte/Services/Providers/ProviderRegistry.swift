@@ -364,8 +364,21 @@ final class ProviderRegistry {
         // report their models from a session of their own, and a list of the others left
         // them out, so a model OpenCode gained after launch (its catalog follows models.dev)
         // could not be found in Settings until the app was relaunched.
+        // The catalog loads spawn handshakes and CLIs, so they run through the same
+        // sliding window the probes use rather than all at once: an unbounded burst of
+        // node processes stalls the app just like the probes would.
+        let catalogs = ProviderKind.allCases.filter { status($0).isInstalled }
+        var next = 0
         await withTaskGroup(of: Void.self) { group in
-            for provider in ProviderKind.allCases where status(provider).isInstalled {
+            while next < catalogs.count, next < Self.probeWidth {
+                let provider = catalogs[next]
+                group.addTask { await self.loadCatalog(provider, force: true) }
+                next += 1
+            }
+            for await _ in group {
+                guard next < catalogs.count else { continue }
+                let provider = catalogs[next]
+                next += 1
                 group.addTask { await self.loadCatalog(provider, force: true) }
             }
         }

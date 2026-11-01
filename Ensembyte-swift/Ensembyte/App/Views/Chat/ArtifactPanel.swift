@@ -46,6 +46,9 @@ struct ArtifactPanel: View {
         .padding(.top, HydraPanel.stripHeight)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Artifacts"))
+        // Head panels mount a composer area without the changes refresh driver, so they refresh
+        // themselves; the per-revision memo makes a panel that reopens a no-op.
+        .task(id: runtime.diffRevision) { await runtime.refreshChangeStats() }
         .overlay(alignment: .top) {
             strip
         }

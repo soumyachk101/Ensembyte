@@ -2147,7 +2147,7 @@ private struct SidebarThreadRow: View, Equatable {
     /// motion. The row itself leaves on the list's removal fade (see `AnyTransition.sidebarRow`).
     private func settle() {
         guard !isSettling, !thread.isSettled else { return }
-        if model.settings.settleSound { SettleChime.play() }
+        if model.settings.settleSound { Chime.settle.play() }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { isSettling = true }
         withAnimation(Chrome.panelSlide) { model.settle(thread.id, sounds: false) }
     }

@@ -819,6 +819,7 @@ final class CodexSession: ProviderSession {
                 default: .pending
                 }
                 var item = TodoStep(text: text, status: status)
+                item.id = step["id"]?.string
                 item.activeForm = step["activeForm"]?.string ?? step["active_form"]?.string
                 item.error = step["error"]?.string ?? step["errorMessage"]?.string
                 item.duration = step["duration"]?.double

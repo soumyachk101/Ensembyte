@@ -20,7 +20,7 @@ struct TimelineItem: Codable, Identifiable, Hashable, Sendable {
         case reasoning(ReasoningBlock)
         case tool(ToolCall)
         case plan(ProposedPlan)
-        case todos([TodoStep])
+        case todos(TodoList)
         case artifact(Artifact)
         case notice(Notice)
         case turnEnd(TurnSummary)
@@ -235,12 +235,63 @@ struct TodoStep: Codable, Hashable, Sendable {
 
     var text: String
     var status: Status
+    /// The provider's own id for the step when its payload carries one: the row's stable
+    /// identity across in-place rewrites of the list.
+    var id: String? = nil
     /// What to say while the step is running, when the provider's payload carries it.
     var activeForm: String? = nil
     /// The provider's error for a failed step, when its payload carries one.
     var error: String? = nil
     /// How long the step took, when the provider's payload times it.
     var duration: TimeInterval? = nil
+
+    /// A stable key for each step of a list, in the list's order: the provider's own id
+    /// when its payload carried one, the step's words otherwise. A list rewritten in
+    /// place keeps the keys of its surviving steps, so rows keyed by these stay the same
+    /// view through the rewrite; only keys with no provider id — words that the agent
+    /// rewrites — move.
+    static func rowKeys(for steps: [TodoStep]) -> [String] {
+        // Two steps that share a key get one apart: a repeat of the same words is one
+        // item twice, and a ForEach with two identical ids drops a row.
+        var seen: [String: Int] = [:]
+        return steps.map { step in
+            let key = step.id.map { "id:\($0)" } ?? step.text
+            let n = seen[key, default: 0]
+            seen[key] = n + 1
+            return n == 0 ? key : "\(key) #\(n)"
+        }
+    }
+}
+
+/// The running turn's to-do list as the thread stores it: the items, when the last rewrite
+/// landed, and whether the turn settled them, so a stopped or failed turn never leaves a
+/// step frozen at `active`.
+struct TodoList: Codable, Equatable, Hashable, Sendable {
+    var revision: UInt64 = 0
+    var items: [TodoStep] = []
+    var settled: Bool = false
+
+    init() {}
+
+    init(items: [TodoStep]) {
+        self.items = items
+    }
+}
+
+extension TodoList {
+    /// A list stored by an earlier build is a bare array of steps: read it back as that
+    /// array, upgraded with a zero revision and unsettled, so an old thread's rows still
+    /// show the list they had rather than an empty one.
+    init(from decoder: Decoder) throws {
+        if let steps = try? decoder.singleValueContainer().decode([TodoStep].self) {
+            self = TodoList(items: steps)
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        revision = container.value(.revision, default: 0)
+        items = container.value(.items, default: [Lenient<TodoStep>]()).compactMap(\.value)
+        settled = container.value(.settled, default: false)
+    }
 }
 
 /// One file, document or code output of a turn's agent, shown as a card in the thread.

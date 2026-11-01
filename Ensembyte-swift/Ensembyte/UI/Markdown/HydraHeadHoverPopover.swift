@@ -63,14 +63,14 @@ private struct HydraHeadHoverCard: View {
             HydraGlyph(persona: persona, size: 28, isRunning: target.status == .running, status: target.status)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: persona.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.chat(.callout, weight: .semibold))
                     .foregroundStyle(persona.color)
                 Text(verbatim: target.task)
-                    .font(.system(size: 12))
+                    .font(.chat(.caption))
                     .foregroundStyle(Chrome.primaryText)
                     .lineLimit(3)
                 Text(verbatim: statusLine)
-                    .font(.system(size: 11))
+                    .font(.chat(.caption2))
                     .foregroundStyle(Chrome.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -191,7 +191,7 @@ private struct ActivityShimmer: ViewModifier {
             content
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
                 .overlay {
-                    TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: ScrollActivity.shared.isScrolling)) { context in
+                    TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: ScrollActivity.shared.isScrolling)) { context in
                         let centre = Self.bandCentre(at: context.date)
                         content
                             .foregroundStyle(Chrome.primaryText)

@@ -81,8 +81,10 @@ final class TokenLedger {
     }
 
     /// Where v1 kept live spend: one mixed-provider total per day, in the
-    /// preferences plist. Read once into `legacyDaily` and left on disk as it was.
-    private static let legacyLiveDefaultsKey = "swarmcode.tokenActivity.liveDaily"
+    /// preferences plist. Read once into `legacyDaily` and left on disk as it was. The
+    /// key uses the post-rename `ensembyte.` prefix with a read fallback to the legacy
+    /// `swarmcode.` name older builds persisted under (see `LiveSpendStateStore.load`),
+    /// so the rename never drops existing users' totals.
     /// A capture run keeps to its own suite, like the rest of the app's settings.
     private static let defaults: UserDefaults = CaptureRun.defaults ?? .standard
 
@@ -267,14 +269,22 @@ private struct CodexFileFingerprint: Sendable, Codable {
 /// few megabytes of fingerprints slow down every setting the app touches. They sit in
 /// their own JSON file in Application Support instead, beside the library.
 private enum CodexFingerprintStore {
-    /// Where earlier builds kept them. Read once, then cleared.
-    private static let legacyDefaultsKey = "swarmcode.tokenActivity.codexFiles"
+    /// Where earlier builds kept them. Read once, then cleared. The key uses the
+    /// post-rename `ensembyte.` prefix; older builds persisted the value under the legacy
+    /// `swarmcode.` name, which stays a read fallback so the rename never drops existing
+    /// users' fingerprints.
+    private static let legacyDefaultsKey = "ensembyte.tokenActivity.codexFiles"
+    private static let legacyDefaultsKeyOld = "swarmcode.tokenActivity.codexFiles"
 
     private static var fileURL: URL {
         Storage.root.appendingPathComponent("token-activity-codex-v3.json")
     }
 
     static func load() -> [String: CodexFileFingerprint] {
+        // Every tier below stays reachable: a disk from an older build can still hold the
+        // v1 file, the v2 file, or the legacy-plist key with no v3 written yet, so each
+        // migration is run once and then its source cleared. A later read finds the v3
+        // file and stops here, so nothing older is ever seen twice.
         // The first shape counted a resumed thread's history once per file it
         // was resumed in; the v2 file holds each file's own growth, so the
         // old one is not migrated.
@@ -302,10 +312,18 @@ private enum CodexFingerprintStore {
             save(rebuilt)
             return rebuilt
         }
-        guard let legacy = UserDefaults.standard.dictionary(forKey: legacyDefaultsKey) as? [String: [String: Any]] else {
-            return [:]
+        // Read the renamed key, falling back to the pre-rename `swarmcode.` name older
+        // builds persisted under, so the rename never drops existing users' data; clear
+        // both once read.
+        let legacy: [String: [String: Any]]?
+        if let current = UserDefaults.standard.dictionary(forKey: legacyDefaultsKey) as? [String: [String: Any]] {
+            legacy = current
+        } else {
+            legacy = UserDefaults.standard.dictionary(forKey: legacyDefaultsKeyOld) as? [String: [String: Any]]
         }
         UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: legacyDefaultsKeyOld)
+        guard let legacy else { return [:] }
         let migrated = legacy.reduce(into: [String: CodexFileFingerprint]()) { result, entry in
             if let fingerprint = CodexFileFingerprint(dict: entry.value, path: entry.key) { result[entry.key] = fingerprint }
         }
@@ -364,7 +382,13 @@ private enum LiveSpendStateStore {
         } else {
             state = LiveSpendState()
             // The v1 per-day totals, read once. They stay on disk as they were.
-            state.legacyDaily = defaults.dictionary(forKey: "swarmcode.tokenActivity.liveDaily") as? [String: Int] ?? [:]
+            // Read the renamed `ensembyte.` key, falling back to the pre-rename
+            // `swarmcode.` key older builds persisted under, so the rename never
+            // drops existing users' totals.
+            state.legacyDaily =
+                (defaults.dictionary(forKey: "ensembyte.tokenActivity.liveDaily") as? [String: Int])
+                    ?? (defaults.dictionary(forKey: "swarmcode.tokenActivity.liveDaily") as? [String: Int])
+                    ?? [:]
         }
         // The process that recorded `liveCodex` is gone: its Codex spend is
         // settled now, and the rollouts holding it are files on disk that the

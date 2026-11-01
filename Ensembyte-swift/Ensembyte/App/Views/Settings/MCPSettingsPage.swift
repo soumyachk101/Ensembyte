@@ -65,7 +65,7 @@ struct MCPSettingsPage: View {
             guard !reduceMotion else { return }
             for (id, state) in current where state.isConnected && !(previous[id]?.isConnected ?? false) {
                 celebrating.insert(id)
-                SettleChime.play()
+                Chime.settle.play()
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(900))
                     celebrating.remove(id)

@@ -69,7 +69,7 @@ final class MCPStore {
             return stored
         }
         if entry.id == "github" && field.key == "token" {
-            if let token = GitHubAuth.resolveToken(), !token.isEmpty { return token }
+            if let token = GitHubAuth.cachedToken(), !token.isEmpty { return token }
         }
         return field.defaultValue ?? ""
     }
@@ -302,7 +302,7 @@ final class MCPStore {
             }
         }
         if entry.id == "github" && (values["token"] == nil || values["token"]?.isEmpty == true) {
-            if let token = GitHubAuth.resolveToken(), !token.isEmpty {
+            if let token = GitHubAuth.cachedToken(), !token.isEmpty {
                 values["token"] = token
             }
         }

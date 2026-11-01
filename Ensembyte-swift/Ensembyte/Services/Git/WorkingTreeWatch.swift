@@ -116,8 +116,8 @@ final class WorkingTreeWatch: Sendable {
     private let rootPrefixBytes: Int
     private let cookiePrefixCharacters: Int
     /// The index the captures build on, kept between them so a capture walks only what changed.
-    private let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("swarm-code-index-\(UUID().uuidString)")
-    private let queue = DispatchQueue(label: "swarm.working-tree-watch", qos: .utility)
+    private let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("ensembyte-code-index-\(UUID().uuidString)")
+    private let queue = DispatchQueue(label: "ensembyte.working-tree-watch", qos: .utility)
     private let state = Mutex(State())
 
     /// Events name the real path, /var as /private/var. Foundation's symlink resolution
@@ -132,7 +132,7 @@ final class WorkingTreeWatch: Sendable {
         let gitRoot = Self.real(gitDirectory)
         rootPrefix = root + "/"
         gitPrefix = gitRoot + "/"
-        cookiePrefix = gitRoot + "/swarm-code-sync-"
+        cookiePrefix = gitRoot + "/ensembyte-code-sync-"
         rootPrefixBytes = rootPrefix.utf8.count
         cookiePrefixCharacters = cookiePrefix.count
         var context = FSEventStreamContext(

@@ -539,12 +539,19 @@ final class CommandCodeSession: ProviderSession {
     private static func todos(from input: JSONValue) -> [TodoStep] {
         (input["todos"]?.array ?? []).compactMap { todo -> TodoStep? in
             guard let text = todo["content"]?.string ?? todo["text"]?.string ?? todo["title"]?.string else { return nil }
-            let status: TodoStep.Status = switch todo["status"]?.string {
-            case "completed", "done": .done
-            case "in_progress", "active": .active
+            // Lenient, matching the ACP parser's table: a provider that phrases a step's
+            // words differently ("in-progress", "working", "success") must not silently
+            // demote an item to pending.
+            let status: TodoStep.Status = switch (todo["status"]?.string ?? "")
+                .lowercased()
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_") {
+            case "in_progress", "inprogress", "incomplete", "active", "working", "started": .active
+            case "completed", "complete", "done", "finished", "success": .done
             default: .pending
             }
             var step = TodoStep(text: text, status: status)
+            step.id = todo["id"]?.string
             step.activeForm = todo["activeForm"]?.string ?? todo["active_form"]?.string ?? todo["description"]?.string
             step.error = todo["error"]?.string
             step.duration = todo["duration"]?.double

@@ -695,12 +695,19 @@ final class ACPSession: ProviderSession {
         (value?.array ?? []).compactMap { item -> TodoStep? in
             guard let text = item["content"]?.string ?? item["text"]?.string ?? item["step"]?.string ?? item["title"]?.string,
                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            let status: TodoStep.Status = switch item["status"]?.string {
-            case "completed", "complete", "done": .done
-            case "in_progress", "inProgress", "in-progress", "active": .active
+            // Case-insensitive and tolerant of the variants that slip past the provider's
+            // own vocabulary ("in-progress", "incomplete"): a miss here would drop the
+            // step, so anything unknown lands pending rather than being lost.
+            let status: TodoStep.Status = switch (item["status"]?.string ?? "")
+                .lowercased()
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_") {
+            case "in_progress", "inprogress", "incomplete", "active", "working", "started": .active
+            case "completed", "complete", "done", "finished", "success": .done
             default: .pending
             }
             var step = TodoStep(text: text, status: status)
+            step.id = item["id"]?.string
             step.activeForm = item["activeForm"]?.string ?? item["active_form"]?.string ?? item["description"]?.string
             step.error = item["error"]?.string ?? item["errorMessage"]?.string
             step.duration = item["duration"]?.double

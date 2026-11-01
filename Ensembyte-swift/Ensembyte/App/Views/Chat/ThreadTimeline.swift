@@ -33,7 +33,7 @@ struct ThreadTimeline: View, Equatable {
             && lhs.projectName == rhs.projectName
             && lhs.workingDirectory == rhs.workingDirectory
             && lhs.supportsRewind == rhs.supportsRewind
-            && lhs.columnHeight == rhs.columnHeight
+            && ((lhs.columnHeight / 8).rounded() == (rhs.columnHeight / 8).rounded())
             && lhs.showsMinimap == rhs.showsMinimap
             && lhs.showsNewThreadPrompt == rhs.showsNewThreadPrompt
     }
@@ -152,7 +152,15 @@ struct ThreadTimeline: View, Equatable {
         // prompt for a new one would flash for the frames before it lands. Its newest
         // turns land first and show while the older ones are read.
         if runtime.isLoadingHistory && blocks.isEmpty {
-            Color.clear
+            // History is still being read off the main thread: its newest turns land first and
+            // show while the older ones are read, so a bare empty pane would read as "no thread".
+            VStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text("Loading history")
+                    .font(.chat(.caption))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if blocks.isEmpty && !runtime.isRunning {
             // A forwarded thread starts empty too, but it is not a new one: it explains
             // where it came from before the reader picks anything.
@@ -431,7 +439,7 @@ struct ThreadTimeline: View, Equatable {
     /// small one still fades in.
     private static func transition(for block: DisplayBlock) -> AnyTransition {
         if case .turn(_, _, _, .some(_), _) = block { return .identity }
-        if case .group(.work(_, let entries, _), _, _) = block, entries.count > softAppearLimit { return .identity }
+        if case .group(.work(_, let entries, _, _), _, _) = block, entries.count > softAppearLimit { return .identity }
         return rowTransition
     }
 
@@ -1899,21 +1907,68 @@ private struct ScrollMetrics: Equatable {
     }
 }
 
+/// What a run of entries is, collapsed to one value for the checks that would otherwise
+/// walk the arrays: the row and group `==`s and the summary rescan compare the value,
+/// so a rebuilt or appended run costs a comparison, not a scan. The value is derived
+/// from the entries' pointers only, never their content, so a row changing in place
+/// while streaming leaves it untouched. The fold is over pointers in order; with the
+/// count and last pointer kept alongside, it stands in for the array's identity.
+struct EntrySignature: Hashable {
+    var count: Int
+    var last: ObjectIdentifier?
+    var fold: UInt64
+
+    static func of(_ entries: [TimelineEntry]) -> EntrySignature {
+        var fold: UInt64 = 0xcbf29ce484222325
+        var last: ObjectIdentifier?
+        for entry in entries {
+            let pointer = ObjectIdentifier(entry)
+            fold = (fold ^ UInt64(bitPattern: Int64(pointer.hashValue))) &* 0x100000001b3
+            last = pointer
+        }
+        return .init(count: entries.count, last: last, fold: fold)
+    }
+
+    static func ofSingle(_ entry: TimelineEntry) -> EntrySignature {
+        .init(
+            count: 1,
+            last: ObjectIdentifier(entry),
+            fold: (0xcbf29ce484222325 ^ UInt64(bitPattern: Int64(ObjectIdentifier(entry).hashValue))) &* 0x100000001b3
+        )
+    }
+}
+
 enum TimelineGroup: Identifiable, Equatable {
     case single(TimelineEntry)
     /// A run of tool entries. `startsCollapsed` is true when reply text follows
     /// the run, so past work renders as one tappable summary line above the answer.
-    case work(id: String, entries: [TimelineEntry], startsCollapsed: Bool)
+    case work(id: String, entries: [TimelineEntry], startsCollapsed: Bool, signature: EntrySignature)
     /// The heads a turn sent out (its `.agent` tool calls), in order. Always the last
     /// group of a run and never part of a work run: the heads stay in view as a list of
     /// their own below the turn's steps and replies, whether or not the steps are folded.
-    case heads(id: String, entries: [TimelineEntry])
+    case heads(id: String, entries: [TimelineEntry], signature: EntrySignature)
 
     var id: String {
         switch self {
         case .single(let entry): entry.id
-        case .work(let id, _, _): id
-        case .heads(let id, _): id
+        case .work(let id, _, _, _): id
+        case .heads(let id, _, _): id
+        }
+    }
+
+    /// The group checks its entries' shared signature, not the arrays: a check that
+    /// walked the arrays re-paid the build's work, on every append of a running turn
+    /// and every row diff of the stack.
+    nonisolated static func == (lhs: TimelineGroup, rhs: TimelineGroup) -> Bool {
+        switch (lhs, rhs) {
+        case (.single(let l), .single(let r)):
+            return l === r
+        case (.work(let li, _, let lc, let L), .work(let ri, _, let rc, let R)):
+            return li == ri && lc == rc && L == R
+        case (.heads(let li, _, let L), .heads(let ri, _, let R)):
+            return li == ri && L == R
+        default:
+            return false
         }
     }
 
@@ -1928,12 +1983,25 @@ enum TimelineGroup: Identifiable, Equatable {
     /// by a tool step of the same turn. They read as steps, inside the work group, while a
     /// final reply, text that sends out heads and text before a head stay rows of their own.
     /// Only a reply with a step after it is read, and that one has finished streaming.
+    /// One linear pass: the next non-reasoning entry after each index is found in a single
+    /// backward scan, so the repeated builds of `TurnGroupCache` no longer pay a tail scan
+    /// per reply.
     @MainActor
     static func narration(in entries: [TimelineEntry]) -> Set<ObjectIdentifier> {
         var narration: Set<ObjectIdentifier> = []
+        guard !entries.isEmpty else { return narration }
+        // For each index, the index of the nearest non-reasoning entry after it; one pass
+        // remembering the nearest one found so far.
+        var nextNonReasoning: [Int?] = .init(repeating: nil, count: entries.count)
+        var next: Int? = nil
+        for index in (0..<entries.count).reversed() {
+            nextNonReasoning[index] = next
+            if entries[index].kind != .reasoning { next = index }
+        }
         for (index, entry) in entries.enumerated() where entry.kind == .assistant {
-            guard let next = entries[(index + 1)...].first(where: { $0.kind != .reasoning }),
-                  next.kind == .tool, next.turnID == entry.turnID, !isHead(next),
+            guard let nextIndex = nextNonReasoning[index],
+                  entries[nextIndex].kind == .tool, entries[nextIndex].turnID == entry.turnID,
+                  !isHead(entries[nextIndex]),
                   case .assistant(let message) = entry.item.content,
                   !HydraPrompts.hasDelegationBlock(in: message.text) else { continue }
             narration.insert(ObjectIdentifier(entry))
@@ -1962,7 +2030,7 @@ enum TimelineGroup: Identifiable, Equatable {
             guard let first = work.first else { return }
             let workEnd = workStart + work.count - 1
             let collapsed = replyIndices.contains { $0 > workEnd }
-            groups.append(.work(id: "work-\(first.id)", entries: work, startsCollapsed: collapsed))
+            groups.append(.work(id: "work-\(first.id)", entries: work, startsCollapsed: collapsed, signature: EntrySignature.of(work)))
             work.removeAll()
         }
 
@@ -1994,7 +2062,7 @@ enum TimelineGroup: Identifiable, Equatable {
         }
         flushWork()
         if let first = heads.first {
-            groups.append(.heads(id: "heads-\(first.id)", entries: heads))
+            groups.append(.heads(id: "heads-\(first.id)", entries: heads, signature: EntrySignature.of(heads)))
         }
         return groups
     }
@@ -2509,12 +2577,12 @@ private struct TurnRunningBlock: View {
             heads = groups.removeLast()
         }
         // The group the turn is working in: the last row, while the turn runs.
-        let liveGroupID: String? = if showsWorking, case .work(let id, _, _)? = groups.last { id } else { nil }
+        let liveGroupID: String? = if showsWorking, case .work(let id, _, _, _)? = groups.last { id } else { nil }
         // A plain stack: a lazy stack inside a lazy row resolved its own visibility on every
         // scrolled frame for nothing, the row is on screen whole or not at all.
         return VStack(alignment: .leading, spacing: TimelineMetrics.rowSpacing) {
             ForEach(groups) { group in
-                if case .work(let id, let work, _) = group {
+                if case .work(let id, let work, _, _) = group {
                     ActivityGroup(id: id, entries: work, runtime: runtime, workingDirectory: context.workingDirectory, isLive: id == liveGroupID)
                         .equatable()
                         .transition(liveAppearance ? ThreadTimeline.rowTransition : .identity)
@@ -2591,7 +2659,7 @@ struct TimelineGroupView: View {
             case .reasoning: EmptyView()
             case .tool: ActivityGroup(id: "work-\(entry.id)", entries: [entry], runtime: runtime, workingDirectory: context.workingDirectory)
             case .plan: PlanCard(entry: entry, runtime: runtime)
-            case .todos: TodoListRow(entry: entry)
+            case .todos: TodoListRow(entry: entry, runtime: runtime)
             case .notice: NoticeRow(entry: entry)
             case .artifact:
                 if case .artifact(let artifact) = entry.item.content {
@@ -2602,9 +2670,9 @@ struct TimelineGroupView: View {
                     TurnEndRow(summary: summary, hasReply: hasReply)
                 }
             }
-        case .work(let id, let entries, _):
+        case .work(let id, let entries, _, _):
             ActivityGroup(id: id, entries: entries, runtime: runtime, workingDirectory: context.workingDirectory)
-        case .heads(_, let entries):
+        case .heads(_, let entries, _):
             HydraHeadsList(entries: entries, runtime: runtime, workingDirectory: context.workingDirectory)
         }
     }

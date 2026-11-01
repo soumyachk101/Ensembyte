@@ -115,6 +115,9 @@ enum Chrome {
             : .spring(glideSpring)
     }
 
+    // Deliberately theme-invariant category tints: they hold steady when the accent is
+    // retinted by a named theme (Dracula, Nord, …), so a category stays recognizable
+    // across themes. Do not route them through the theme.
     static let gray = Color(red: 0.556, green: 0.557, blue: 0.576)
     static let blue = Color(red: 0.040, green: 0.478, blue: 1.000)
     static let orange = Color(red: 1.000, green: 0.584, blue: 0.000)

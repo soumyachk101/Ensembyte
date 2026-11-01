@@ -44,6 +44,7 @@ public enum GitHubAuth {
     nonisolated(unsafe) private static var cachedCLIToken: String?
     nonisolated(unsafe) private static var cachedCLISource: CLISource?
     nonisolated(unsafe) private static var lastCLICheck: Date?
+    nonisolated(unsafe) private static var warmInFlight = false
     private static let cacheTTL: TimeInterval = 300
 
     public static func invalidateCache() {
@@ -54,13 +55,41 @@ public enum GitHubAuth {
         cacheLock.unlock()
     }
 
+    /// Kicks off the cold CLI resolve once, off the main thread. Repeated calls while a
+    /// pass is running (or the cache is still fresh) are no-ops.
     public static func warmCache() {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if warmInFlight { return }
+        if let last = lastCLICheck, Date().timeIntervalSince(last) < cacheTTL { return }
+        warmInFlight = true
         Task.detached(priority: .utility) {
             _ = resolveToken()
+            cacheLock.withLock { warmInFlight = false }
         }
     }
 
-    /// Resolves token: Custom token > Environment variables > gh CLI > git credential fill
+    /// Cache-only token read, safe on the main thread: it never waits for a cold CLI
+    /// resolve. Custom and environment tokens are fast direct reads; the CLI-backed
+    /// answer is whatever a previous warm pass stored, and when nothing is cached it
+    /// kicks one off in the background and returns nil.
+    public static func cachedToken() -> String? {
+        if let custom = customToken(), !custom.isEmpty {
+            return custom
+        }
+        if let env = ProcessInfo.processInfo.environment["GITHUB_TOKEN"] ?? ProcessInfo.processInfo.environment["GH_TOKEN"], !env.isEmpty {
+            return env
+        }
+        cacheLock.lock()
+        let token = cachedCLIToken
+        cacheLock.unlock()
+        if token == nil { warmCache() }
+        return token
+    }
+
+    /// Resolves token: Custom token > Environment variables > gh CLI > git credential fill.
+    /// The CLI steps run synchronous processes and take up to a few seconds: call this
+    /// off the main thread, or use `cachedToken` where main-thread safety matters.
     public static func resolveToken() -> String? {
         if let custom = customToken(), !custom.isEmpty {
             return custom
@@ -100,6 +129,8 @@ public enum GitHubAuth {
     }
 
     /// Short label indicating where the active token came from (for Settings display).
+    /// Main-thread safe: it reads only what a warm pass has already resolved, and asks
+    /// for one in the background when the cache is still empty.
     public static func tokenSourceDescription() -> String? {
         if let custom = customToken(), !custom.isEmpty {
             return "Custom token (Keychain)"
@@ -107,7 +138,7 @@ public enum GitHubAuth {
         if let env = ProcessInfo.processInfo.environment["GITHUB_TOKEN"] ?? ProcessInfo.processInfo.environment["GH_TOKEN"], !env.isEmpty {
             return "Environment variable"
         }
-        guard let token = resolveToken(), !token.isEmpty else { return nil }
+        guard let token = cachedToken(), !token.isEmpty else { return nil }
         cacheLock.lock()
         let source = cachedCLISource
         cacheLock.unlock()

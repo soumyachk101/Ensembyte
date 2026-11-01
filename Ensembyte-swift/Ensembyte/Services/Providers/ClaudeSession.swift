@@ -107,11 +107,16 @@ final class ClaudeSession: ProviderSession {
             hydraPolicy = HydraPrompts.fallbackPolicy(hydra)
             arguments += ["--disallowedTools", "Agent", "Task"]
         }
+        // The work plan posts first, so the to-do panel reads the plan at the start of the
+        // task rather than catching up to it: when a task has more than a step or two, the
+        // whole plan goes out on its first TodoWrite call before the first edit, and the
+        // list stays current — one step in progress, its steps checked off as they land.
+        let planFirst = "Before any reply that includes a hydra delegation block, call TodoWrite with the full plan first (one entry per head + a final integration step), then mark each head's entry active as it goes out and done when it reports. Keep exactly one step in progress."
         // Exactly one combined system prompt segment for every session, Hydra or not. The
         // off notice goes out too, so a resumed thread cannot keep earlier guidance alive.
         arguments += [
             "--append-system-prompt",
-            [hydraPolicy, AntiSlopPolicy.instructions(enabled: configuration.antiSlopEnabled)]
+            [hydraPolicy, AntiSlopPolicy.instructions(enabled: configuration.antiSlopEnabled), planFirst]
                 .compactMap { $0 }
                 .joined(separator: "\n\n"),
         ]

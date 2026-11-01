@@ -49,22 +49,14 @@ struct AgentActivityOverview: View {
     }
 
     private var activeThreadGroups: [HydraThreadGroup] {
-        var seen = Set<UUID>()
-        var groups: [HydraThreadGroup] = []
-
-        for thread in model.threads {
-            if thread.isHydraHead { continue }
-            let heads = model.hydraTeam(of: thread.id)
-                .filter { $0.hydra != nil }
-            guard !heads.isEmpty else { continue }
-            if seen.contains(thread.id) { continue }
-            seen.insert(thread.id)
-
-            let headInfos = heads.compactMap { head -> HydraHeadDisplayInfo? in
-                guard let info = head.hydra else { return nil }
-                let liveInfo = HydraLiveInfo.shown(info, model.existingRuntime(for: head.id))
+        // The groups are the library's, revision-cached on the model: one head's write
+        // costs that head's cell, not a rescan of every thread and team.
+        model.hydraActivityGroups().compactMap { group in
+            let heads = group.headIDs.compactMap { headID -> HydraHeadDisplayInfo? in
+                guard let thread = model.thread(headID), let info = thread.hydra else { return nil }
+                let liveInfo = HydraLiveInfo.shown(info, model.existingRuntime(for: headID))
                 return HydraHeadDisplayInfo(
-                    id: head.id,
+                    id: headID,
                     persona: liveInfo.persona,
                     displayName: liveInfo.displayName,
                     task: liveInfo.task,
@@ -77,23 +69,13 @@ struct AgentActivityOverview: View {
                     kind: liveInfo.kind
                 )
             }
-
-            guard !headInfos.isEmpty else { continue }
-
-            groups.append(HydraThreadGroup(
-                threadID: thread.id,
-                threadTitle: thread.title.isEmpty ? "Untitled thread" : thread.title,
-                heads: headInfos
-            ))
+            guard !heads.isEmpty else { return nil }
+            return HydraThreadGroup(
+                threadID: group.threadID,
+                threadTitle: group.threadTitle,
+                heads: heads
+            )
         }
-
-        groups.sort { a, b in
-            let aRunning = a.heads.contains { $0.status == .running }
-            let bRunning = b.heads.contains { $0.status == .running }
-            if aRunning != bRunning { return aRunning && !bRunning }
-            return a.threadTitle.localizedStandardCompare(b.threadTitle) == .orderedAscending
-        }
-        return groups
     }
 }
 
@@ -121,12 +103,6 @@ private struct HydraHeadDisplayInfo: Identifiable, Equatable {
 private struct AgentHeadRow: View {
     let info: HydraHeadDisplayInfo
 
-    private var isRunning: Bool {
-        info.status == .running
-    }
-
-    @State private var elapsedTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
     var body: some View {
         let isRunning = info.status == .running
         HStack(alignment: .top, spacing: 12) {
@@ -146,7 +122,15 @@ private struct AgentHeadRow: View {
 
                     Spacer(minLength: 4)
 
-                    elapsedLabel
+                    // A head at work ticks its own label once a second off the timeline; a
+                    // finished one stays static.
+                    if isRunning {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            elapsedLabel(now: context.date)
+                        }
+                    } else {
+                        elapsedLabel(now: .now)
+                    }
                 }
 
                 if !info.task.isEmpty {
@@ -183,10 +167,6 @@ private struct AgentHeadRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .onReceive(elapsedTick) { _ in }
-        .onDisappear {
-            elapsedTick.upstream.connect().cancel()
-        }
     }
 
     @ViewBuilder
@@ -208,9 +188,11 @@ private struct AgentHeadRow: View {
             )
     }
 
-    private var elapsedLabel: some View {
-        let seconds = isRunning
-            ? Int(Date.now.timeIntervalSince(info.startedAt))
+    /// The head's lifetime: a running label walks forward once a second off the
+    /// timeline's date; a finished one is static, measured to its `finishedAt`.
+    private func elapsedLabel(now: Date) -> some View {
+        let seconds = info.status == .running
+            ? Int(now.timeIntervalSince(info.startedAt))
             : (info.finishedAt.map { Int($0.timeIntervalSince(info.startedAt)) } ?? 0)
         let text: String = {
             guard seconds > 0 else { return "" }
@@ -345,6 +327,9 @@ struct RootView: View {
     /// The width the browser section held when its edge was grabbed, the anchor every
     /// drag translation measures against.
     @State private var browserDragStart: CGFloat = 0
+    /// The width the drag is holding right now: written per event, committed to settings
+    /// only on release, so a drag costs one defaults write, not one per frame.
+    @State private var liveBrowserWidth: CGFloat?
     /// The voice stage's arrival, 0 hidden to 1 covering the chat, and whether it is drawn.
     @State private var voiceReveal: CGFloat = 0
     @State private var voiceStageShown = false
@@ -435,7 +420,7 @@ struct RootView: View {
             // never under a settings page.
             if browserSectionOn && !settingsShown {
                 BrowserSectionView()
-                    .frame(width: model.settings.browserSectionWidth)
+                    .frame(width: liveBrowserWidth ?? model.settings.browserSectionWidth)
                     .frame(maxHeight: .infinity)
                     .padding(.top, Chrome.sheetInset)
                     .padding(.bottom, Chrome.sheetInset)
@@ -446,10 +431,15 @@ struct RootView: View {
                             isActive: true,
                             onBegin: { browserDragStart = model.settings.browserSectionWidth },
                             onChange: { translation in
-                                model.settings.browserSectionWidth = min(
-                                    960, max(280, browserDragStart - translation))
+                                liveBrowserWidth = min(960, max(280, browserDragStart - translation))
                             },
-                            onEnd: { browserDragStart = 0 }
+                            onEnd: {
+                                if let live = liveBrowserWidth {
+                                    model.settings.browserSectionWidth = live
+                                }
+                                liveBrowserWidth = nil
+                                browserDragStart = 0
+                            }
                         )
                         .frame(width: SidebarResizeHandle.hitWidth)
                         .padding(.top, Chrome.trafficLightTop + Chrome.trafficLightDiameter)
@@ -458,6 +448,13 @@ struct RootView: View {
             }
         }
         .animation(Chrome.panelSlide, value: browserSectionOn)
+        // A hidden section's web view stops loading (its tabs are kept) and resumes where
+        // the user left it on the way back; a thread switch moves with this the same way.
+        .onChange(of: browserSectionOn) { _, on in
+            if let thread = model.selectedThreadID {
+                if on { model.browser.resume(in: thread) } else { model.browser.pause(in: thread) }
+            }
+        }
         // While the sidebar is hidden, dragging the window's leading edge pulls it back out.
         .overlay(alignment: .leading) {
             SidebarResizeHandle(
@@ -542,8 +539,19 @@ struct RootView: View {
         var lastProject: Project?
         for folder in folders { lastProject = model.addProject(at: folder) }
         if let lastProject { model.newThread(in: lastProject) }
-        if !files.isEmpty, let threadID = model.selectedThreadID {
-            Storage.attach(files.map(AttachmentSource.file), to: Bindable(model.runtime(for: threadID)).draft.attachments)
+        if !files.isEmpty {
+            // With no thread selected, a dropped file would vanish. Open a thread the way a
+            // dropped folder does — in the current project — and attach to it.
+            let threadID: UUID? = model.selectedThreadID ?? {
+                guard model.newThread(in: model.currentProject) != nil else {
+                    model.showToast("No thread open to attach the files to — open a project first")
+                    return nil
+                }
+                return model.selectedThreadID
+            }()
+            if let threadID {
+                Storage.attach(files.map(AttachmentSource.file), to: Bindable(model.runtime(for: threadID)).draft.attachments)
+            }
         }
         return !folders.isEmpty || !files.isEmpty
     }

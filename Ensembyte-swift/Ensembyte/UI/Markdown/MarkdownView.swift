@@ -62,7 +62,6 @@ struct MarkdownView: View, Equatable {
     /// through the thread will ask for again.
     var isStreaming = false
     @Environment(\.markdownProseRuns) private var proseRuns
-    @State private var sawStreaming = false
     @State private var streamingCoordinator = StreamingParseCoordinator()
 
     /// Equal text renders equally, so finished replies are skipped entirely while a
@@ -117,7 +116,7 @@ struct MarkdownView: View, Equatable {
         let blocks = parse.blocks
         let stable = parse.stable
         let last = blocks.count - 1
-        if !isStreaming && !sawStreaming && proseRuns {
+        if !isStreaming && proseRuns {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(Self.segments(blocks).enumerated()), id: \.offset) { _, segment in
                     switch segment {
@@ -148,8 +147,6 @@ struct MarkdownView: View, Equatable {
             // snapping the moment the next block starts.
             .environment(\.markdownVeiled, isStreaming)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .onAppear { if isStreaming { sawStreaming = true } }
-            .onChange(of: isStreaming) { _, streaming in if streaming { sawStreaming = true } }
         }
     }
 
@@ -164,6 +161,10 @@ struct MarkdownView: View, Equatable {
     /// four slots, twenty heads evicted each other's parse on every flush and every
     /// render parsed its reply from the start again, on the main thread.
     nonisolated fileprivate static let streamingSlots = 48
+    /// A trailing code dump collapses after this many lines (see `CodeBlock`), so a streaming
+    /// tail can never be meaningfully longer than one of those; bounding the re-parse keeps
+    /// the collapse behaviour and the parse cost consistent.
+    fileprivate static let streamingLimit = 120
 
     /// The parse of a streaming text together with how many of its leading blocks are
     /// final: the parser decides each line from that line and the next, so a block that
@@ -173,14 +174,36 @@ struct MarkdownView: View, Equatable {
     /// every earlier block of a long reply.
     @MainActor
     static func streamingParse(for text: String) -> (blocks: [MarkdownBlock], stable: Int) {
-        if let parse = streamingParses.last(where: { $0.text.utf8.count == text.utf8.count && $0.text == text }) {
-            return (parse.parse.blocks, parse.parse.stable)
+        // The full-text compare (the exact-match pass) touches only the slots that match
+        // in size, indexed by length, instead of all 48 on every flush. The extends scan
+        // below is the cheap one: it probes 128 bytes at the head and tail of the texts.
+        let candidates = streamingParseIndex[text.utf8.count] ?? []
+        if let hit = candidates.last(where: { streamingParses[$0].text == text }) {
+            return (streamingParses[hit].parse.blocks, streamingParses[hit].parse.stable)
         }
         let slot = streamingParses.lastIndex { extends($0.text, to: text) }
         let parsed = MarkdownParser.parse(text, extending: slot.map { streamingParses[$0] })
-        if let slot { streamingParses.remove(at: slot) } else if streamingParses.count == streamingSlots { streamingParses.removeFirst() }
+        if let slot {
+            streamingParses.remove(at: slot)
+        } else if streamingParses.count == streamingSlots {
+            streamingParses.removeFirst()
+        }
         streamingParses.append((text, parsed))
+        rebuildStreamingParseIndex()
         return (parsed.blocks, parsed.stable)
+    }
+
+    /// `streamingParses`' slots grouped by their text's length, in slot order: the
+    /// exact-match pass of `streamingParse` compares full text only where the lengths
+    /// already match. Slots move when one is removed, so the group is rebuilt, not
+    /// patched, when the array mutates.
+    @MainActor private static var streamingParseIndex: [Int: [Int]] = [:]
+
+    @MainActor
+    private static func rebuildStreamingParseIndex() {
+        streamingParseIndex = streamingParses.indices.reduce(into: [:]) { index, slot in
+            index[streamingParses[slot].text.utf8.count, default: []].append(slot)
+        }
     }
 
     @MainActor
@@ -232,12 +255,14 @@ struct MarkdownView: View, Equatable {
         blocks.reduce(0) { $0 + approximateSourceLength($1) + 4 }
     }
 
+    /// Bounding the streaming tail re-parse at `streamingLimit` code lines keeps it
+    /// consistent with the CodeBlock collapse.
     private static func approximateSourceLength(_ block: MarkdownBlock) -> Int {
         switch block {
         case .paragraph(let text), .heading(_, let text):
             return text.count + 2
         case .code(_, let code):
-            return code.count + 8
+            return min(code.count + 8, Self.streamingLimit)
         case .quote(let inner):
             return approximateSourceLength(inner[...]) + 2
         case .table(let header, let rows):
@@ -360,7 +385,10 @@ struct MarkdownBlockView: View, Equatable {
             // Only the AppKit paragraph can say what is under the pointer, so a finished
             // paragraph naming a head takes that path; while streaming the SwiftUI path
             // keeps its veil and still opens the chat on click.
-            if RichLink.containsLinks(in: text, streaming: streaming) {
+            // One pretty build answers both questions: the link check and the asset key
+            // come out of the same runs `linkProfile` walks.
+            let profile = RichLink.linkProfile(for: text, streaming: streaming)
+            if profile.hasLinks {
                 InlineText(text, hasLinks: true)
             } else if !streaming, listDepth == 0, mentionsTarget(in: text) {
                 InlineText(text, hasLinks: true)
@@ -437,24 +465,12 @@ struct MarkdownBlockView: View, Equatable {
     private static func mentionGlyphOffset(size: CGFloat) -> CGFloat { -(size * 0.2) }
 
     /// The head's dragon as a template image small enough to sit in a Text run.
-    /// Redrawn once per (asset, size), then kept; tinted like the name.
+    /// Drawn once per (asset, size) through the shared glyph cache, then kept;
+    /// tinted like the name.
     @MainActor
     static func mentionGlyph(_ persona: HydraPersona, size: CGFloat) -> Image {
-        let key = persona.asset + "@\(size)"
-        if let cached = glyphCache[key] { return cached }
-        // Drawn on demand rather than into fixed pixels, so it stays crisp on any display.
-        let source = NSImage(named: persona.asset)
-        let out = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            source?.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-            return true
-        }
-        out.isTemplate = true
-        let image = Image(nsImage: out).renderingMode(.template)
-        glyphCache[key] = image
-        return image
+        Image(nsImage: GlyphCache.template(named: persona.asset, size: size)).renderingMode(.template)
     }
-
-    @MainActor private static var glyphCache: [String: Image] = [:]
 
     /// Every head name mentioned anywhere in the paragraph, as prose/fixed segments so
     /// each renders as glyph + coloured bold name inline in one flowing Text. Matches are
@@ -639,40 +655,36 @@ enum RichLink {
         return result
     }
 
+    /// The paragraph's link work off one build of its pretty runs: whether any run links,
+    /// the favicon hosts, and the video ids, first-seen order, each once. A row that asks
+    /// all of it makes one parse and one pass, not one per question.
     @MainActor
-    static func linkHosts(for source: String, streaming: Bool = false) -> [String] {
+    static func linkProfile(for source: String, streaming: Bool = false) -> (hasLinks: Bool, key: String, hosts: [String], videos: [String]) {
         let pretty = prettyAttributed(source, streaming: streaming)
         var hosts: [String] = []
-        var seen = Set<String>()
+        var videos: [String] = []
+        var seenHosts = Set<String>()
+        var seenVideos = Set<String>()
+        var hasLinks = false
         for run in pretty.runs {
-            if let host = run.link?.host?.lowercased(), !host.isEmpty, seen.insert(host).inserted {
+            guard let link = run.link else { continue }
+            hasLinks = true
+            if let host = link.host?.lowercased(), !host.isEmpty, seenHosts.insert(host).inserted {
                 hosts.append(host)
             }
+            if let id = LinkTitles.videoID(for: link), seenVideos.insert(id).inserted {
+                videos.append(id)
+            }
         }
-        return hosts
-    }
-
-    /// The video ids a paragraph's links carry, first-seen order, each once.
-    @MainActor
-    static func videoIDs(for source: String, streaming: Bool = false) -> [String] {
-        let pretty = prettyAttributed(source, streaming: streaming)
-        var ids: [String] = []
-        var seen = Set<String>()
-        for run in pretty.runs {
-            guard let link = run.link, let id = LinkTitles.videoID(for: link), seen.insert(id).inserted else { continue }
-            ids.append(id)
-        }
-        return ids
+        let key = hosts.isEmpty && videos.isEmpty ? "" : hosts.joined(separator: ",") + "|" + videos.joined(separator: ",")
+        return (hasLinks, key, hosts, videos)
     }
 
     /// What keys the paragraph's link work: hosts and video ids together, empty when
     /// there is neither, so a caller's `isEmpty` test still means something.
     @MainActor
     static func linkAssetKey(for source: String, streaming: Bool = false) -> String {
-        let hosts = linkHosts(for: source, streaming: streaming)
-        let videos = videoIDs(for: source, streaming: streaming)
-        guard !(hosts.isEmpty && videos.isEmpty) else { return "" }
-        return hosts.joined(separator: ",") + "|" + videos.joined(separator: ",")
+        linkProfile(for: source, streaming: streaming).key
     }
 
     /// Drops a paragraph's warmed pretty strings, so a landed video title shows.
@@ -750,7 +762,7 @@ enum RichLink {
 
     @MainActor
     static func containsLinks(in source: String, streaming: Bool = false) -> Bool {
-        prettyAttributed(source, streaming: streaming).runs.contains { $0.link != nil }
+        linkProfile(for: source, streaming: streaming).hasLinks
     }
 
     static func isBareDisplay(_ display: String, url: URL) -> Bool {
@@ -1147,8 +1159,11 @@ struct InlineText: View {
         // faviconRevision read so loaded favicons rebuild the text.
         let _ = faviconRevision
         let scaled = (pointSize * 2).rounded() / 2
-        // Local file links have no host, but still need the native link opener.
-        let hasLinkText = hasLinks ?? RichLink.containsLinks(in: source, streaming: streaming)
+        // One `linkProfile` build answers both questions: whether any run links and what
+        // keys the link work. A caller that already knows its `hasLinks` skips the check;
+        // the key still comes from the same fetch.
+        let profile = RichLink.linkProfile(for: source, streaming: streaming)
+        let hasLinkText = hasLinks ?? profile.hasLinks
         if hasLinkText {
             // An AppKit view has no text baseline of its own, so a list's marker sat on the
             // paragraph's top edge and the text started a line below it. The first line's
@@ -1160,7 +1175,7 @@ struct InlineText: View {
             let lineHeight = metrics.lineHeight
             // Stable hosts and video ids key the link work, so a streamed token with no
             // new link leaves the task alone.
-            let hostKey = RichLink.linkAssetKey(for: source, streaming: streaming)
+            let hostKey = profile.key
             // The hover and the host callback keep only the text view's weak box and the
             // hand binding: the hover responder and the representable must not keep this
             // paragraph (and its styled text) alive after it scrolls away.
@@ -1206,13 +1221,12 @@ struct InlineText: View {
     /// binding, never the whole view value (and its styled text) after it goes away.
     /// Fetches favicons for each link host and video titles for each video link.
     static func fetchLinkAssets(source: String, streaming: Bool, revision: Binding<Int>) async {
-        let hosts = await MainActor.run { RichLink.linkHosts(for: source, streaming: streaming) }
+        let profile = await MainActor.run { RichLink.linkProfile(for: source, streaming: streaming) }
         var changed = false
-        for host in hosts where FaviconCache.cached(host: host) == nil {
+        for host in profile.hosts where FaviconCache.cached(host: host) == nil {
             if await FaviconCache.image(for: host) != nil { changed = true }
         }
-        let videos = await MainActor.run { RichLink.videoIDs(for: source, streaming: streaming) }
-        for id in videos {
+        for id in profile.videos {
             if await LinkTitles.title(forVideo: id) != nil { changed = true }
         }
         if changed { await MainActor.run { RichLink.invalidate(source); revision.wrappedValue += 1 } }
