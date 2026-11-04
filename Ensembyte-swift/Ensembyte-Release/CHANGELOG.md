@@ -2,6 +2,17 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.17] - 2026-11-04
+
+### New features
+- Ensembyte[bot] GitHub App Native Authentication: Direct RS256 JWT signing via Security framework (`.rsaSignatureMessagePKCS1v15SHA256`) and dynamic installation access token minting without external dependencies.
+- Dedicated GitHub Connection Management: Settings UI sheets (`GitHubConnectView`, `GitHubSettingsSection`) to inspect App installation IDs, grant repository permissions, and test token validity.
+- Direct Artifacts HUD Toggle: Chat chrome capsule button upgraded to direct **Artifacts** toggle with checklist symbol and smooth sliding drawer animation.
+
+### Architecture & Performance
+- Terminal Fixed-Pitch Grid Monospace Validation: Added `picked.isFixedPitch` monospace checks in `TerminalFont` to prevent proportional fonts from breaking SwiftTerm's character grid geometry.
+- OpenCode Credential Matching Isolation: Hardened provider registry token matching to target exact `"opencode"` credentials, avoiding accidental capture of OpenCode Go tokens.
+
 ## [1.1.16] - 2026-11-01
 
 ### New features

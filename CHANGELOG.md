@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.17] - 2026-11-04
+
+Ensembyte 1.1.17 introduces Ensembyte[bot] native GitHub App RS256 authentication and dynamic installation token minting, direct Artifacts HUD controls in chat chrome, terminal monospace advance validation, provider credential isolation, and cross-platform GPUI WebView composition stability.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Native GitHub App Authentication (`GitHubAppAuth.swift`)**: Direct RS256 JWT generation using Apple's Security framework (`.rsaSignatureMessagePKCS1v15SHA256`) with zero third-party cryptography dependencies.
+- **Dynamic Installation Token Minting (`GitHubConnection.swift`)**: Authenticates against GitHub App REST endpoints to mint and rotate short-lived (1-hour) installation access tokens for repository operations and workflow automation.
+- **GitHub Connection Management View**: Added `GitHubConnectView` and `GitHubSettingsSection` to inspect installation credentials, test token connectivity, and view repository access scopes.
+- **Direct Artifacts HUD Toggle (`ChatView.swift`)**: Upgraded top chrome capsule button to direct **Artifacts** toggle with checklist iconography and smooth sliding drawer animation.
+- **Terminal Monospace Advance Validation (`TerminalFont.swift`)**: Enforces `picked.isFixedPitch` monospace checks to prevent non-monospaced fallback fonts from distorting SwiftTerm character cell widths and horizontal layout grids.
+- **OpenCode Zen Credential Matching (`ProviderRegistry.swift`)**: Hardened credential registry matching to explicitly target the bare `"opencode"` identifier, preventing accidental collisions with OpenCode Go credentials.
+
+### Windows & Linux Updates (`Ensembyte-rust/`)
+- **WebView Composition Stability (`windows_webview.rs`, `view.rs`)**: Introduced layout-compatible local `NativeComposition` handle abstraction in GPUI WebView integration, resolving external type dependency issues and ensuring smooth Windows and Linux builds.
+
 ## [1.1.16] - 2026-11-01
 
 Ensembyte 1.1.16 brings interactive timeline task tracking with live in-flight tool following, non-blocking asynchronous storage serialization, Hydra multi-agent activity overviews, high-DPI glyph caching, and background GitHub credential warming in Ensembyte-swift for macOS.

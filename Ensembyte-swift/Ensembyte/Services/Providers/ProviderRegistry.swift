@@ -994,10 +994,11 @@ final class ProviderRegistry {
                 }
                 return name.isEmpty ? nil : name
             }
-            // Go carries its own credential in the one auth file; Zen is whatever else is there.
+            // Go carries its own credential in the one auth file; Zen is the bare "opencode" credential,
+            // not just whatever line happens to be first.
             let name = provider == .opencodeGo
                 ? credentials.first { $0.localizedCaseInsensitiveContains("opencode go") }
-                : credentials.first
+                : credentials.first { $0.localizedCaseInsensitiveCompare("opencode") == .orderedSame }
             if let name { return .signedIn(name) }
             return result.succeeded ? .signedOut : .unknown
         case .grok:

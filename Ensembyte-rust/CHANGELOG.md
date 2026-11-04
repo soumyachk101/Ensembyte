@@ -5,6 +5,11 @@ All notable changes to Ensembyte (Rust Core & Desktop) are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.17] - 2026-11-04
+
+### Fixed
+- **Windows WebView Composition Handle Abstraction (`crates/ui`)**: Defined a local layout-compatible `NativeComposition` struct in `windows_webview.rs`, eliminating dependency on unexported GPUI composition methods on Windows targets.
+
 ## [1.1.12] - 2026-10-27
 
 ### Added

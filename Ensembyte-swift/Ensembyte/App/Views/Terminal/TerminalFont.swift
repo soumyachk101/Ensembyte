@@ -4,15 +4,25 @@ import AppKit
 /// so a Starship prompt's Nerd Font glyphs render instead of landing as empty boxes.
 @MainActor
 enum TerminalFont {
-    /// The configured terminal font that carries the icons, or the closest thing to it.
+    /// The configured terminal font that carries the icons, or the closest monospace to it.
+    /// The base grid font must be fixed-pitch: SwiftTerm sizes every character cell from
+    /// this font's "W" advance, so a proportional font makes the whole grid wide and
+    /// uneven. Nerd-glyph icons still render through SwiftTerm's per-character CoreText
+    /// fallback, so a monospace base is safe even when no Nerd font is installed.
     static func preferred(fallbackSize: CGFloat = 12) -> NSFont {
         let configured = configuredFonts()
-        if let match = configured.first(where: hasNerdGlyphs) { return match }
-        if let first = configured.first {
-            return nerdSibling(of: first) ?? firstInstalledNerdFont(size: first.pointSize) ?? first
+        let picked: NSFont
+        if let match = configured.first(where: hasNerdGlyphs) {
+            picked = match
+        } else if let first = configured.first {
+            picked = nerdSibling(of: first) ?? firstInstalledNerdFont(size: first.pointSize) ?? first
+        } else {
+            picked = firstInstalledNerdFont(size: fallbackSize)
+                ?? NSFont.monospacedSystemFont(ofSize: fallbackSize, weight: .regular)
         }
-        return firstInstalledNerdFont(size: fallbackSize)
-            ?? NSFont.monospacedSystemFont(ofSize: fallbackSize, weight: .regular)
+        return picked.isFixedPitch
+            ? picked
+            : NSFont.monospacedSystemFont(ofSize: picked.pointSize, weight: .regular)
     }
 
     /// Each terminal's configured font, the running terminals first so the one in front of
