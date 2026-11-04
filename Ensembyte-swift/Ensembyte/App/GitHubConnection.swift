@@ -250,7 +250,7 @@ final class GitHubConnection {
     }
 
     func connectBot() async {
-        guard botInstallations.count > 0 else {
+        if botInstallations.isEmpty {
             await loadBotInstallations()
         }
         // A sole installation is picked without asking.

@@ -57,7 +57,7 @@ struct GitHubConnectView: View {
                 } else {
                     Button("Connect as Ensembyte[bot]…") {
                         showsBot = true
-                        botInstallationID = String(connection.botInstallationID ?? "")
+                        botInstallationID = connection.botInstallationID.map(String.init) ?? ""
                         Task {
                             await connection.loadBotInstallations()
                             // Default to the first installation when none is chosen yet.

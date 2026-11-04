@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 /// The GitHub App behind Ensembyte: its bot account (`ensembyte[bot]`) is what
 /// GitHub resolves a co-author trailer to and what an App installation token
@@ -102,19 +103,37 @@ extension GitHubAppAuth {
     /// (no external crypto): PKCS#1v15 SHA-256 over the base64url header and
     /// claims. Valid for nine minutes, with a one-minute issuance skew.
     public static func appJWT() -> String? {
-        guard let data = privateKeyData(),
-              let key = SecKeyCreatePrivateKeyWithData(data as CFData, &kSecItemFormatPEMData) else {
+        guard let der = privateKeyDER() else { return nil }
+        var keyErr: Unmanaged<CFError>?
+        let attributes: [CFString: Any] = [
+            kSecAttrKeyType: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass: kSecAttrKeyClassPrivate,
+        ]
+        guard let key = SecKeyCreateWithData(der as CFData, attributes as CFDictionary, &keyErr) else {
             return nil
         }
         let now = Int(Date().timeIntervalSince1970)
-        let claims = ["iat": now - 60, "exp": now + 540, "iss": "\(GitHubAppIdentity.appId)"]
+        let claims: [String: Any] = ["iat": now - 60, "exp": now + 540, "iss": "\(GitHubAppIdentity.appId)"]
         guard let headerJSON = try? JSONSerialization.data(withJSONObject: ["alg": "RS256", "typ": "JWT"]),
               let claimsJSON = try? JSONSerialization.data(withJSONObject: claims) else { return nil }
         let signingInput = base64url(headerJSON) + "." + base64url(claimsJSON)
+        var signatureErr: Unmanaged<CFError>?
         guard let signature = SecKeyCreateSignature(
-            key, kSecKeyAlgorithmRSASignaturePKCS1v15SHA256, .messageData,
-            signingInput.data(using: .utf8)! as CFData, nil) else { return nil }
-        return signingInput + "." + base64url(signature)
+            key, SecKeyAlgorithm.rsaSignatureMessagePKCS1v15SHA256,
+            signingInput.data(using: .utf8)! as CFData, &signatureErr) else { return nil }
+        return signingInput + "." + base64url(signature as Data)
+    }
+
+    /// The App key on disk is PEM; this Security API wants the PKCS#1 DER body,
+    /// so the base64 inside the armour is decoded back down to its raw bytes.
+    private static func privateKeyDER() -> Data? {
+        guard let pem = privateKeyData(),
+              let text = String(data: pem, encoding: .utf8) else { return nil }
+        let body = text.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("-----") }
+            .joined()
+        return Data(base64Encoded: body)
     }
 
     /// Every installation of the Ensembyte App, paginated.
