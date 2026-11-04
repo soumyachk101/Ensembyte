@@ -299,6 +299,21 @@ struct Geometry {
     scale: f32,
 }
 
+/// Raw composition handles for embedding the page beneath GPUI's overlay
+/// plane. The pinned gpui rev does not export `NativeComposition` yet, so
+/// `sync` is called with `None` and this stays unused; the layout matches
+/// what the renderer will pass once that API lands, and `remount` picks it
+/// up then.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct NativeComposition {
+    /// Borrowed `IDCompositionDevice*` that owns the layer.
+    pub device: *mut std::ffi::c_void,
+    /// Borrowed `IDCompositionVisual*` layer the page visual mounts in.
+    pub layer: *mut std::ffi::c_void,
+    /// Changes when GPU recovery recreates the device; remount the page.
+    pub generation: u64,
+}
+
 pub(super) struct Host {
     hwnd: HWND,
     tx: Sender,
@@ -946,7 +961,7 @@ impl Host {
         bounds: Bounds<Pixels>,
         mask: Bounds<Pixels>,
         scale: f32,
-        composition: Option<gpui::NativeComposition>,
+        composition: Option<NativeComposition>,
     ) {
         let visible = bounds.intersect(&mask);
         {
@@ -977,7 +992,7 @@ impl Host {
 
     /// (Re)create the page visual when the renderer's device generation
     /// changes (first frame, or GPU recovery).
-    fn remount(&self, composition: gpui::NativeComposition) {
+    fn remount(&self, composition: NativeComposition) {
         let mut page = self.page.borrow_mut();
         let Some(page) = page.as_mut() else { return };
         // Handles are only valid for their generation, and the renderer frees
