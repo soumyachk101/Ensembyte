@@ -20,6 +20,27 @@ final class GitHubConnection {
     private(set) var cloningFullName: String?
     var errorMessage: String?
 
+    /// The Ensembyte GitHub App installations, for the bot picker.
+    private(set) var botInstallations: [GitHubAppInstallation] = []
+    /// Whether the bot (ensembyte[bot]) overlay is active. Coexists with the
+    /// human connection above; it does not replace the user card.
+    private(set) var botConnected = false
+    private(set) var botUser: GitHubUser?
+
+    private var storedBotInstallationID: Int? = UserDefaults.standard.object(forKey: "GitHubBotInstallationID") as? Int
+    /// The selected installation; persisted so a later connect reuses it.
+    var botInstallationID: Int? {
+        get { storedBotInstallationID }
+        set {
+            storedBotInstallationID = newValue
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: "GitHubBotInstallationID")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "GitHubBotInstallationID")
+            }
+        }
+    }
+
     @ObservationIgnored private var token: String?
     @ObservationIgnored private var signInTask: Task<Void, Never>?
     @ObservationIgnored private var connectionGeneration = UUID()
@@ -177,6 +198,11 @@ final class GitHubConnection {
         cancelSignIn()
         if source == .ensembyte { GitHubCredentials.remove() }
         if source == .githubCLI { UserDefaults.standard.set(true, forKey: "GitHubCLIDeclined") }
+        if botConnected {
+            botConnected = false
+            botUser = nil
+            GitHubAppAuth.removeBotToken()
+        }
         LoginEnvironment.setOverlay([:])
         token = nil
         user = nil
@@ -192,6 +218,67 @@ final class GitHubConnection {
         source = nil
         disconnect()
         errorMessage = "Your GitHub sign-in expired. Connect again."
+    }
+
+    /// The bot overlay keeps the human credential stack under it, so a bot
+    /// connect while a user is connected layers on top; a bot disconnect
+    /// reverts to exactly that stack (or empty).
+    private func humanOverlay() -> [String: String] {
+        if let token {
+            return LoginEnvironment.current.merging(GitHubCredentials.environment(token: token)) { _, new in new }
+        }
+        return [:]
+    }
+
+    /// The bot's author/committer identity, layered on top of the token env so
+    /// every agent process Ensembyte spawns authors and pushes as the bot.
+    private func botIdentityOverlay() -> [String: String] {
+        [
+            "GIT_AUTHOR_NAME": GitHubAppIdentity.botLogin,
+            "GIT_AUTHOR_EMAIL": GitHubAppIdentity.botNoreply,
+            "GIT_COMMITTER_NAME": GitHubAppIdentity.botLogin,
+            "GIT_COMMITTER_EMAIL": GitHubAppIdentity.botNoreply,
+        ]
+    }
+
+    func loadBotInstallations() async {
+        botInstallations = (try? await GitHubAppAuth.listInstallations()) ?? []
+        // A stored id only counts while the installation still exists.
+        if let id = botInstallationID, !botInstallations.contains(where: { $0.id == id }) {
+            botInstallationID = nil
+        }
+    }
+
+    func connectBot() async {
+        guard botInstallations.count > 0 else {
+            await loadBotInstallations()
+        }
+        // A sole installation is picked without asking.
+        if botInstallations.count == 1, botInstallationID == nil {
+            botInstallationID = botInstallations.first?.id
+        }
+        guard let id = botInstallationID else { return }
+        do {
+            let botToken = try await GitHubAppAuth.installationAccessToken(id: id)
+            let user = (try? await GitHubAPI.user(token: botToken))
+                ?? GitHubUser(id: GitHubAppIdentity.botUserID, login: GitHubAppIdentity.botLogin, name: nil, avatarURL: nil)
+            botUser = user
+            botConnected = true
+            let overlay = LoginEnvironment.current
+                .merging(GitHubCredentials.environment(token: botToken)) { _, new in new }
+                .merging(botIdentityOverlay()) { _, new in new }
+            LoginEnvironment.setOverlay(overlay)
+        } catch {
+            botConnected = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func disconnectBot() {
+        botConnected = false
+        botUser = nil
+        GitHubAppAuth.removeBotToken()
+        LoginEnvironment.setOverlay(humanOverlay())
     }
 
     func refreshCLIStatus() async {

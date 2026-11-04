@@ -5,6 +5,8 @@ struct GitHubConnectView: View {
     private var connection: GitHubConnection { .shared }
     @State private var showsToken = false
     @State private var token = ""
+    @State private var showsBot = false
+    @State private var botInstallationID = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -46,6 +48,67 @@ struct GitHubConnectView: View {
                     .buttonStyle(.glass)
                 }
                 Button("Use a token…") { showsToken.toggle() }.buttonStyle(.glass)
+                if connection.botConnected {
+                    HStack(spacing: 8) {
+                        Text("Ensembyte[bot]")
+                        Spacer()
+                        Button("Disconnect") { connection.disconnectBot() }.buttonStyle(.glass)
+                    }
+                } else {
+                    Button("Connect as Ensembyte[bot]…") {
+                        showsBot = true
+                        botInstallationID = String(connection.botInstallationID ?? "")
+                        Task {
+                            await connection.loadBotInstallations()
+                            // Default to the first installation when none is chosen yet.
+                            if connection.botInstallationID == nil,
+                               let first = connection.botInstallations.first {
+                                connection.botInstallationID = first.id
+                                botInstallationID = String(first.id)
+                            }
+                        }
+                    }
+                    .buttonStyle(.glass)
+                }
+                if showsBot {
+                    HStack(spacing: 8) {
+                        if connection.botInstallations.count > 1 {
+                            Menu {
+                                ForEach(connection.botInstallations) { installation in
+                                    Button(installation.owner) {
+                                        botInstallationID = String(installation.id)
+                                        connection.botInstallationID = installation.id
+                                    }
+                                }
+                            } label: {
+                                Text(connection.botInstallations.first { $0.id == connection.botInstallationID }?.owner ?? "Installation…")
+                                    .frame(minWidth: 120, alignment: .leading)
+                            }
+                        } else if connection.botInstallations.count == 0 {
+                            TextField("Installation ID", text: $botInstallationID)
+                                .textFieldStyle(.plain)
+                                .padding(8)
+                                .background(Chrome.overlay(0.06), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        Button("Connect") {
+                            if let id = Int(botInstallationID) {
+                                connection.botInstallationID = id
+                            }
+                            Task {
+                                await connection.connectBot()
+                                showsBot = false
+                            }
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(connection.botInstallations.count == 1 ? false : botInstallationID.isEmpty)
+                        Button("Cancel") { showsBot = false }.buttonStyle(.glass)
+                    }
+                    if connection.botInstallations.count == 1 {
+                        Text("Installed as \(connection.botInstallations[0].owner)")
+                            .font(.caption)
+                            .foregroundStyle(Chrome.secondaryText)
+                    }
+                }
                 if showsToken {
                     HStack(spacing: 8) {
                         SecureField("Personal access token", text: $token)

@@ -76,7 +76,34 @@ struct GitHubDeviceCode: Equatable, Sendable {
 }
 
 enum GitHubTokenSource: String, Codable, Sendable {
-    case ensembyte, githubCLI
+    case ensembyte, githubCLI, bot
+}
+
+/// One installation of the Ensembyte GitHub App, from `GET /app/installations`.
+struct GitHubAppInstallation: Codable, Identifiable, Equatable, Sendable {
+    let id: Int
+    let owner: String
+
+    private struct Account: Codable {
+        let login: String
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(Int.self, forKey: .id)
+        owner = try values.decode(Account.self, forKey: .account).login
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encode(Account(login: owner), forKey: .account)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case account = "account"
+    }
 }
 
 enum GitHubRepoReference {
@@ -109,6 +136,7 @@ enum GitHubRepoReference {
 
 enum GitHubError: LocalizedError, Equatable {
     case unauthorized, denied, expired, notFound
+    case appKeyMissing
     case http(Int, String)
     case invalidResponse
     case cloneFailed(String)
@@ -119,6 +147,7 @@ enum GitHubError: LocalizedError, Equatable {
         case .denied: "The sign-in was cancelled on GitHub."
         case .expired: "The code expired. Try again."
         case .notFound: "That repository was not found, or your account cannot see it."
+        case .appKeyMissing: "The GitHub App's private key is missing, so the bot cannot sign in."
         case let .http(code, message): "GitHub answered \(code): \(message)"
         case .invalidResponse: "GitHub sent an answer Ensembyte could not read."
         case let .cloneFailed(message): message

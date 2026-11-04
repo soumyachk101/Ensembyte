@@ -74,7 +74,8 @@ enum GitHubAPI {
         let message: String?
     }
 
-    private static func request<Value: Decodable>(
+    /// App-JWT authenticated (bot flow), no user credential involved.
+    static func request<Value: Decodable>(
         _ url: URL, token: String? = nil, form: [String: String]? = nil
     ) async throws -> Value {
         var request = URLRequest(url: url)
