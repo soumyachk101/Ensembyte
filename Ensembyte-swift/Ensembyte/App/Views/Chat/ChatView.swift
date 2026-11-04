@@ -1425,7 +1425,7 @@ private struct ChatChromeRow: View {
                         }
                     }
                     // The icon-only capsule: browser, terminal and changes stay one height.
-                    // The title-bearing Panels menu sits in its own capsule so its taller
+                    // The title-bearing Panels button sits in its own capsule so its taller
                     // label row can't bump this icon row's height (a title control in a
                     // capsule drags the whole capsule's height up with it).
                     ChromeCapsule {
@@ -1442,10 +1442,8 @@ private struct ChatChromeRow: View {
                         }
                     }
                     ChromeCapsule {
-                        ChromeTextMenu(symbol: "checklist", title: "Panels", help: "Tasks and Artifacts panels") {
-                            PopoverItem("Artifacts", isChecked: runtime.isArtifactPanelVisible) {
-                                withAnimation(Chrome.panelSlide) { runtime.isArtifactPanelVisible = true }
-                            }
+                        ChromeTextButton(symbol: "checklist", title: "Panels", help: "Artifacts panel") {
+                            withAnimation(Chrome.panelSlide) { runtime.isArtifactPanelVisible.toggle() }
                         }
                     }
                 }
