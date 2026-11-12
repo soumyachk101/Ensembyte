@@ -7,7 +7,7 @@
 <p align="center">
   <b>The open-source multi-agent coding client.</b><br/>
   A local-first desktop for AI coding agents.<br/>
-  <a href="https://ensembyte.vercel.app"><b>🌐 ensembyte.vercel.app</b></a>
+  <a href="https://ensembyte.vercel.app"><img src="assets/btn-website.svg" width="340" height="56" alt="Visit ensembyte.vercel.app" /></a>
 </p>
 
 <p align="center">
@@ -21,6 +21,10 @@
     <img src="https://github.com/soumyachk101/Ensembyte/actions/workflows/release.yml/badge.svg" alt="Release" />
   </a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+</p>
+
+<p align="center">
+  <img src="assets/hero-anim.svg" width="1200" height="420" alt="Ensembyte hero: a lead coding agent plans a task, eight Hydra heads fan out into parallel git worktrees, diffs flip from red to green, results auto-merge through a progress gate, and the v1.1.18 build ships with pixel confetti while a HYDRA GRID HUD tracks heads, worktrees and tokens." />
 </p>
 
 ---
@@ -376,7 +380,7 @@ Ensembyte is open source under the **MIT License** and actively welcomes contrib
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.
 
-**Latest documented version:** v1.1.17. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
+**Latest documented version:** v1.1.18. See [`CHANGELOG.md`](CHANGELOG.md) for the version history and GitHub Releases for downloadable builds.
 
 ---
 

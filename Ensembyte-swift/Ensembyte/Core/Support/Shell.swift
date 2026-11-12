@@ -360,7 +360,10 @@ enum LoginEnvironment {
 
     static var current: [String: String] {
         let base = cached.withLock { $0 } ?? fallbackEnvironment
-        return base.merging(overlay.withLock { $0 }) { _, new in new }
+        let merged = base.merging(overlay.withLock { $0 }) { _, new in new }
+        // After the overlay, so a GitHub credential block's GIT_CONFIG_COUNT
+        // cannot drop the hooks path that credits ensembyte[bot] on commits.
+        return CommitCredit.applying(to: merged)
     }
 
     /// The overlay is how a connected GitHub account reaches every process the app starts.

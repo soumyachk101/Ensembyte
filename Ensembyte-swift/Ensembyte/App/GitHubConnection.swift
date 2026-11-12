@@ -201,7 +201,7 @@ final class GitHubConnection {
         if botConnected {
             botConnected = false
             botUser = nil
-            GitHubAppAuth.removeBotToken()
+            if let id = storedBotInstallationID { GitHubAppAuth.removeBotToken(id: id) }
         }
         LoginEnvironment.setOverlay([:])
         token = nil
@@ -216,29 +216,19 @@ final class GitHubConnection {
     private func expireSignIn() {
         GitHubCredentials.remove()
         source = nil
+        // A 401 means the token we were handed is no longer good; drop the cached
+        // gh-CLI answer too so the next read re-resolves instead of serving it for the TTL.
+        GitHubAuth.invalidateOnAuthFailure()
         disconnect()
         errorMessage = "Your GitHub sign-in expired. Connect again."
     }
 
-    /// The bot overlay keeps the human credential stack under it, so a bot
-    /// connect while a user is connected layers on top; a bot disconnect
-    /// reverts to exactly that stack (or empty).
+    /// Disconnect restores the person's token and nothing else. Copying
+    /// `LoginEnvironment.current` would keep the bot's author variables,
+    /// and would freeze the co-author hook config into the stored overlay.
     private func humanOverlay() -> [String: String] {
-        if let token {
-            return LoginEnvironment.current.merging(GitHubCredentials.environment(token: token)) { _, new in new }
-        }
-        return [:]
-    }
-
-    /// The bot's author/committer identity, layered on top of the token env so
-    /// every agent process Ensembyte spawns authors and pushes as the bot.
-    private func botIdentityOverlay() -> [String: String] {
-        [
-            "GIT_AUTHOR_NAME": GitHubAppIdentity.botLogin,
-            "GIT_AUTHOR_EMAIL": GitHubAppIdentity.botNoreply,
-            "GIT_COMMITTER_NAME": GitHubAppIdentity.botLogin,
-            "GIT_COMMITTER_EMAIL": GitHubAppIdentity.botNoreply,
-        ]
+        guard let token else { return [:] }
+        return GitHubCredentials.humanOverlay(token: token)
     }
 
     func loadBotInstallations() async {
@@ -264,10 +254,9 @@ final class GitHubConnection {
                 ?? GitHubUser(id: GitHubAppIdentity.botUserID, login: GitHubAppIdentity.botLogin, name: nil, avatarURL: nil)
             botUser = user
             botConnected = true
-            let overlay = LoginEnvironment.current
-                .merging(GitHubCredentials.environment(token: botToken)) { _, new in new }
-                .merging(botIdentityOverlay()) { _, new in new }
-            LoginEnvironment.setOverlay(overlay)
+            // Credentials and the bot author only. The co-author hook is
+            // appended by LoginEnvironment.current on the way out to a process.
+            LoginEnvironment.setOverlay(GitHubCredentials.botOverlay(token: botToken))
         } catch {
             botConnected = false
             errorMessage = error.localizedDescription
@@ -277,7 +266,7 @@ final class GitHubConnection {
     func disconnectBot() {
         botConnected = false
         botUser = nil
-        GitHubAppAuth.removeBotToken()
+        if let id = storedBotInstallationID { GitHubAppAuth.removeBotToken(id: id) }
         LoginEnvironment.setOverlay(humanOverlay())
     }
 

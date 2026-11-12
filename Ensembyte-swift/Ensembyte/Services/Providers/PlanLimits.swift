@@ -34,6 +34,8 @@ struct PlanLimits: Sendable, Equatable {
     /// What the app-server answered when a reset was spent.
     enum ResetOutcome: String, Sendable, Equatable {
         case reset, nothingToReset, noCredit, alreadyRedeemed
+        /// The reset was accepted but the meters had not cleared by the confirm deadline.
+        case pending
 
         var message: String {
             switch self {
@@ -41,6 +43,7 @@ struct PlanLimits: Sendable, Equatable {
             case .nothingToReset: "There was no active usage to reset."
             case .noCredit: "No banked resets are left."
             case .alreadyRedeemed: "That reset was already used."
+            case .pending: "Reset accepted — the meters haven't caught up yet."
             }
         }
     }

@@ -220,7 +220,7 @@ struct ChatView: View {
                         autoPoppedPanel(auto, scene: scene, workingDirectory: workingDirectory, project: project)
                     }
                 }
-                .animation(switching ? nil : Chrome.panelSlide, value: scene.autoPopped.map(\.id))
+                .animation(switching ? nil : Chrome.panelSlide, value: scene.autoPoppedIDs)
             }
             .overlay(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
@@ -282,7 +282,7 @@ struct ChatView: View {
                 artifactDrag.reclamp(in: scene.layout)
                 for drag in autoDrags.values { drag.reclamp(in: scene.layout) }
             }
-            .onChange(of: scene.autoPopped.map(\.id), initial: true) { _, ids in
+            .onChange(of: scene.autoPoppedIDs, initial: true) { _, ids in
                 for id in ids where autoDrags[id] == nil { autoDrags[id] = PanelDragState() }
                 for id in autoDrags.keys where !ids.contains(id) { autoDrags[id] = nil }
             }
@@ -324,6 +324,8 @@ struct ChatView: View {
             await git.refresh(directory, force: false)
         }
         .onChange(of: runtime.diffRevision) {
+            // A diff revision means git state may have changed, so force a re-read
+            // here despite the 30s freshness cache.
             Task { await git.refresh(directory) }
         }
         // The column is not rebuilt on a thread switch, so what belonged to the previous
@@ -817,52 +819,21 @@ struct ChatView: View {
     private func reorder(_ id: FloatingPanelID, at position: CGPoint, corner: PanelDockCorner, scene: PanelScene) {
         let side = corner.side
         let others = scene.slots.filter { $0.value.corner.side == side && $0.key != id }
-        let n = max(scene.slotsOnSide[side] ?? 1, others.count + 1)
-        let target = scene.layout.slotIndex(at: position, slots: n, docks: scene.docks)
-        var occupancy: [Int: FloatingPanelID] = [:]
-        for (panelID, slot) in others {
-            occupancy[slot.corner.isTop ? slot.below : n - 1 - slot.below] = panelID
+        let capacity = scene.slotsOnSide[side] ?? 1
+        let target = scene.layout.slotIndex(at: position, slots: max(capacity, others.count + 1), docks: scene.docks)
+        let result = ReorderLayout.reorder(
+            moving: id,
+            to: target,
+            capacity: capacity,
+            others: others.mapValues { ReorderLayout.PanelPlace(isTop: $0.corner.isTop, below: $0.below) },
+            previous: scene.slots[id].flatMap { $0.corner.side == side ? ReorderLayout.PanelPlace(isTop: $0.corner.isTop, below: $0.below) : nil }
+        )
+        for (panelID, place) in result.placements {
+            setCorner(panelID, PanelDockCorner.make(side: side, isTop: place.isTop))
         }
-        let previous: Int? = scene.slots[id].flatMap { $0.corner.side == side ? ($0.corner.isTop ? $0.below : n - 1 - $0.below) : nil }
-        let full = !(others.count + 1 > (scene.slotsOnSide[side] ?? 1))
-        if let other = occupancy[target], previous != nil, full {
-            occupancy[previous!] = other
-            occupancy[target] = id
-        } else if let other = occupancy[target] {
-            occupancy.removeValue(forKey: target)
-            occupancy[target] = id
-            let forward = previous == nil || previous! < target
-            var displaced = other
-            var next = target + (forward ? 1 : -1)
-            while true {
-                if next < 0 || next >= n {
-                    let free = forward ? (0..<n).first(where: { occupancy[$0] == nil }) : (0..<n).reversed().first(where: { occupancy[$0] == nil })
-                    if let free { occupancy[free] = displaced }
-                    break
-                }
-                if occupancy[next] == nil {
-                    occupancy[next] = displaced
-                    break
-                }
-                let occupant = occupancy[next]!
-                occupancy[next] = displaced
-                displaced = occupant
-                next += forward ? 1 : -1
-            }
-        } else {
-            occupancy[target] = id
-        }
-        for (index, panelID) in occupancy {
-            let (corner, _) = PanelDocks.corner(forSlot: index, of: n, side: side)
-            setCorner(panelID, corner)
-        }
-        let occupiedCorners = Dictionary(uniqueKeysWithValues: occupancy.map { ($0.value, PanelDocks.corner(forSlot: $0.key, of: n, side: side).corner) })
-        let top = occupancy.filter { occupiedCorners[$0.value]?.isTop == true }.sorted { $0.key < $1.key }.map(\.value)
-        let bottom = occupancy.filter { occupiedCorners[$0.value]?.isTop == false }.sorted { $0.key > $1.key }.map(\.value)
-        let sideOrder = top + bottom
-        let onSide = Set(occupancy.values)
+        let onSide = Set(result.placements.keys)
         let kept = runtime.panelStackOrder.filter { !onSide.contains($0) && $0 != id }
-        let next = kept + sideOrder
+        let next = kept + result.order
         if next != runtime.panelStackOrder { runtime.panelStackOrder = next }
     }
 
@@ -1080,6 +1051,9 @@ private struct PanelScene {
     }
     /// The heads with a panel of their own.
     let autoPopped: [ChatThread]
+    /// The auto-popped head ids, cached so body passes read them instead of
+    /// re-mapping the list every frame of a live resize.
+    var autoPoppedIDs: [UUID] = []
     let slots: [FloatingPanelID: PanelSlot]
     let slotsOnSide: [PanelDockSide: Int]
 
@@ -1123,6 +1097,7 @@ private struct PanelScene {
         subagent = members.subagent
         isDocked = members.isDocked
         autoPopped = geometry.autoPopped
+        autoPoppedIDs = autoPopped.map(\.id)
         slots = geometry.slots
         slotsOnSide = geometry.slotsOnSide
         usageHeight = geometry.usageHeight
@@ -1398,7 +1373,7 @@ private struct ChatChromeRow: View {
                     }
                     PermissionMenu(thread: thread)
                 }
-                if git.isRepository {
+                if git.isRepository(directory) {
                     BranchMenu(runtime: runtime, directory: directory, git: git)
                 }
                 ChatChromeTitle(runtime: runtime, title: title)
@@ -1419,7 +1394,7 @@ private struct ChatChromeRow: View {
                             ChromeDivider()
                             ScriptsMenu(project: project, runtime: runtime)
                         }
-                        if git.isRepository {
+                        if git.isRepository(directory) {
                             ChromeDivider()
                             GitActionsMenu(runtime: runtime, directory: directory, git: git)
                         }
@@ -1548,11 +1523,37 @@ private struct ThreadsButton: View {
 @MainActor
 @Observable
 final class GitStatusModel {
-    private(set) var isRepository = false
-    private(set) var status: GitStatus?
-    private(set) var branches: [GitBranch] = []
-    private(set) var remoteURL: URL?
-    private(set) var activity: String?
+    /// The git state per directory: a thread switch shows the directory's last
+    /// read immediately, never the previous thread's.
+    private struct Status {
+        var isRepository = false
+        var status: GitStatus?
+        var branches: [GitBranch] = []
+        var remoteURL: URL?
+    }
+    private var statuses: [String: Status] = [:]
+    /// The read in flight per directory: concurrent refreshes for one directory
+    /// coalesce into one git process run.
+    private var inFlight: [String: Task<Void, Never>] = [:]
+    /// The operation in flight per directory, shown only on that directory's
+    /// chrome row: one thread committing never labels another's row.
+    private var activities: [String: String] = [:]
+
+    func isRepository(_ directory: String) -> Bool {
+        statuses[directory]?.isRepository ?? false
+    }
+    func status(_ directory: String) -> GitStatus? {
+        statuses[directory]?.status
+    }
+    func branches(_ directory: String) -> [GitBranch] {
+        statuses[directory]?.branches ?? []
+    }
+    func remoteURL(_ directory: String) -> URL? {
+        statuses[directory]?.remoteURL
+    }
+    func activity(_ directory: String) -> String? {
+        activities[directory]
+    }
 
     private struct Snapshot {
         var isRepository = false
@@ -1564,39 +1565,57 @@ final class GitStatusModel {
 
     /// The last read per directory, shared by every chat. Switching threads shows the branch at
     /// once and only runs git again when the read is stale, a turn changed files, or forced.
+    /// Bounded: the oldest-touched is dropped when it passes 32.
     private static var snapshots: [String: Snapshot] = [:]
+    private static var snapshotOrder: [String] = []
+    private static let snapshotLimit = 32
     private static let freshness: TimeInterval = 30
 
     func refresh(_ directory: String, force: Bool = true) async {
+        // A read already in flight for this directory: coalesce into it instead
+        // of running git in parallel.
+        if let inFlight = inFlight[directory] {
+            await inFlight.value
+            return
+        }
         if let cached = Self.snapshots[directory] {
-            apply(cached)
+            // Show the last read at once; the switch never shows another thread's.
+            statuses[directory] = Status(isRepository: cached.isRepository, status: cached.status, branches: cached.branches, remoteURL: cached.remoteURL)
             if !force, Date.now.timeIntervalSince(cached.fetchedAt) < Self.freshness { return }
         }
-        let git = Git(directory)
-        var snapshot = Snapshot(isRepository: await git.isRepository())
-        if snapshot.isRepository {
-            async let status = git.status()
-            async let branches = git.branches()
-            async let remoteURL = git.remoteWebURL()
-            snapshot.status = await status
-            snapshot.branches = await branches
-            snapshot.remoteURL = await remoteURL
+        let task = Task { @MainActor in
+            let git = Git(directory)
+            var snapshot = Snapshot(isRepository: await git.isRepository())
+            if snapshot.isRepository {
+                async let status = git.status()
+                async let branches = git.branches()
+                async let remoteURL = git.remoteWebURL()
+                snapshot.status = await status
+                snapshot.branches = await branches
+                snapshot.remoteURL = await remoteURL
+            }
+            snapshot.fetchedAt = .now
+            Self.touch(directory, snapshot)
+            // Last-write-wins: the newest finished read owns the directory's state.
+            statuses[directory] = Status(isRepository: snapshot.isRepository, status: snapshot.status, branches: snapshot.branches, remoteURL: snapshot.remoteURL)
         }
-        snapshot.fetchedAt = .now
-        Self.snapshots[directory] = snapshot
-        apply(snapshot)
+        inFlight[directory] = task
+        defer { inFlight[directory] = nil }
+        await task.value
     }
 
-    private func apply(_ snapshot: Snapshot) {
-        isRepository = snapshot.isRepository
-        status = snapshot.status
-        branches = snapshot.branches
-        remoteURL = snapshot.remoteURL
+    private static func touch(_ directory: String, _ snapshot: Snapshot) {
+        snapshots[directory] = snapshot
+        snapshotOrder.removeAll { $0 == directory }
+        snapshotOrder.append(directory)
+        while snapshotOrder.count > snapshotLimit {
+            snapshots[snapshotOrder.removeFirst()] = nil
+        }
     }
 
-    func perform(_ activity: String, _ work: () async throws -> Void) async -> Error? {
-        self.activity = activity
-        defer { self.activity = nil }
+    func perform(_ directory: String, _ activity: String, _ work: () async throws -> Void) async -> Error? {
+        activities[directory] = activity
+        defer { if activities[directory] == activity { activities[directory] = nil } }
         do {
             try await work()
             return nil
@@ -1639,11 +1658,11 @@ private struct BranchMenu: View {
     var body: some View {
         ChromeTextMenu(
             symbol: "arrow.triangle.branch",
-            title: git.activity ?? git.status?.branch ?? "Detached",
+            title: git.activity(directory) ?? git.status(directory)?.branch ?? "Detached",
             help: "Branch"
         ) {
             PopoverSectionHeader("Switch branch")
-            ForEach(git.branches.prefix(25)) { branch in
+            ForEach(git.branches(directory).prefix(25)) { branch in
                 PopoverItem(
                     branch.name,
                     isChecked: branch.isCurrent,
@@ -1673,7 +1692,7 @@ private struct BranchMenu: View {
     private func switchBranch(_ name: String) {
         Task {
             let repository = Git(directory)
-            if let error = await git.perform("Switching", { try await repository.switchBranch(name) }) {
+            if let error = await git.perform(directory, "Switching", { try await repository.switchBranch(name) }) {
                 model.alert = AppAlert(title: "Could not switch branch", message: error.localizedDescription)
             }
             await git.refresh(directory)
@@ -1685,7 +1704,7 @@ private struct BranchMenu: View {
         guard !name.isEmpty else { return }
         Task {
             let repository = Git(directory)
-            if let error = await git.perform("Creating", { try await repository.createBranch(name) }) {
+            if let error = await git.perform(directory, "Creating", { try await repository.createBranch(name) }) {
                 model.alert = AppAlert(title: "Could not create branch", message: error.localizedDescription)
             }
             await git.refresh(directory)
@@ -1759,14 +1778,14 @@ private struct GitActionsMenu: View {
     @State private var isCommitting = false
 
     var body: some View {
-        let changed = git.status?.changedFiles ?? 0
+        let changed = git.status(directory)?.changedFiles ?? 0
         ChromeMenuButton(symbol: "arrow.triangle.pull", help: changed == 0 ? "Commit, push and open pull requests" : "\(changed) changed files") {
             PopoverNote(changed == 1 ? "1 changed file" : "\(changed) changed files")
             PopoverDivider()
             PopoverItem("Commit…", symbol: "checkmark.circle", isEnabled: changed > 0) { isCommitting = true }
             PopoverItem("Push", symbol: "arrow.up.circle") { push() }
             PopoverItem("Create pull request", symbol: "arrow.triangle.pull") { openPullRequest() }
-            if let url = git.remoteURL {
+            if let url = git.remoteURL(directory) {
                 PopoverDivider()
                 PopoverItem("Open repository", symbol: "safari") { NSWorkspace.shared.open(url) }
             }
@@ -1780,7 +1799,7 @@ private struct GitActionsMenu: View {
     private func push() {
         Task {
             let repository = Git(directory)
-            if let error = await git.perform("Pushing", { try await repository.push() }) {
+            if let error = await git.perform(directory, "Pushing", { try await repository.push() }) {
                 model.alert = AppAlert(title: "Push failed", message: error.localizedDescription)
             }
             await git.refresh(directory)
@@ -1791,7 +1810,7 @@ private struct GitActionsMenu: View {
         Task {
             let repository = Git(directory)
             var url: URL?
-            let error = await git.perform("Opening pull request") {
+            let error = await git.perform(directory, "Opening pull request") {
                 try await repository.push()
                 let subject = (try? await repository.output(["log", "-1", "--pretty=%s"]))?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -1949,7 +1968,7 @@ private struct CommitSheet: View {
         let repository = Git(directory)
         let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let pushes = pushesAfterCommit
-        let error = await git.perform("Committing") {
+        let error = await git.perform(directory, "Committing") {
             try await repository.commitAll(message: text)
             if pushes { try await repository.push() }
         }

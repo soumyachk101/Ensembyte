@@ -39,6 +39,10 @@ final class CopilotSession: ProviderSession {
 
     private let configuration: SessionConfiguration
     private var connection: JSONRPCConnection?
+    /// The stop() teardown, tracked so the connection dying on its own (handleClose) or the
+    /// session going away (deinit) can cancel them; neither may outlive the session.
+    nonisolated(unsafe) private var shutdownTask: Task<Void, Never>?
+    nonisolated(unsafe) private var closeBackstopTask: Task<Void, Never>?
     private var sessionID: String?
     private var runtimeMode: RuntimeMode
     private var interactionMode: InteractionMode = .build
@@ -308,16 +312,48 @@ final class CopilotSession: ProviderSession {
 
     func stop() {
         isStopping = true
-        guard let connection, !connection.isClosed else { return }
+        guard let connection, !connection.isClosed else { cancelShutdown(); return }
         // A shutdown lets the CLI flush the session's event log; the close after it is the backstop.
-        Task {
+        shutdownTask = Task { [weak self] in
+            await self?.awaitShutdown(connection)
+            connection.close()
+        }
+        closeBackstopTask = Task { [weak self] in
+            _ = try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            connection.close()
+            self?.cancelShutdown()
+        }
+    }
+
+    /// Asks the CLI to shut down, racing the reply against a two-second cap so a
+    /// wedged request can't hold up the close backstop.
+    private func awaitShutdown(_ connection: JSONRPCConnection) async {
+        let requestTask = Task { @MainActor in
             _ = try? await connection.request("runtime.shutdown")
-            connection.close()
         }
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            connection.close()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await requestTask.value }
+            group.addTask { try? await Task.sleep(for: .seconds(2)) }
+            // Whichever finishes first (the reply or the cap) ends the wait; the
+            // other is abandoned so a hanging request cannot outlive the session.
+            _ = await group.next()
+            group.cancelAll()
         }
+        requestTask.cancel()
+    }
+
+    /// Cancels the stop() teardown, called when the connection dies on its own or the session
+    /// goes away so neither task strong-captures the connection outliving it.
+    nonisolated private func cancelShutdown() {
+        shutdownTask?.cancel()
+        closeBackstopTask?.cancel()
+        shutdownTask = nil
+        closeBackstopTask = nil
+    }
+
+    deinit {
+        cancelShutdown()
     }
 
     // MARK: - Modes and selection
@@ -930,6 +966,9 @@ final class CopilotSession: ProviderSession {
         pendingRequests.removeAll()
         for key in resolved { onEvent?(.requestResolved(id: key)) }
         turnActive = false
+        // The connection is gone: the stop() teardown and its backstop would capture it
+        // past its life, so cancel them whichever way the close arrived.
+        cancelShutdown()
         guard !isStopping else { return }
         onEvent?(.exited(error: TextCleanup.lastLines(tail)))
     }

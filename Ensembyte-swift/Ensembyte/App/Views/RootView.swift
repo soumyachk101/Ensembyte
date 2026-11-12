@@ -866,35 +866,6 @@ private struct OpenProvidersSettingsButton: View {
     }
 }
 
-struct CopyCommandButton: View {
-    let command: String
-    @State private var didCopy = false
-
-    var body: some View {
-        Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(command, forType: .string)
-            didCopy = true
-            // Back to the command after a beat, the way the transcript's copy button
-            // goes back to its mark; it used to read "Copied" for the rest of the launch.
-            Task {
-                try? await Task.sleep(for: .seconds(1.4))
-                didCopy = false
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: didCopy ? "checkmark" : "terminal")
-                    .font(.system(size: 10))
-                Text(verbatim: didCopy ? "Copied" : command)
-                    .font(.system(size: 11, design: .monospaced))
-            }
-            .frame(height: Chrome.rowButtonLabelHeight)
-        }
-        .buttonStyle(.glass)
-        .help("Copy the sign-in command, then run it in Terminal")
-    }
-}
-
 struct NoThreadView: View {
     @Environment(AppModel.self) private var model
     @State private var showsActivity = false

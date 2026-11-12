@@ -1,9 +1,8 @@
 import Foundation
 
 enum GitHubAPI {
-    /// The "Ensembyte" OAuth App, device flow enabled and token expiry off (nothing here
-    /// refreshes tokens). Public by design: device flow needs no client secret.
-    static let clientID = "Ov23li5RP2y9yjVjd3Zr"
+    /// The Ensembyte GitHub App. Device flow needs no client secret.
+    static let clientID = GitHubAppIdentity.clientID
     static let scopes = "repo read:org workflow"
 
     static func user(token: String) async throws -> GitHubUser {
@@ -148,6 +147,29 @@ enum GitHubCredentials {
             "GIT_CONFIG_VALUE_0": "",
             "GIT_CONFIG_KEY_1": "credential.https://github.com.helper",
             "GIT_CONFIG_VALUE_1": "!f() { test \"$1\" = get || return 0; echo username=x-access-token; echo \"password=$GH_TOKEN\"; }; f",
+        ]
+    }
+
+    /// The stored overlay for a signed-in person. Author variables are absent,
+    /// so the commit stays theirs; `LoginEnvironment.current` adds the co-author hook after this.
+    static func humanOverlay(token: String) -> [String: String] {
+        environment(token: token)
+    }
+
+    /// The stored overlay while ensembyte[bot] is connected: the credential
+    /// block plus the bot's author and committer. The login environment is
+    /// not copied, so disconnect can drop the author by storing `humanOverlay`.
+    static func botOverlay(token: String) -> [String: String] {
+        environment(token: token).merging(botAuthorIdentity()) { _, new in new }
+    }
+
+    /// The four variables that author and commit as ensembyte[bot]. Only the bot overlay carries them.
+    static func botAuthorIdentity() -> [String: String] {
+        [
+            "GIT_AUTHOR_NAME": GitHubAppIdentity.botLogin,
+            "GIT_AUTHOR_EMAIL": GitHubAppIdentity.botNoreply,
+            "GIT_COMMITTER_NAME": GitHubAppIdentity.botLogin,
+            "GIT_COMMITTER_EMAIL": GitHubAppIdentity.botNoreply,
         ]
     }
 }

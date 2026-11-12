@@ -22,10 +22,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::EngineError;
 
-/// The GitHub App's bot account (`ensembyte[bot]`, user id 346184242): its
+/// The GitHub App's bot account (`ensembyte[bot]`, user id 352044576): its
 /// noreply address is what GitHub resolves a co-author trailer to.
+/// `346184242` is `zeronsh[bot]`; that id lists the wrong bot.
 pub const TRAILER: &str =
-    "Co-authored-by: ensembyte[bot] <346184242+ensembyte[bot]@users.noreply.github.com>";
+    "Co-authored-by: ensembyte[bot] <352044576+ensembyte[bot]@users.noreply.github.com>";
 
 /// Hooks the wrappers stand in for. `reference-transaction` and
 /// `post-index-change` are left out: they run on every ref or index write,

@@ -1628,7 +1628,7 @@ mod tests {
             "config",
             "--global",
             "user.email",
-            "346184242+ensembyte[bot]@users.noreply.github.com",
+            "352044576+ensembyte[bot]@users.noreply.github.com",
         ]);
         configure_git_identity(home.path(), &user).await;
         assert_eq!(git(&["config", "--global", "user.email"]), user.email);

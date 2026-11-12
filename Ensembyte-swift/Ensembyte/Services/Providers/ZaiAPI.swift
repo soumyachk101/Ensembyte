@@ -196,9 +196,42 @@ enum ZaiAPI {
         guard json["code"]?.int == 200, json["success"]?.bool == true else {
             throw ResetCreditError.rejected(json["msg"]?.string ?? "Z.ai declined the reset.")
         }
-        // The meters lag the reset by a moment; the dashboard waits the same two seconds.
-        try? await Task.sleep(for: .seconds(2))
-        return .reset
+        // The meters lag the reset: re-read and confirm the window actually cleared instead of
+        // a fixed sleep, so the UI is not handed a stale "reset" before the meter moved.
+        return await confirmReset(apiKey: apiKey)
+    }
+
+    /// Bounded re-read-and-confirm after a spent card: the meters lag the reset, so poll
+    /// the window a few times with a short delay until it reflects the cleared state. Returns
+    /// `.reset` only once a meter confirms; if it still has not confirmed by the cap it
+    /// reports `.pending` (the not-yet-confirmed state) rather than a false success.
+    static func confirmReset(apiKey: String) async -> PlanLimits.ResetOutcome {
+        let maxAttempts = 6
+        let delaySeconds: Double = 2
+        for attempt in 0..<maxAttempts {
+            if attempt > 0 {
+                try? await Task.sleep(for: .seconds(delaySeconds))
+                if Task.isCancelled { break }
+            }
+            guard let limits = await ZaiAPI.planLimits(apiKey: apiKey) else { continue }
+            if ZaiAPI.isWindowCleared(limits) { return .reset }
+        }
+        return .pending
+    }
+
+    /// Whether any credit meter in `limits` reflects a cleared window. Both card types
+    /// ("FIVE_HOUR", "WEEK") clear the credit-based windows ("credit-0"/"credit-1"); the MCP
+    /// tool-call windows ("tools-") are separate and untouched by a reset card. A confirmed
+    /// reset reads at/near zero.
+    static func isWindowCleared(_ limits: PlanLimits) -> Bool {
+        limits.windows.contains { window in
+            window.id.hasPrefix("credit-") && ZaiAPI.isCleared(window.percent)
+        }
+    }
+
+    /// A cleared meter reads at or near zero.
+    static func isCleared(_ percent: Double) -> Bool {
+        percent <= 0.01
     }
 
     /// Z.ai writes its card expiries as naive `yyyy-MM-dd HH:mm:ss` in the operator's zone.

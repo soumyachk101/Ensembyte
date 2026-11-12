@@ -289,10 +289,6 @@ final class ThreadRuntime {
     /// every rewrite so a row animation keyed to it settles on the flip itself, not a
     /// whole-list churn.
     var todos: TodoList = .init()
-    /// The thread's most recent to-do list, updated in place as the agent rewrites it,
-    /// so a floating panel can read it without walking the whole timeline. Mirrors
-    /// `todos.items` wherever it is set.
-    var latestTodos: [TodoStep] = []
     /// Whether the browser section is open for this thread. Session-only: switching to
     /// another thread or project does not carry it over, so each thread starts with it off.
     var isBrowserSectionVisible = false
@@ -720,7 +716,7 @@ final class ThreadRuntime {
             }
         }
         entries = loaded + entries
-        // The panel reads `latestTodos` (maintained live by `upsertTodos`), but a
+        // The panel reads `todos` (maintained live by `upsertTodos`), but a
         // restored thread's list came back as entries, not events: seed it from the
         // freshest non-empty list so the panel matches the timeline's todo rows. A row
         // stored by an earlier build is a bare array, not a `TodoList`; the entry keeps
@@ -728,7 +724,6 @@ final class ThreadRuntime {
         for entry in entries.reversed() {
             guard case .todos(let list) = entry.item.content, !list.items.isEmpty else { continue }
             todos = list
-            latestTodos = list.items
             break
         }
         // A card left in its sent state by a quit mid-hold goes now: its heads went out long ago.
@@ -1363,7 +1358,6 @@ final class ThreadRuntime {
         // first list starts fresh rather than merging into the settled one behind it, and
         // a late rewrite of the finished turn's list is dropped against the new owner.
         todos = .init()
-        latestTodos = []
         todosTurnID = nil
         append(userItem)
         phase = .starting
@@ -3611,10 +3605,6 @@ final class ThreadRuntime {
             lastSeen[ObjectIdentifier(runtime)] = .now
         }
 
-        func forget(_ runtime: ThreadRuntime) {
-            lastSeen[ObjectIdentifier(runtime)] = nil
-        }
-
         /// Runtimes that flushed within the last two seconds.
         var streamingCount: Int {
             let now = ContinuousClock.now
@@ -3625,10 +3615,6 @@ final class ThreadRuntime {
         /// The least a head waits between two flushes while `streamingCount` heads talk.
         var headFlushDelayMilliseconds: Int {
             max(45, streamingCount * Self.headFlushBudget)
-        }
-
-        var headFlushWindow: Duration {
-            .milliseconds(headFlushDelayMilliseconds)
         }
     }
 
@@ -4138,7 +4124,6 @@ final class ThreadRuntime {
         list.settled = false
         list.revision += 1
         todos = list
-        latestTodos = merged
         // The row is remembered rather than searched for: a turn rewrites its list many
         // times, and the timeline behind it can hold thousands of rows. Without it, the
         // running turn's entries are the last ones, and an earlier turn ends the walk.
@@ -4179,7 +4164,6 @@ final class ThreadRuntime {
         list.settled = true
         list.revision += 1
         todos = list
-        latestTodos = list.items
         entry.item.content = .todos(list)
         saveRevision += 1
         scheduleSave()
@@ -4209,25 +4193,6 @@ final class ThreadRuntime {
             append(item)
         }
         scheduleSave()
-    }
-
-    /// The running turn's todo list, freshest update first: the row is rewritten in
-    /// place as the agent works, and an earlier turn's list stays behind it.
-    var currentTurnTodos: [TodoStep] {
-        for entry in entries.reversed() {
-            if entry.item.turnID != currentTurnID { break }
-            if case .todos(let list) = entry.item.content { return list.items }
-        }
-        return []
-    }
-
-    /// The freshest artifact the running turn has produced; older ones stay in place.
-    var currentTurnArtifact: Artifact? {
-        for entry in entries.reversed() {
-            if entry.item.turnID != currentTurnID { break }
-            if case .artifact(let artifact) = entry.item.content { return artifact }
-        }
-        return nil
     }
 
     private func appendNotice(_ level: Notice.Level, _ message: String) {
@@ -4532,7 +4497,6 @@ extension ThreadRuntime {
         // A new turn is a new plan, as `startTurn`'s: the mirror and its owner start fresh
         // and a late rewrite of the finished turn's list is dropped against the new owner.
         todos = .init()
-        latestTodos = []
         todosTurnID = nil
         hydraCurrentTurnTouchedPaths = Set(touchedPaths)
         phase = .running

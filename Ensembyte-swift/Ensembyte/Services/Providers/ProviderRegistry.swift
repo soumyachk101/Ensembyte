@@ -76,6 +76,10 @@ final class ProviderRegistry {
     @ObservationIgnored private var limitsFetchedAt: [ProviderKind: Date] = [:]
     // A forced read that arrives while a read is out is remembered, not dropped.
     @ObservationIgnored private var forcedLimitReads: Set<ProviderKind> = []
+    /// Per-provider generation of the in-flight limits read. The watchdog bumps it when it
+    /// takes over, so a still-running read that started before the bump publishes nothing —
+    /// only the read that the drain kicks off may write.
+    @ObservationIgnored private var limitsReadGeneration: [ProviderKind: Int] = [:]
 
     /// What the last check of each account found: sign-in, identity and usage windows.
     var accountStates: [UUID: ProviderAccountState] = [:]
@@ -751,18 +755,21 @@ final class ProviderRegistry {
                 return
             }
             loadingLimits.insert(provider)
+            let generation = startLimitsRead(for: provider)
             let watchdog = Task { try? await Task.sleep(for: .seconds(25)); loadingLimits.remove(provider); drainedForcedRead(provider) }
             Task {
                 defer { watchdog.cancel(); loadingLimits.remove(provider); drainedForcedRead(provider) }
                 let limits = await PlanLimitsReader.read(provider, apiKey: apiKey)
                 guard let limits else { return }
-                planLimits[provider] = limits
-                limitsFetchedAt[provider] = .now
+                // A read the watchdog already superseded publishes nothing, so a slow read
+                // cannot write a stale result over a newer one.
+                publishLimits(limits, for: provider, generation: generation)
             }
             return
         }
         guard PlanLimitsReader.exposesLimits(provider), !loadingLimits.contains(provider) else { return }
         loadingLimits.insert(provider)
+        let generation = startLimitsRead(for: provider)
         let watchdog = Task { try? await Task.sleep(for: .seconds(25)); loadingLimits.remove(provider); drainedForcedRead(provider) }
         Task {
             defer { watchdog.cancel(); loadingLimits.remove(provider); drainedForcedRead(provider) }
@@ -772,9 +779,26 @@ final class ProviderRegistry {
             guard let executable = executable(for: provider) else { return }
             let limits = await PlanLimitsReader.read(provider, executable: executable, environment: environment(for: provider))
             guard let limits else { return }
-            planLimits[provider] = limits
-            limitsFetchedAt[provider] = .now
+            // A read the watchdog already superseded publishes nothing, so a slow read
+            // cannot write a stale result over a newer one.
+            publishLimits(limits, for: provider, generation: generation)
         }
+    }
+
+    /// Bumps the provider's limits-read generation and returns the new value to capture:
+    /// each new read supersedes the one before it, so a superseded read's write is dropped
+    /// by `publishLimits` rather than landing after the watchdog cleared the slot.
+    private func startLimitsRead(for provider: ProviderKind) -> Int {
+        let generation = (limitsReadGeneration[provider] ?? 0) + 1
+        limitsReadGeneration[provider] = generation
+        return generation
+    }
+
+    /// Writes a finished read's result only if no newer read has superseded it.
+    private func publishLimits(_ limits: PlanLimits, for provider: ProviderKind, generation: Int) {
+        guard limitsReadGeneration[provider] == generation else { return }
+        planLimits[provider] = limits
+        limitsFetchedAt[provider] = .now
     }
 
     /// Drops the provider's limits read for another account, so nothing shows the old

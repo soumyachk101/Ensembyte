@@ -12,9 +12,16 @@ public enum GitHubAuth {
     public static func customToken() -> String? {
         guard !CaptureRun.isEnabled else { return nil }
         if let keychain = readKeychain(), !keychain.isEmpty { return keychain }
+        if let inMemory = inMemoryToken, !inMemory.isEmpty { return inMemory }
+        // The plaintext UserDefaults copy is only ever a read for a Mac whose Keychain
+        // refused the write earlier; it is never re-persisted.
         if let fallback = UserDefaults.standard.string(forKey: fallbackKey), !fallback.isEmpty { return fallback }
         return nil
     }
+
+    /// The token this session secured in memory when the Keychain refused the write;
+    /// it survives until the app quits or is invalidated and is never written to disk.
+    nonisolated(unsafe) private static var inMemoryToken: String?
 
     @discardableResult
     public static func setCustomToken(_ token: String) -> Bool {
@@ -23,16 +30,19 @@ public enum GitHubAuth {
         if trimmed.isEmpty {
             deleteKeychain()
             UserDefaults.standard.removeObject(forKey: fallbackKey)
+            inMemoryToken = nil
             return true
         }
-        let saved = APIKeychain.set(trimmed, account: account, service: service)
-        if saved {
+        if APIKeychain.set(trimmed, account: account, service: service) {
+            inMemoryToken = nil
             UserDefaults.standard.removeObject(forKey: fallbackKey)
             return true
-        } else {
-            UserDefaults.standard.set(trimmed, forKey: fallbackKey)
-            return false
         }
+        // The Keychain refused, so the key is held in memory for this session only;
+        // it is never written to the plaintext UserDefaults fallback (a secret on disk
+        // in a plist), which was removed rather than kept.
+        inMemoryToken = trimmed
+        return false
     }
 
     private enum CLISource {
@@ -45,9 +55,24 @@ public enum GitHubAuth {
     nonisolated(unsafe) private static var cachedCLISource: CLISource?
     nonisolated(unsafe) private static var lastCLICheck: Date?
     nonisolated(unsafe) private static var warmInFlight = false
-    private static let cacheTTL: TimeInterval = 300
+    /// A revoked or rotated gh-CLI token is not re-resolved for this long; short enough that
+    /// a stale cached token ages out on its own, so a 401 is not served for minutes.
+    private static let cacheTTL: TimeInterval = 60
 
     public static func invalidateCache() {
+        cacheLock.lock()
+        cachedCLIToken = nil
+        cachedCLISource = nil
+        lastCLICheck = nil
+        cacheLock.unlock()
+    }
+
+    /// Call when a token consumer gets a 401: clears the cached CLI token so the next read
+    /// re-resolves, instead of serving a revoked or rotated token for the whole TTL. It
+    /// does not touch the user's own custom token (or its in-memory hold) — that one is
+    /// still valid even if a GitHub call 401'd. The 401 handling lives in the App layer
+    /// (GitHubConnection); this is the hook it should call at that narrow point.
+    public static func invalidateOnAuthFailure() {
         cacheLock.lock()
         cachedCLIToken = nil
         cachedCLISource = nil

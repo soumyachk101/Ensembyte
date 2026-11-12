@@ -509,24 +509,25 @@ final class AppSettings {
         if keys.commandcode.inKeychain { defaults.removeObject(forKey: Key.commandcodeAPIKey) }
     }
 
-    /// One provider key changed: hand it to the Keychain and keep a plaintext copy in
-    /// the defaults only for a Mac whose Keychain refused it.
+    /// One provider key changed: hand it to the Keychain. When the Keychain refuses the
+    /// write the key stays in the in-memory input (the session still works) but is never
+    /// written to the plaintext defaults — a secret on disk in a plist. The removed
+    /// fallback meant an older build's plaintext copy is dropped too, so a refused write
+    /// leaves no secret on disk.
     private func storeAPIKeyChange(_ value: String, from oldValue: String, provider: ProviderKind, fallbackKey: String) {
         guard !isReadingKeychain, value != oldValue else { return }
         let kept = APIKeychain.setKey(value, for: provider)
-        storeAPIKeyFallback(kept ? "" : value, forKey: fallbackKey)
-    }
-
-    /// The plaintext copy in defaults, for a Mac whose Keychain refused the key; an empty
-    /// value removes it, so a key the Keychain holds never sits in the defaults too.
-    private func storeAPIKeyFallback(_ value: String, forKey key: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            defaults.removeObject(forKey: key)
-        } else {
-            defaults.set(trimmed, forKey: key)
+        // Either way the plaintext copy is dropped: on success the Keychain owns it, on
+        // refusal it must not linger on disk.
+        defaults.removeObject(forKey: fallbackKey)
+        if !kept {
+            keychainUnavailable = true
         }
     }
+
+    /// True when the Keychain refused a key write this session, so the Settings view can
+    /// say "Keychain unavailable" instead of the key sitting in the plaintext defaults.
+    private(set) var keychainUnavailable = false
 
     private(set) var binaryPaths: [String: String] {
         didSet { defaults.set(binaryPaths, forKey: Key.binaryPaths) }

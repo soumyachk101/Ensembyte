@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.18] - 2026-11-12
+
+Ensembyte 1.1.18 strengthens secret hygiene and GitHub App identity across both clients—fixing the `ensembyte[bot]` user ID (`352044576`), adding automatic `Co-authored-by` git-hook attribution, eliminating plaintext credential fallbacks, hardening MCP proxy/OAuth handling, stabilizing provider lifecycle polling, and isolating per-directory Git status caching in `Ensembyte-swift`.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Ensembyte[bot] Commit Attribution & App Identity (`CommitCredit.swift`, `GitHubAppIdentity.swift`, `Shell.swift`)**: Fixed `botUserID` (`352044576`), updated App client ID (`Iv23lip8dk91VWKI1t22`), and installed `git-hooks` wrappers via `GIT_CONFIG_COUNT`/`core.hooksPath` to chain existing repo hooks and append `Co-authored-by` trailers on agent commits.
+- **Per-Installation Token Store & Keychain Override (`GitHubAppAuth.swift`, `GitHubConnection.swift`, `GitHubSettingsSection.swift`)**: Isolated cached installation tokens per installation ID (`BotTokenStore`), cleanly separated `humanOverlay` and `botOverlay`, and added Keychain override controls for the App private key in Settings.
+- **Zero Plaintext Secret Fallbacks (`AppSettings.swift`, `GitHubAuth.swift`)**: Removed `UserDefaults` plaintext storage fallbacks on Keychain write refusal (in-memory only + `keychainUnavailable`), shortened the `gh` CLI cache TTL to 60s, and invalidated cached auth on 401 responses.
+- **MCP & OAuth Hardening (`MCPOAuth.swift`, `MCPProxy.swift`)**: Added proactive `TokenDecision` refresh when tokens omit `expires_at`, and enforced a 32 MiB `bodyLimit` on non-SSE upstream proxy responses.
+- **Provider Lifecycle & Reset Polling (`ZaiAPI.swift`, `PlanLimits.swift`, `ProviderRegistry.swift`, `CopilotSession.swift`)**: Switched Z.ai credit resets to bounded `confirmReset` polling with `ResetOutcome.pending`, added `limitsReadGeneration` watchdog guards against stale writes, and capped `CopilotSession` shutdown at 2 seconds.
+- **Per-Directory Git Cache, Pure Reorder Math & Cleanup (`ChatView.swift`, `ReorderLayout.swift`, `EnsembyteCoreTests`)**: Scoped git status models, request coalescing, and 32-entry LRU caching per directory; extracted `ReorderLayout`; removed dead views/APIs; and added 5 new XCTest suites (77 tests passing).
+
+### Windows & Linux Updates (`Ensembyte-rust/`)
+- **Bot Co-Author Attribution Fix (`commit_credit.rs`, `credentials.rs`)**: Updated `ensembyte[bot]` user ID from `346184242` to `352044576` so agent commit trailers and git identity configuration resolve accurately to `ensembyte[bot]`.
+
 ## [1.1.17] - 2026-11-04
 
 Ensembyte 1.1.17 introduces Ensembyte[bot] native GitHub App RS256 authentication and dynamic installation token minting, direct Artifacts HUD controls in chat chrome, terminal monospace advance validation, provider credential isolation, and cross-platform GPUI WebView composition stability.

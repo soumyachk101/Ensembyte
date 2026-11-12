@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Foundation
 import Network
+import OSLog
 
 enum MCPOAuthError: LocalizedError, Sendable {
     case discoveryFailed(String)
@@ -125,8 +126,28 @@ private final class CallbackWait: @unchecked Sendable {
 }
 
 enum MCPOAuth {
+    private static let log = Logger(subsystem: "org.ensembyte.desktop", category: "mcp-oauth")
     private static let refreshGate = OAuthRefreshGate()
     private static let callbackTimeout: TimeInterval = 300
+
+    enum TokenDecision: Equatable {
+        case noRefresh
+        case refresh
+        case useStale
+    }
+
+    /// Whether a stored token should be treated as needing a refresh. A token without a
+    /// stored `expires_at` can't be checked for expiry, so it is not trusted as fresh:
+    /// if it has expired server-side, every use would 401 with no way to recover.
+    static func tokenDecision(stored: JSONValue) -> TokenDecision {
+        guard let expiresAt = stored["expires_at"]?.double else {
+            if let refreshToken = stored["refresh_token"]?.string, !refreshToken.isEmpty {
+                return .refresh
+            }
+            return .useStale
+        }
+        return Date().timeIntervalSince1970 >= expiresAt - 90 ? .refresh : .noRefresh
+    }
 
     // MARK: - Sign in
 
@@ -169,8 +190,13 @@ enum MCPOAuth {
             throw MCPOAuthError.signedOut
         }
         let needsRefresh: Bool = {
-            guard let expiresAt = json["expires_at"]?.double else { return false }
-            return Date().timeIntervalSince1970 >= expiresAt - 90
+            switch Self.tokenDecision(stored: json) {
+            case .noRefresh: return false
+            case .refresh: return true
+            case .useStale:
+                Self.log.info("token for \(serverID) has no stored expiry and no refresh token; using the cached token, which may be stale")
+                return false
+            }
         }()
         guard needsRefresh else { return accessToken }
         guard let refreshToken = json["refresh_token"]?.string, !refreshToken.isEmpty else {

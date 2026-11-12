@@ -17,3 +17,6 @@ target/
 SS/
 animations/
 SwarmCode-Dekstop-Release/
+# GitHub App private keys: never commit them; source them from the Keychain.
+Ensembyte/Resources/GitHubAppPrivateKey.pem
+*.pem

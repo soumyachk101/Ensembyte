@@ -3,6 +3,7 @@ import SwiftUI
 struct GitHubSettingsSection: View {
     @Environment(AppModel.self) private var model
     private var connection: GitHubConnection { .shared }
+    @State private var botKeyDraft = ""
 
     var body: some View {
         ChromeSection(title: "GitHub") {
@@ -55,6 +56,26 @@ struct GitHubSettingsSection: View {
                     ChromeRowDivider()
                     ChromeRow(title: "Clone into", detail: (connection.cloneDirectory.path as NSString).abbreviatingWithTildeInPath) {
                         Button("Change…") { GitHubClonePanel.chooseCloneDirectory() }.buttonStyle(.glass)
+                    }
+                    ChromeRowDivider()
+                    ChromeRow(
+                        title: "App private key",
+                        detail: "The RSA private key from your GitHub App settings; Ensembyte[bot] signs with it. Stored in your Keychain."
+                    ) {
+                        HStack(spacing: 8) {
+                            SecureField("-----BEGIN RSA PRIVATE KEY-----", text: $botKeyDraft)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(1...4)
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(width: 280)
+                            Button(botKeyDraft.isEmpty ? "Remove" : "Save") {
+                                GitHubAppAuth.setKeychainKey(botKeyDraft)
+                            }
+                            .buttonStyle(.glass)
+                        }
+                        .onAppear {
+                            if botKeyDraft.isEmpty { botKeyDraft = GitHubAppAuth.storedKey() ?? "" }
+                        }
                     }
                 } else if case .checking = connection.phase {
                     HStack(spacing: 8) {

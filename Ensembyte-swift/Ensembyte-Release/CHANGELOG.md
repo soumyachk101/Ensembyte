@@ -2,6 +2,19 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.18] - 2026-11-12
+
+### Security & Identity
+- Ensembyte[bot] Commit Attribution & Identity (`CommitCredit.swift`, `GitHubAppIdentity.swift`, `Shell.swift`): Fixed `ensembyte[bot]` user ID (`352044576`), updated App client ID (`Iv23lip8dk91VWKI1t22`), and installed `git-hooks` wrappers via `core.hooksPath` that run repository hooks first and append `Co-authored-by` trailers on agent commits.
+- Per-Installation Bot Token Store & Keychain Override (`GitHubAppAuth.swift`, `GitHubSettingsSection.swift`): Switched installation token caching to per-installation `[Int: BotTokenCache]` storage, separated `humanOverlay` from `botOverlay`, and added an App Private Key Keychain override field in Settings.
+- Plaintext Credential Fallback Removal (`AppSettings.swift`, `GitHubAuth.swift`): Dropped all `UserDefaults` plaintext fallbacks for API keys and GitHub tokens on Keychain refusal (`keychainUnavailable` state), tightened `gh` CLI cache TTL to 60s, and added 401 auth cache invalidation.
+- MCP & OAuth Hardening (`MCPOAuth.swift`, `MCPProxy.swift`): Added proactive `TokenDecision` refresh when `expires_at` is omitted alongside a `refresh_token`, and capped non-SSE upstream `MCPProxy` response bodies at 32 MiB (`bodyLimit`).
+
+### Architecture & Reliability
+- Provider Stability & Concurrency (`ZaiAPI.swift`, `PlanLimits.swift`, `ProviderRegistry.swift`, `CopilotSession.swift`): Replaced fixed reset sleep with bounded `confirmReset` polling and `.pending` state, added `limitsReadGeneration` watchdog guards against stale limit writes, and bounded `CopilotSession` shutdown teardown to 2 seconds.
+- Per-Directory Git Status LRU & Panel Reorder (`ChatView.swift`, `ReorderLayout.swift`): Isolated git status reads, in-flight coalescing, 32-entry LRU caching, and activity tracking per directory; extracted pure `ReorderLayout` math and cached `PanelScene.autoPoppedIDs`.
+- Code Hygiene & Core Tests (`EnsembyteCoreTests`): Removed unused view/helper types (`DragHandle`, `HydraRunMetricsView`, `HydraDelegationBlock`, `OpenAICompatibleAPI`, `CopyCommandButton`, `AppZoomModifier`, `OrbTheme`, `latestTodos`) and added `CommitCreditTests`, `GitHubBotTokenCacheTests`, `MCPOAuthTests`, `ReorderLayoutTests`, and `ZaiResetConfirmTests`.
+
 ## [1.1.17] - 2026-11-04
 
 ### New features

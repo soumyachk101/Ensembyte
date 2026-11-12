@@ -114,16 +114,6 @@ enum OrbSize: CaseIterable, Hashable, Sendable {
     }
 }
 
-/// Theme mode for monochrome ink on a transparent canvas.
-enum OrbTheme: Hashable, Sendable {
-    /// Resolve from the appearance.
-    case auto
-    /// Light ink for dark backgrounds.
-    case dark
-    /// Dark ink for light backgrounds.
-    case light
-}
-
 /// Internal mode keys, one painter per key.
 enum OrbModeKey: Hashable, Sendable {
     case orbits, globe, rubik, wave, web, braid, ribbon, ring, morph, focus, gyroscope, echo

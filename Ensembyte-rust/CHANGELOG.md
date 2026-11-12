@@ -5,6 +5,11 @@ All notable changes to Ensembyte (Rust Core & Desktop) are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.18] - 2026-11-12
+
+### Fixed
+- **Ensembyte[bot] Attribution User ID (`crates/engine/src/commit_credit.rs`, `credentials.rs`)**: Updated `ensembyte[bot]` noreply user ID from `346184242` to `352044576` so co-author commit trailers and configured bot git identities resolve to `ensembyte[bot]`.
+
 ## [1.1.17] - 2026-11-04
 
 ### Fixed

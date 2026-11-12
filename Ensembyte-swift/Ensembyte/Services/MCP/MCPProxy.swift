@@ -48,6 +48,10 @@ final class MCPProxy: @unchecked Sendable {
         let connection: NWConnection
     }
 
+    private enum MCPProxyError: Error {
+        case responseTooLarge
+    }
+
     private static let headLimit = 65_536
     private static let bodyLimit = 32 * 1_024 * 1_024
     private static let divider = Data("\r\n\r\n".utf8)
@@ -582,13 +586,27 @@ final class MCPProxy: @unchecked Sendable {
             connection.cancel()
             forget(connection)
         } else {
+            // The request is bounded by `bodyLimit`; bound the non-SSE response the same way
+            // so a misbehaving upstream can't OOM the proxy by streaming without end.
             var payload = Data()
             if response.expectedContentLength > 0 {
-                payload.reserveCapacity(Int(response.expectedContentLength))
+                payload.reserveCapacity(min(Int(response.expectedContentLength), Self.bodyLimit))
             }
-            for try await byte in stream {
-                payload.append(byte)
+            do {
+                for try await byte in stream {
+                    payload.append(byte)
+                    if payload.count > Self.bodyLimit {
+                        throw MCPProxyError.responseTooLarge
+                    }
+                }
+            } catch MCPProxyError.responseTooLarge {
+                Self.log.error("upstream response exceeded \(Self.bodyLimit) bytes; dropping")
+                respond(connection: box.connection, status: 502, body: Self.jsonError("The upstream response was too large."))
+                return
+            } catch {
+                return
             }
+
             headers.append(("Content-Length", "\(payload.count)"))
             headers.append(("Connection", "close"))
             var out = Data(Self.statusHead(status: response.statusCode, headers: headers).utf8)
