@@ -196,6 +196,7 @@ final class AppSettings {
         static let usagePanelDock = "usagePanelDock"
         static let usagePanelHeight = "usagePanelHeight"
         static let browserSectionWidth = "browserSectionWidth"
+        static let ideSectionWidth = "ideSectionWidth"
         static let hydraPairs = "hydraPairs"
         static let hasSeenTour = "hasSeenTour"
         static let hasSeenHydraIntro = "hasSeenHydraIntro"
@@ -746,6 +747,11 @@ final class AppSettings {
         didSet { defaults.set(Double(browserSectionWidth), forKey: Key.browserSectionWidth) }
     }
 
+    /// The width of the IDE's window section, as its leading edge was last dragged to.
+    var ideSectionWidth: CGFloat {
+        didSet { defaults.set(Double(ideSectionWidth), forKey: Key.ideSectionWidth) }
+    }
+
     /// The lead-and-heads pairings, in the order they were added.
     private(set) var hydraPairs: [HydraPair] {
         didSet { store(hydraPairs, forKey: Key.hydraPairs) }
@@ -838,6 +844,7 @@ final class AppSettings {
         usagePanelDock = defaults.string(forKey: Key.usagePanelDock).flatMap(PanelDockCorner.init(rawValue:)) ?? .bottomLeading
         usagePanelHeight = defaults.object(forKey: Key.usagePanelHeight).flatMap { $0 as? Double }.map { CGFloat($0) }
         browserSectionWidth = defaults.object(forKey: Key.browserSectionWidth).flatMap { $0 as? Double }.map { CGFloat($0) } ?? 440
+        ideSectionWidth = defaults.object(forKey: Key.ideSectionWidth).flatMap { $0 as? Double }.map { CGFloat($0) } ?? 440
         hydraPairs = Self.load([Lenient<HydraPair>].self, forKey: Key.hydraPairs)?.compactMap(\.value) ?? []
     }
 

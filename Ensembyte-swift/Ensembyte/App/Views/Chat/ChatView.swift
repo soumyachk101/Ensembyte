@@ -1415,6 +1415,10 @@ private struct ChatChromeRow: View {
                         ChromeIconButton(symbol: "plusminus", isActive: runtime.isDiffVisible, help: "Changes" + ShortcutStore.hint(for: .toggleChanges)) {
                             runtime.toggleDiff()
                         }
+                        ChromeDivider()
+                        ChromeIconButton(symbol: "chevron.left.forwardslash.chevron.right", isActive: runtime.isIDESectionVisible, help: "IDE") {
+                            withAnimation(Chrome.panelSlide) { runtime.isIDESectionVisible.toggle() }
+                        }
                     }
                     ChromeCapsule {
                         ChromeTextButton(symbol: "checklist", title: "Artifacts", help: "Artifacts panel") {

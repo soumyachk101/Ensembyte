@@ -330,6 +330,12 @@ struct RootView: View {
     /// The width the drag is holding right now: written per event, committed to settings
     /// only on release, so a drag costs one defaults write, not one per frame.
     @State private var liveBrowserWidth: CGFloat?
+    /// The width the IDE section held when its edge was grabbed, the anchor every
+    /// drag translation measures against.
+    @State private var ideDragStart: CGFloat = 0
+    /// The width the drag is holding right now: written per event, committed to settings
+    /// only on release, so a drag costs one defaults write, not one per frame.
+    @State private var liveIDEWidth: CGFloat?
     /// The voice stage's arrival, 0 hidden to 1 covering the chat, and whether it is drawn.
     @State private var voiceReveal: CGFloat = 0
     @State private var voiceStageShown = false
@@ -349,6 +355,7 @@ struct RootView: View {
         // stays closed in a thread whose flag was never flipped and reopens where it
         // was left. No thread selected means no runtime to observe, hence off.
         let browserSectionOn = model.selectedThreadID.map { model.runtime(for: $0).isBrowserSectionVisible } ?? false
+        let ideSectionOn = model.selectedThreadID.map { model.runtime(for: $0).isIDESectionVisible } ?? false
         HStack(spacing: 0) {
             ZStack(alignment: .leading) {
                 // The rows are laid out at the sidebar's width once, and the slide moves the clip
@@ -412,7 +419,7 @@ struct RootView: View {
             .padding(.leading, settingsShown || (sidebar.isVisible && !onlyFloats) ? 0 : Chrome.sheetInset)
             // When the section sits behind the chat, the column ends at the section's edge,
             // so the sheet's trailing inset is what separates them.
-            .padding(.trailing, browserSectionOn && !settingsShown ? 0 : Chrome.sheetInset)
+            .padding(.trailing, (browserSectionOn || ideSectionOn) && !settingsShown ? 0 : Chrome.sheetInset)
             .padding(.vertical, Chrome.sheetInset)
 
             // The browser's own column: an opaque section beside the chat, sized by the
@@ -446,8 +453,40 @@ struct RootView: View {
                     }
                     .transition(.opacity)
             }
+
+            // The IDE's own column: an opaque section beside the chat, sized by the
+            // persisted width and resized live by its leading edge. Only beside the chat,
+            // never under a settings page.
+            if ideSectionOn && !settingsShown {
+                IDESectionView()
+                    .frame(width: liveIDEWidth ?? model.settings.ideSectionWidth)
+                    .frame(maxHeight: .infinity)
+                    .padding(.top, Chrome.sheetInset)
+                    .padding(.bottom, Chrome.sheetInset)
+                    .overlay(alignment: .leading) {
+                        // The section's left edge: dragging left widens it, so the handle's
+                        // (window-space) translation is inverted from the sidebar's.
+                        SidebarResizeHandle(
+                            isActive: true,
+                            onBegin: { ideDragStart = model.settings.ideSectionWidth },
+                            onChange: { translation in
+                                liveIDEWidth = min(960, max(280, ideDragStart - translation))
+                            },
+                            onEnd: {
+                                if let live = liveIDEWidth {
+                                    model.settings.ideSectionWidth = live
+                                }
+                                liveIDEWidth = nil
+                                ideDragStart = 0
+                            }
+                        )
+                        .frame(width: SidebarResizeHandle.hitWidth)
+                        .padding(.top, Chrome.trafficLightTop + Chrome.trafficLightDiameter)
+                    }
+                    .transition(.opacity)
+            }
         }
-        .animation(Chrome.panelSlide, value: browserSectionOn)
+        .animation(Chrome.panelSlide, value: browserSectionOn || ideSectionOn)
         // A hidden section's web view stops loading (its tabs are kept) and resumes where
         // the user left it on the way back; a thread switch moves with this the same way.
         .onChange(of: browserSectionOn) { _, on in

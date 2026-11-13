@@ -250,7 +250,7 @@ enum TourCaptures {
     /// needs the first of them.
     static func ensurePairs(_ model: AppModel) async {
         guard model.settings.hydraPairs.isEmpty else { return }
-        let fableID = model.providers.model("claude-fable-5-1[1m]", for: .claude)?.id ?? "claude-fable-5-1[1m]"
+        let fableID = model.providers.model("claude-fable-5-2[1m]", for: .claude)?.id ?? "claude-fable-5-2[1m]"
         var first = HydraPair(provider: .claude)
         first.orchestratorModel = fableID
         first.workerProvider = .antigravity

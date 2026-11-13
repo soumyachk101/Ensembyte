@@ -21,7 +21,7 @@ extension TourCaptures {
     static func addHydraMocks(to library: inout Library, storageRoot: URL, repos: URL, now: Date) {
         guard let project = library.projects.first else { return }
         let leadID = HydraID.lead
-        var lead = ChatThread(projectID: project.id, provider: .claude, model: "claude-fable-5-1[1m]", effort: "high", runtimeMode: .supervised)
+        var lead = ChatThread(projectID: project.id, provider: .claude, model: "claude-fable-5-2[1m]", effort: "high", runtimeMode: .supervised)
         lead.id = leadID
         lead.title = "Welcome tour for the app"
         lead.hasCustomTitle = true

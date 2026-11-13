@@ -292,6 +292,9 @@ final class ThreadRuntime {
     /// Whether the browser section is open for this thread. Session-only: switching to
     /// another thread or project does not carry it over, so each thread starts with it off.
     var isBrowserSectionVisible = false
+    /// Whether the IDE section is open for this thread. Session-only, like the browser
+    /// section: switching threads or projects does not carry it over.
+    var isIDESectionVisible = false
     /// The head whose timeline the Hydra panel shows.
     var hydraSelectedHeadID: UUID?
     /// The head popped out of the Hydra panel into a second panel of its own, if any, and

@@ -251,7 +251,7 @@ enum CommandCodeAPI {
         let base = short.split(separator: ":").first.map(String.init) ?? short
         let suffix = short.contains(":free") ? " Free" : ""
         var tokens = base.split(separator: "-").map(String.init)
-        // Trailing version pairs read as one number: `claude-fable-5-1` is Fable 5.1.
+        // Trailing version pairs read as one number: `claude-fable-5-2` is Fable 5.2.
         var index = 0
         while index + 1 < tokens.count {
             if tokens[index].allSatisfy(\.isNumber), tokens[index + 1].allSatisfy(\.isNumber) {
@@ -287,7 +287,7 @@ enum CommandCodeAPI {
         let highMax = ["high", "max"]
         let lowHighMax = ["low", "high", "max"]
         let table: [String: [String]] = [
-            "claude-sonnet-5": full, "claude-sonnet-4-6": full, "claude-fable-5-1": full, "claude-fable-5": full,
+            "claude-sonnet-5": full, "claude-sonnet-4-6": full, "claude-fable-5-2": full, "claude-fable-5-1": full, "claude-fable-5": full,
             "claude-opus-5-5": full, "claude-opus-5": full, "claude-opus-4-8": full, "claude-opus-4-7": full,
             "gpt-6-astra": full, "gpt-5.6-sol": full, "gpt-5.6-terra": full, "gpt-5.6-luna": full,
             "gpt-5.5": toXHigh, "gpt-5.4": toXHigh, "gpt-5.3-codex": toXHigh, "gpt-5.4-mini": toHigh,
@@ -313,7 +313,7 @@ enum CommandCodeAPI {
     static func contextWindow(for id: String?) -> Int? {
         guard let id else { return nil }
         let table: [String: Int] = [
-            "claude-sonnet-5": 1_000_000, "claude-sonnet-4-6": 1_000_000, "claude-fable-5-1": 1_000_000, "claude-fable-5": 1_000_000,
+            "claude-sonnet-5": 1_000_000, "claude-sonnet-4-6": 1_000_000, "claude-fable-5-2": 1_000_000, "claude-fable-5-1": 1_000_000, "claude-fable-5": 1_000_000,
             "claude-opus-5-5": 1_000_000, "claude-opus-5": 1_000_000, "claude-opus-4-8": 1_000_000, "claude-opus-4-7": 1_000_000, "claude-haiku-4-5": 200_000,
             "claude-haiku-4-5-20251001": 200_000,
             "gpt-6-astra": 1_050_000, "gpt-5.6-sol": 1_050_000, "gpt-5.6-terra": 1_050_000, "gpt-5.6-luna": 1_050_000,
@@ -348,7 +348,7 @@ enum CommandCodeAPI {
     /// Anthropic row, the CLI's own default, and a spread of what the account can run.
     static let seed: [ModelOption] = [
         ModelOption(id: "claude-sonnet-5", name: "Claude Sonnet 5", detail: "Anthropic · best combo of speed & intelligence", efforts: efforts(for: "claude-sonnet-5"), isDefault: true),
-        ModelOption(id: "claude-fable-5-1", name: "Claude Fable 5.1", detail: "Anthropic · most capable for demanding reasoning & long-horizon agents", efforts: efforts(for: "claude-fable-5-1")),
+        ModelOption(id: "claude-fable-5-2", name: "Claude Fable 5.2", detail: "Anthropic · most capable for demanding reasoning & long-horizon agents", efforts: efforts(for: "claude-fable-5-2")),
         ModelOption(id: "claude-opus-5-5", name: "Claude Opus 5.5", detail: "Anthropic · the newest Opus, for everyday complex work and coding", efforts: efforts(for: "claude-opus-5-5")),
         ModelOption(id: "claude-opus-5", name: "Claude Opus 5", detail: "Anthropic · most intelligent Opus for agents and coding", efforts: efforts(for: "claude-opus-5")),
         ModelOption(id: "gpt-6-astra", name: "GPT-6 Astra", detail: "OpenAI · most capable OpenAI model for demanding reasoning & agents", efforts: efforts(for: "gpt-6-astra")),

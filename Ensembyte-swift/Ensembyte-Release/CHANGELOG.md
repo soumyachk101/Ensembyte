@@ -2,6 +2,17 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.19] - 2026-11-13
+
+### New features
+- IDE Mode (`Ensembyte/App/Views/IDE/`, `Ensembyte/Services/IDE/`): A third 'IDE' column beside the chat — filterable file tree with per-type icons, editable code view with unsaved markers and Cmd-S save, and a working-tree Changes tab with live diffs, a total +N / -M summary, and a language/line-count status bar.
+- Terminal Tab in the IDE Pane (`IDESectionView+Terminal.swift`): The thread's own shell hosted beside the code, shared with the chat's bottom terminal, with a Restart control and an exited-shell placeholder.
+- Pane State Persistence (`IDEEditorStore+Persistence.swift`): Open files, selection and dirty flags persist under Application Support across relaunch.
+
+### Bug fixes
+- Fable 5.1-to-5.2 Model Picker Consolidation (`ProviderRegistry.swift`, `CommandCodeAPI.swift`): The seeded Fable row and the live CLI catalog now fold into one Fable 5.2 entry; old `claude-fable-5-1` ids (threads, captures, Command Code tables) resolve to 5.2 through an alias.
+- Cookbook & Capture Copy Updated to Fable 5.2 (`HydraCookbook.swift`): Hydra cookbook recipes and tour captures now name Fable 5.2 instead of 5.1.
+
 ## [1.1.18] - 2026-11-12
 
 ### Security & Identity

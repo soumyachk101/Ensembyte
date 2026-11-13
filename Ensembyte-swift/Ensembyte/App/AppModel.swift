@@ -26,6 +26,8 @@ final class AppModel {
     /// The app's browser: its open tabs, which one is front, and the commands that move them.
     let browser: BrowserStore
     let sidebar: SidebarLayout
+    /// The IDE pane's editor: the open file buffers and selection, surviving the pane toggling.
+    let ideEditor = IDEEditorStore()
     /// Picks chats back up once a spent usage limit resets, with the setting on.
     @ObservationIgnored private(set) var autoContinue: AutoContinue!
     /// The voice agent mode's call, one for the app: independent of the selected chat.
@@ -158,6 +160,9 @@ final class AppModel {
         providers = ProviderRegistry(settings: settings)
         mcp = MCPStore()
         terminals = TerminalStore()
+        if !CaptureRun.isEnabled {
+            ideEditor.loadState()
+        }
         browser = BrowserStore()
         sidebar = SidebarLayout()
         autoContinue = AutoContinue(app: self)

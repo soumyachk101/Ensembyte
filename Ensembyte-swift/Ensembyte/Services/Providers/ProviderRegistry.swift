@@ -96,21 +96,37 @@ final class ProviderRegistry {
     private static let claudeSeed = [
         ModelOption(id: "default", name: "Default", detail: "Claude Code's recommended model", efforts: claudeEfforts, isDefault: true, fastTier: "fast"),
         ModelOption(id: "opus", name: "Opus", efforts: claudeEfforts, fastTier: "fast"),
-        ModelOption(id: "claude-fable-5-1[1m]", name: "Fable", detail: "Fable 5.1 · Most capable for your hardest and longest-running tasks", efforts: claudeEfforts),
+        ModelOption(id: "claude-fable-5-2[1m]", name: "Fable", detail: "Fable 5.2 · Most capable for your hardest and longest-running tasks", efforts: claudeEfforts),
         ModelOption(id: "sonnet", name: "Sonnet", efforts: claudeEfforts),
         ModelOption(id: "haiku", name: "Haiku"),
     ]
 
+    /// Old model ids the threads and captures keep naming: they resolve to the rows the
+    /// catalog now holds, so a renamed model is picked up where it stands.
+    private static let claudeModelAliases: [String: String] = [
+        "claude-fable-5-1": "claude-fable-5-2",
+        "claude-fable-5-1[1m]": "claude-fable-5-2[1m]",
+    ]
+
     /// A cached Claude list made only of the earlier seed's ids is that seed, persisted when another
     /// provider's live catalog arrived, not a list the CLI reported: a live list always names `opus[1m]`
-    /// and the Fable row. Re-seeding it gives launches that cached the old seed the Fable row, while a
+    /// and the Fable 5.2 row. Re-seeding it gives launches that cached the old seed the Fable row, while a
     /// live list without Fable stays as it is, since that account cannot use it.
     /// The seed with a live Claude list laid over it: a live row for a seed id lends its
     /// effort levels, description and fast tier; a row the seed lacks is appended; no seed
-    /// row is ever dropped, since threads keep naming those ids.
+    /// row is ever dropped, since threads keep naming those ids. Renamed ids (the Fable
+    /// 5.1 rows) find their successor by alias, see `claudeModelAliases`.
     private static func mergedClaudeCatalog(_ live: [ModelOption]) -> [ModelOption] {
         var merged = claudeSeed
-        for option in live {
+        // A CLI that still lists the old Fable id would otherwise append it beside the
+        // seed's row; the alias folds it onto the seed, so one Fable row shows.
+        let aliased = live.map { option -> ModelOption in
+            guard let id = claudeModelAliases[option.id] else { return option }
+            var option = option
+            option.id = id
+            return option
+        }
+        for option in aliased {
             if let index = merged.firstIndex(where: { $0.id == option.id }) {
                 var kept = merged[index]
                 // The CLI's own name carries the version ("Opus 5.5"), and recipes pick the
@@ -206,6 +222,26 @@ final class ProviderRegistry {
                     option.efforts = ACPSession.orderedEfforts(option.efforts)
                     return option
                 }
+            }
+            // The Fable row is now named after its version (5.2); a cache held the 5.1
+            // one, and both rows together would show a Fable entry twice.
+            if let claude = catalogs[.claude] {
+                let isOldFable = { (id: String) in id == "claude-fable-5-1" || id == "claude-fable-5-1[1m]" }
+                let isNewFable = { (id: String) in id == "claude-fable-5-2" || id == "claude-fable-5-2[1m]" }
+                let cleaned: [ModelOption]
+                if claude.contains(where: { isOldFable($0.id) }), claude.contains(where: { isNewFable($0.id) }) {
+                    // The cache holds both Fable rows; the older one goes.
+                    cleaned = claude.filter { !isOldFable($0.id) }
+                } else {
+                    cleaned = claude.map { option -> ModelOption in
+                        guard isOldFable(option.id) else { return option }
+                        var option = option
+                        option.id = option.id.hasSuffix("[1m]") ? "claude-fable-5-2[1m]" : "claude-fable-5-2"
+                        option.detail = "Fable 5.2 · Most capable for your hardest and longest-running tasks"
+                        return option
+                    }
+                }
+                catalogs[.claude] = cleaned
             }
         }
         if !CaptureRun.isEnabled,
@@ -493,6 +529,23 @@ final class ProviderRegistry {
     func model(_ id: String?, for provider: ProviderKind) -> ModelOption? {
         guard let id else { return nil }
         if let match = Self.match(id, in: models(for: provider)) { return match }
+        // A renamed model's old id is still named by threads and captures: when the id
+        // no longer lists but a successor does, the alias answers (Fable, 5.1 → 5.2),
+        // trying the bracketed and bare forms of what the catalog may hold.
+        if provider == .claude {
+            let candidates: [String]
+            if let bracket = id.firstIndex(of: "[") {
+                let base = String(id[..<bracket])
+                candidates = [id, base, base + "[1m]"]
+            } else {
+                candidates = [id, id + "[1m]"]
+            }
+            for candidate in candidates where candidate != id {
+                if let aliased = Self.claudeModelAliases[candidate], let match = Self.match(aliased, in: models(for: .claude)) {
+                    return match
+                }
+            }
+        }
         // A thread or pin made before Zen and Go split kept `.opencode` for a Go model;
         // the CLI is one and the same, so the Go catalogue answers.
         guard provider == .opencode, id.hasPrefix("opencode-go/") else { return nil }
