@@ -25,11 +25,17 @@ final class WorkingTreeWatch: Sendable {
     private struct IndexStamp: Equatable {
         var modified: Date?
         var size: Int?
+        /// The index file's inode, as its file-identifier bytes: an index rewritten
+        /// with an identical mtime and size still changes identifier, so the rewrite
+        /// is noticed. Nil where the volume does not report it, where the stamp is
+        /// mtime+size only, as before.
+        var inode: UInt64?
 
         init(path: String) {
             let attributes = try? FileManager.default.attributesOfItem(atPath: path)
             modified = attributes?[.modificationDate] as? Date
             size = attributes?[.size] as? Int
+            inode = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.fileIdentifierKey]).fileIdentifier
         }
     }
 
@@ -294,6 +300,7 @@ final class WorkingTreeWatch: Sendable {
         // share: the caller walks the tree into an index of its own.
         guard let generation = await settledGeneration() else { return try await capture(nil, nil) }
         let index = IndexStamp(path: indexPath)
+        var retried = false
         while true {
             let lookup: Lookup = state.withLock { state in
                 if let snapshot = state.snapshot, snapshot.generation == generation, snapshot.index == index {
@@ -317,7 +324,14 @@ final class WorkingTreeWatch: Sendable {
                     self.state.withLock { state in
                         if state.capture?.id == id { state.capture = nil }
                         if let tree {
-                            state.snapshot = Snapshot(tree: tree, generation: generation, index: index, commit: nil)
+                            // A settle during the walk advanced the generation: the tree
+                            // then holds a half-written state, so it is not stamped with
+                            // the settled one - an inert snapshot would outlive the walk
+                            // that made it. The callers' after-check re-walks instead,
+                            // and the next capture builds on what landed meanwhile.
+                            if state.generation == generation {
+                                state.snapshot = Snapshot(tree: tree, generation: generation, index: index, commit: nil)
+                            }
                         } else {
                             state.changed = nil
                         }
@@ -327,19 +341,34 @@ final class WorkingTreeWatch: Sendable {
                 state.capture = (generation, id, task)
                 return .own(task)
             }
+            // The settled generation is read before the walk and read again after it:
+            // the walk's result is stamped with `generation`, so a write that lands
+            // mid-walk must not slip under that stamp. A write that lands after the
+            // after-check is safe: the next settle counts it, so no snapshot stamped
+            // before it is reused, and its event names the directory in the reset
+            // `changed` set, which the next capture walks.
             switch lookup {
             case .tree(let tree):
-                return tree
+                if state.withLock({ $0.generation }) == generation { return tree }
             case .join(let task):
-                // A failed capture leaves the scratch index to be rebuilt, which only the
-                // owner may do: ask again rather than walking it from here.
-                if let tree = await task.value { return tree }
+                // A failed capture leaves the scratch index to be rebuilt, which only
+                // the owner may do: ask again rather than walking it from here.
+                if let tree = await task.value, state.withLock({ $0.generation }) == generation { return tree }
             case .wait(let task):
                 _ = await task.value
             case .own(let task):
                 guard let tree = await task.value else { throw CocoaError(.fileReadUnknown) }
+                if state.withLock({ $0.generation }) == generation { return tree }
+            }
+            // The generation advanced while a walk ran: its result is stamped with a
+            // generation that was not stable when the walk completed. Drop it and re-walk
+            // into a fresh index, bounded to one retry so a volume that keeps settling
+            // still answers.
+            if retried {
+                guard let tree = try? await capture(nil, nil) else { throw CocoaError(.fileReadUnknown) }
                 return tree
             }
+            retried = true
         }
     }
 

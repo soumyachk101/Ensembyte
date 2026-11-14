@@ -381,6 +381,12 @@ final class ThreadRuntime {
     /// Only the panel row that shows this head follows these; they land on the record
     /// once the head finishes (see `AppModel.finishHydraHead`).
     var hydraActivity: String?
+    /// Which clock last stopped this head — the app's watchdog (stall) or its own turn
+    /// budget — written by that clock when it stops the head, so the finished record and
+    /// the row show the actual stop cause rather than the other clock's stale "Thinking
+    /// for N min…" label. Cleared when the head is sent on for another turn, and once
+    /// `AppModel.finishHydraHead` has landed it on the head's record.
+    @ObservationIgnored var hydraLastStopReason: String?
     var hydraToolCalls = 0
     var hydraTokens = 0
     /// When the head last did anything (a tool, a word of its reply or its reasoning),
@@ -1401,6 +1407,10 @@ final class ThreadRuntime {
         // the only stop a CLI head has.
         let isFinalReport = headReportsNext
         headReportsNext = false
+        // A work turn of the head (not its report turn, which carries the last stop's
+        // reason to `finishHydraHead`): an earlier stop is old news by now, so its
+        // reason cannot follow a head that is steered on for fresh work.
+        if initialThread.hydra?.kind == .ensembyte, !isFinalReport { hydraLastStopReason = nil }
         if initialThread.hydra?.kind == .ensembyte {
             let allowance = isFinalReport
                 ? HydraBudget.reportSeconds
@@ -1410,6 +1420,11 @@ final class ThreadRuntime {
                 try? await Task.sleep(for: .seconds(allowance))
                 guard let self, !Task.isCancelled, self.currentTurnID == turn.id, self.phase != .idle else { return }
                 self.headBudgetSpent = !isFinalReport
+                // The budget clock is what stopped this turn: it writes the shared stop
+                // reason and pulls the watchdog's "Thinking for N min…" label, so the
+                // row and the finished record both show the budget, not the stall.
+                self.hydraLastStopReason = HydraBudget.stoppedNote
+                if let activity = self.hydraActivity, activity.hasPrefix("Thinking for ") { self.hydraActivity = nil }
                 self.interrupt()
             }
         }
@@ -1942,10 +1957,9 @@ final class ThreadRuntime {
     /// cleanup must instead use the same user-authored distinction as `sentPrompts`:
     /// neither a Hydra brief nor a head report is a direct user follow-up.
     private var canArchiveCompletedHeadHistory: Bool {
-        phase == .idle && !isReverting && !isLoadingHistory && sentPrompts.isEmpty
-            && pendingSend == nil && followUps.isEmpty && !followUpFlushScheduled
-            && hydraPendingReports.isEmpty && hydraBatches.isEmpty && hydraWaiting.isEmpty
-            && !hydraFlushScheduled && !hasWorkingHeads
+        isQuiescent && sentPrompts.isEmpty
+            && followUps.isEmpty && !followUpFlushScheduled
+            && !hasWorkingHeads
     }
 
     func waitForProviderHistory() async {
@@ -3053,10 +3067,7 @@ final class ThreadRuntime {
     /// An idle provider may still have a report or a user message waiting to run.
     /// Those continuations must finish before its files take part in a merge.
     var isReadyForHydraMerge: Bool {
-        phase == .idle && !isLoadingHistory && !isReverting && pendingSend == nil
-            && turns.last?.status == .completed && !hasWorkingHeads
-            && hydraPendingReports.isEmpty && hydraBatches.isEmpty && hydraWaiting.isEmpty
-            && !hydraFlushScheduled
+        isQuiescent && turns.last?.status == .completed && !hasWorkingHeads
     }
 
     /// The auto-merge has landed these turns' work: the next merge starts from what came
@@ -4318,16 +4329,30 @@ final class ThreadRuntime {
         return snapshotForSave()
     }
 
+    /// The shared "no in-flight work" core — the one list a new pending flag goes in.
+    /// It is the exact set of conditions every quiescence check on this runtime
+    /// hand-maintained, and each such check is this core plus its own small extras:
+    /// `holdsOnlyPersistedState` adds what a fresh runtime would be missing (the
+    /// session, the typed or mid-edit text, the commands in flight, the landing and
+    /// merge), `isReadyForHydraMerge` adds that the last turn completed and no head
+    /// is at work, and `canArchiveCompletedHeadHistory` adds the user-authored queues
+    /// and the working heads. A flag added here is picked up by all three at once.
+    var isQuiescent: Bool {
+        phase == .idle && !isReverting && pendingSend == nil && !isLoadingHistory
+            && hydraPendingReports.isEmpty && hydraBatches.isEmpty && hydraWaiting.isEmpty
+            && !hydraFlushScheduled
+    }
+
     /// Whether dropping this runtime loses nothing the saved document does not hold: no
     /// turn or session, nothing typed or mid-edit, nothing queued or owed to the lead,
     /// no landing under way. Panel geometry and the head links of old tool rows are UI
     /// conveniences a fresh runtime starts without, as it does after a relaunch.
     var holdsOnlyPersistedState: Bool {
-        phase == .idle && session == nil && !isReverting && pendingSend == nil && !isLoadingHistory
+        isQuiescent
+            && session == nil
             && draft.isEmpty && followUpEdit == nil && messageEdit == nil
             && approvals.isEmpty && questions.isEmpty
-            && hydraPendingReports.isEmpty && hydraBatches.isEmpty && hydraWaiting.isEmpty
-            && !hydraFlushScheduled && hydraLanding == nil && !isHydraMerging && headBudget == nil
+            && hydraLanding == nil && !isHydraMerging && headBudget == nil
             && commandTrees.isEmpty && foreignCommandBases.isEmpty && commandSettles.isEmpty
     }
 

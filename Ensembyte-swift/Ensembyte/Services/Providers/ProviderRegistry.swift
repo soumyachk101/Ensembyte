@@ -52,9 +52,10 @@ final class ProviderRegistry {
     @ObservationIgnored private let catalogDatesKey = "providerModelCatalogDates"
     @ObservationIgnored private var catalogFetchedAt: [ProviderKind: Date] = [:]
 
-    /// Providers whose CLI is being updated right now (see `updateCLIIfDue`).
-    private(set) var updatingCLIs: Set<ProviderKind> = []
     @ObservationIgnored let cliUpdatesKey = "providerCLIUpdateDates"
+    /// One provider's CLI updater is under way: `updateCLIIfDue` and `updateCLI` both hold
+    /// this while their channel update runs, so the two paths never run one binary twice.
+    @ObservationIgnored var cliUpdaterInFlight: Set<ProviderKind> = []
 
     /// Each provider CLI's installed against latest version (see `checkCLIUpdates`). Set
     /// only from `ProviderRegistry+CLIUpdates.swift`.
@@ -85,12 +86,19 @@ final class ProviderRegistry {
     var accountStates: [UUID: ProviderAccountState] = [:]
     /// Sign-ins started from the Accounts section, watched until the login lands.
     @ObservationIgnored var accountSignInWatches: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var loadingAccounts: Set<ProviderKind> = []
     @ObservationIgnored var accountsFetchedAt: [ProviderKind: Date] = [:]
 
     /// Pay-as-you-go balances (DeepSeek's credit), shown where subscriptions show their windows.
     private(set) var credits: [ProviderKind: ProviderCredits] = [:]
     private(set) var loadingCredits: Set<ProviderKind> = []
     @ObservationIgnored private var creditsFetchedAt: [ProviderKind: Date] = [:]
+    /// Per-provider generation of the in-flight credits read, the credits half of the limits
+    /// one: a read the watchdog has superseded publishes nothing (see `publishCredits`).
+    @ObservationIgnored private var creditsReadGeneration: [ProviderKind: Int] = [:]
+    /// A forced credits read that arrived while one is out, remembered and drained when it
+    /// lands rather than dropped (the limits `forcedLimitReads` on the balance side).
+    @ObservationIgnored private var forcedCreditsReads: Set<ProviderKind> = []
 
     private static let claudeEfforts = ["low", "medium", "high", "xhigh", "max"]
     private static let claudeSeed = [
@@ -461,7 +469,12 @@ final class ProviderRegistry {
         }
         await LoginEnvironment.load()
         guard let executable = executable(for: provider) else {
-            statuses[provider] = ProviderStatus()
+            // One transient PATH or executable miss must not flip a signed-in provider to
+            // "not installed": write the row back with its last-known binary, version and
+            // auth as this check copied them; only a provider that was never checked
+            // reads as missing (the empty `ProviderStatus()` above).
+            status.isChecking = false
+            statuses[provider] = status
             return
         }
         let environment = environment(for: provider)
@@ -603,19 +616,25 @@ final class ProviderRegistry {
     @discardableResult
     func updateCLIIfDue(_ provider: ProviderKind, force: Bool = false) async -> Bool {
         guard Self.updatesOwnCLI(provider), !CaptureRun.isEnabled, settings.binaryPath(for: provider).isEmpty else { return false }
-        // An update already under way is not run twice; a forced one waits for it and
-        // then runs, which is quick when that one already brought the newest version.
-        if updatingCLIs.contains(provider) {
+        // An update already under way is not run twice: this path and `updateCLI` (the
+        // Providers page's button) both hold `cliUpdaterInFlight` while their channel
+        // update runs over the same binary, and that is the only one there is. A forced
+        // ask waits for it and then runs, which is quick when that one already brought
+        // the newest version; an unforced one skips, since the interval it would
+        // re-evaluate below is the same one a running updater just stamped.
+        if cliUpdaterInFlight.contains(provider) {
             guard force else { return false }
-            while updatingCLIs.contains(provider) { try? await Task.sleep(for: .milliseconds(500)) }
+            while cliUpdaterInFlight.contains(provider) { try? await Task.sleep(for: .milliseconds(500)) }
         }
+        // Claim the shared gate: `updateCLI` holds it for its channel update, so the two
+        // paths never run a second updater over the same binary.
+        cliUpdaterInFlight.insert(provider)
+        defer { cliUpdaterInFlight.remove(provider) }
         var dates = (UserDefaults.standard.dictionary(forKey: cliUpdatesKey) as? [String: Double]) ?? [:]
         if !force, let last = dates[provider.rawValue],
            Date.now.timeIntervalSince1970 - last < Self.cliUpdateInterval { return false }
         await LoginEnvironment.load()
         guard let executable = executable(for: provider) else { return false }
-        updatingCLIs.insert(provider)
-        defer { updatingCLIs.remove(provider) }
         let environment = environment(for: provider)
         // Through whoever installed it: `claude update` on a Homebrew cask or an npm global
         // reports success and changes nothing.
@@ -859,11 +878,16 @@ final class ProviderRegistry {
     func setPlanLimits(_ limits: PlanLimits, for provider: ProviderKind) {
         planLimits[provider] = limits
         limitsFetchedAt[provider] = .now
+        // A manual or account-switch write supersedes any read still out for the old
+        // generation, so its result is dropped by `publishLimits` instead of clobbering
+        // the number just written.
+        limitsReadGeneration[provider] = startLimitsRead(for: provider)
     }
 
     func forgetPlanLimits(_ provider: ProviderKind) {
         planLimits[provider] = nil
         limitsFetchedAt[provider] = nil
+        limitsReadGeneration[provider] = startLimitsRead(for: provider)
     }
 
     /// Runs a forced read that had to wait because a read was already out for this provider.
@@ -883,8 +907,9 @@ final class ProviderRegistry {
             let environment = environment(for: .codex)
             let outcome = try await CodexSession.consumeResetCredit(executable: executable, environment: environment, creditID: creditID)
             if let limits = try? await CodexSession.readPlanLimits(executable: executable, environment: environment) {
-                planLimits[.codex] = limits
-                limitsFetchedAt[.codex] = .now
+                // Through the generation guard: a read of the pre-redeem windows still out
+                // cannot republish over these.
+                setPlanLimits(limits, for: .codex)
             }
             return outcome
         case .zai:
@@ -892,8 +917,7 @@ final class ProviderRegistry {
             guard !apiKey.isEmpty, let creditID else { throw ResetCreditError.unknownOutcome }
             let outcome = try await ZaiAPI.consumeResetCredit(apiKey: apiKey, creditID: creditID)
             if let limits = await ZaiAPI.planLimits(apiKey: apiKey) {
-                planLimits[.zai] = limits
-                limitsFetchedAt[.zai] = .now
+                setPlanLimits(limits, for: .zai)
             }
             return outcome
         default:
@@ -905,7 +929,8 @@ final class ProviderRegistry {
     /// read unless forced. Like the plan limits, the read runs on its own task, so closing
     /// the popover that asked for it cannot cancel it.
     func refreshCredits(_ provider: ProviderKind, force: Bool = false) {
-        guard CreditsReader.exposesCredits(provider), !loadingCredits.contains(provider) else { return }
+        guard CreditsReader.exposesCredits(provider) else { return }
+        guard !loadingCredits.contains(provider) else { if force { forcedCreditsReads.insert(provider) }; return }
         // Command Code's key is the CLI's own login unless Settings holds one.
         let apiKey = provider == .commandcode
             ? (CommandCodeAPI.apiKey(environment: environment(for: .commandcode)) ?? "")
@@ -916,13 +941,38 @@ final class ProviderRegistry {
         }
         if !force, let fetched = creditsFetchedAt[provider], Date.now.timeIntervalSince(fetched) < 60 { return }
         loadingCredits.insert(provider)
+        let generation = startCreditsRead(for: provider)
+        let watchdog = Task { try? await Task.sleep(for: .seconds(25)); loadingCredits.remove(provider); drainForcedCreditsRead(provider) }
         Task {
+            defer { watchdog.cancel(); loadingCredits.remove(provider); drainForcedCreditsRead(provider) }
             let balance = await CreditsReader.read(provider, apiKey: apiKey)
-            loadingCredits.remove(provider)
             guard let balance else { return }
-            credits[provider] = balance
-            creditsFetchedAt[provider] = .now
+            // A read the watchdog already superseded publishes nothing, so a slow pre-spend
+            // balance cannot write itself over the newer one.
+            publishCredits(balance, for: provider, generation: generation)
         }
+    }
+
+    /// Bumps the provider's credits-read generation and returns the new value to capture:
+    /// each new read supersedes the one before it, so a superseded read's write is dropped
+    /// by `publishCredits` rather than landing after the watchdog cleared the slot.
+    private func startCreditsRead(for provider: ProviderKind) -> Int {
+        let generation = (creditsReadGeneration[provider] ?? 0) + 1
+        creditsReadGeneration[provider] = generation
+        return generation
+    }
+
+    /// Writes a finished read's balance only if no newer read has superseded it.
+    private func publishCredits(_ balance: ProviderCredits, for provider: ProviderKind, generation: Int) {
+        guard creditsReadGeneration[provider] == generation else { return }
+        credits[provider] = balance
+        creditsFetchedAt[provider] = .now
+    }
+
+    /// Runs a forced credits read that had to wait because a read was already out for this provider.
+    private func drainForcedCreditsRead(_ provider: ProviderKind) {
+        guard forcedCreditsReads.remove(provider) != nil else { return }
+        refreshCredits(provider, force: true)
     }
 
     /// A turn just spent tokens, so the cached balance is older than the spend. The next

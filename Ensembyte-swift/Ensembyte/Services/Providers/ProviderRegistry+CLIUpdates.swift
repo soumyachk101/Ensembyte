@@ -40,8 +40,15 @@ extension ProviderRegistry {
     /// is served from the cache; `freshness: 0` asks every feed again.
     func checkCLIUpdates(freshness: TimeInterval = 0) async {
         if let running = cliUpdateCheck {
+            // Await whatever sweep is out (a page-open check must not be dropped just
+            // because the six-hour loop is mid-run) and re-evaluate that sweep's
+            // freshness, so an open page that found a check older than its window gets
+            // its own run rather than the loop's.
             await running.value
-            guard freshness == 0 else { return }
+            guard freshness == 0 else {
+                await checkCLIUpdates(freshness: freshness)
+                return
+            }
         }
         let task = Task { [weak self] in
             guard let self else { return }
@@ -145,6 +152,14 @@ extension ProviderRegistry {
             // Monitoring or the provider switched off while it waited: the update is called off.
             guard cliUpdates[provider]?.phase == .waiting else { return }
         }
+        // The automatic updater may hold the same binary in its channel update; one updater
+        // at a time, so wait its way out rather than run a second `update` over it.
+        while cliUpdaterInFlight.contains(provider) {
+            guard cliUpdates[provider]?.phase.isBusy == true else { return }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        cliUpdaterInFlight.insert(provider)
+        defer { cliUpdaterInFlight.remove(provider) }
         update.phase = .updating
         cliUpdates[provider] = update
         await LoginEnvironment.load()
@@ -168,22 +183,28 @@ extension ProviderRegistry {
         UserDefaults.standard.set(dates, forKey: cliUpdatesKey)
         await refresh(provider)
         let after = status(provider).version
-        update = cliUpdates[provider] ?? update
-        update.installed = after
-        if let latest = update.latest, let after, CLIUpdates.isNewer(latest, than: after) {
+        // The row may have gone while the update ran (monitoring off clears it); a cleared
+        // row has no owner to show `.updated`, so no write-back for one.
+        guard var row = cliUpdates[provider] else { return }
+        row.installed = after
+        if let latest = row.latest, let after, CLIUpdates.isNewer(latest, than: after) {
             // Homebrew can lag an upstream release: `brew upgrade` succeeds with nothing to install.
             failUpdate(provider, after == before
                 ? "\(channel.command) finished, but v\(after) is still installed"
                 : "Updated to v\(after); v\(latest) is not out on this channel yet")
             return
         }
-        update.phase = .updated
-        cliUpdates[provider] = update
+        row.phase = .updated
+        cliUpdates[provider] = row
         await loadCatalog(provider, force: true)
     }
 
+    /// Records a failed update. A row cleared in the meantime (the provider's monitoring
+    /// switched off) is re-created rather than left out: a `.current`/`.available` answer
+    /// about the version the update just tried to move past is exactly what a failed
+    /// update should not leave standing.
     private func failUpdate(_ provider: ProviderKind, _ message: String) {
-        guard var update = cliUpdates[provider] else { return }
+        var update = cliUpdates[provider] ?? CLIUpdateStatus(phase: .failed)
         update.phase = .failed
         update.updateFailed = true
         update.error = message

@@ -620,7 +620,10 @@ final class AppModel {
               // A thread shown beside the selection, in its panel, is on screen.
               thread.parentThreadID == nil || thread.parentThreadID != selectedThreadID,
               !thread.isInPanel, thread.hydra?.status != .running,
-              !runtime.isRunning, runtime.draft.isEmpty, runtime.followUps.isEmpty,
+              // The idle phase and the empty draft are inside
+              // `runtime.holdsOnlyPersistedState` (via `isQuiescent`), so only the
+              // queue that no shared list carries is checked here.
+              runtime.followUps.isEmpty,
               runtime.holdsOnlyPersistedState, !sessionsToRelease.contains(id),
               autoContinue.resumesAt[id] == nil, terminals.sessions(for: id).isEmpty,
               !children(of: id).contains(where: {

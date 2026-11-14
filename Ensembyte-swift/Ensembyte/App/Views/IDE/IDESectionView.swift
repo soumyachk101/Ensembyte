@@ -181,6 +181,14 @@ private struct FileTreeColumn: View {
             loadedChildren.removeAll()
             fileFilter = ""
         }
+        // The drift tick lives here, not in the Changes column's poll, so an
+        // agent write to an open buffer is detected on this tab too.
+        .task(id: directory) {
+            while !Task.isCancelled {
+                store.checkDiskDrift()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
     /// The filter field up top: while it has text, the tree narrows to the
@@ -521,16 +529,18 @@ private struct EditorColumn: View {
 
 /// The Changes tab: the working tree's diff, polled every two seconds while
 /// on screen. The changed files list with their +/- counts; a tapped file
-/// shows its hunks inline, added lines green-tinted, removed red. Each poll
-/// also asks the editor's store whether its open buffers drifted on disk.
+/// shows its hunks inline, added lines green-tinted, removed red.
 private struct ChangesColumn: View {
     let directory: String
     let store: IDEEditorStore
 
     @State private var files: [DiffFile] = []
-    @State private var selectedDiff: DiffFile?
+    @State private var selectedDiffPath: String?
     @State private var hasLoaded = false
     @State private var isPolling = false
+    /// The directory the pane is pointed at now: an in-flight poll captures the
+    /// one it started against and drops its result once this has moved on.
+    @State private var currentDirectory = ""
 
     @ViewBuilder
     var body: some View {
@@ -555,6 +565,7 @@ private struct ChangesColumn: View {
         // the task cancels when the view disappears, so switching tabs stops
         // it, and `isPolling` keeps one poll in flight at a time.
         .task(id: directory) {
+            currentDirectory = directory
             while !Task.isCancelled {
                 guard !isPolling else { break }
                 isPolling = true
@@ -597,6 +608,14 @@ private struct ChangesColumn: View {
         }
     }
 
+    /// The diff on display, looked up from the newest poll by path so the open
+    /// detail always shows the file's current hunks instead of a frozen
+    /// snapshot; it reads back nil when the path leaves the working tree.
+    private var selectedDiff: DiffFile? {
+        guard let selectedDiffPath else { return nil }
+        return files.first { $0.path == selectedDiffPath }
+    }
+
     private var diffDetail: some View {
         Group {
             if let selectedDiff {
@@ -613,7 +632,7 @@ private struct ChangesColumn: View {
     }
 
     private func row(_ file: DiffFile) -> some View {
-        let isSelected = selectedDiff?.id == file.id
+        let isSelected = selectedDiffPath == file.path
         return HStack(spacing: 6) {
             Image(systemName: symbol(for: file))
                 .font(.system(size: 11))
@@ -643,7 +662,7 @@ private struct ChangesColumn: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            selectedDiff = file
+            selectedDiffPath = file.path
         }
         .accessibilityLabel("\(file.path), plus \(file.additions) lines, minus \(file.deletions) lines")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -726,6 +745,9 @@ private struct ChangesColumn: View {
     /// truncated patch would leave off, and the status-only paths (untracked
     /// files) come in so the list matches what the working tree shows.
     private func poll() async {
+        // A thread switch cancels the poll loop but not this in-flight work, so capture the
+        // directory this poll started with and re-check it before committing below.
+        let startedIn = directory
         let git = Git(directory)
         let changes = await git.workingChanges()
         var parsed = DiffParser.parse(changes.patch)
@@ -761,13 +783,12 @@ private struct ChangesColumn: View {
             .filter { !listed.contains($0) }
             .map { DiffFile(path: $0, change: .added, isBinary: false, hunks: []) }
 
-        if let selected = selectedDiff, !parsed.contains(where: { $0.id == selected.id }) {
-            selectedDiff = nil
+        // A stale poll from the previous thread's directory must not write onto the new one.
+        guard startedIn == currentDirectory else { return }
+        if let selectedDiffPath, !parsed.contains(where: { $0.path == selectedDiffPath }) {
+            self.selectedDiffPath = nil
         }
         files = parsed
         hasLoaded = true
-        // The agent's writes land on disk in the moments between polls; this
-        // tick is where an open editor buffer hears about its own.
-        store.checkDiskDrift()
     }
 }

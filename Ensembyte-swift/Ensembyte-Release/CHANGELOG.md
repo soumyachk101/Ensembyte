@@ -2,6 +2,22 @@
 
 All notable changes to Ensembyte for macOS are documented here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are the release tags without the `v`.
 
+## [1.1.20] - 2026-11-14
+
+### Multi-Agent & Turn Budgeting
+- Accurate Dual-Clock Stop Reason Attribution (`AppModel+Hydra.swift`, `ThreadRuntime.swift`, `Hydra.swift`): Head cards and persisted history now explicitly distinguish whether a head was stopped by watchdog stall or by turn budget exhaustion (`HydraBudget.stoppedNote`), eliminating misleading activity labels and ensuring clear diagnosis in multi-agent runs.
+- Capture Run Isolation (`AppModel+Hydra.swift`): Prohibits launching real Hydra heads during automated tour and capture runs (`CaptureRun.isEnabled`), writing an inline timeline note instead so work stays in-thread without spawning worktrees or mutating capture storage.
+- Unified Quiescence Core (`ThreadRuntime.swift`): Consolidated dispersed idle, revert, prompt-queue, and Hydra batch checks into a single canonical `isQuiescent` property used across history archiving, merge readiness, and auto-continuation.
+
+### Git & Working Tree
+- Working Tree Inode Rewrite Detection (`WorkingTreeWatch.swift`): Extended `IndexStamp` to track volume file-identifiers (`inode` via `.fileIdentifierKey`), detecting Git index file rewrites even when file size and mtime are identical.
+- Mid-Walk Double-Generation Check (`WorkingTreeWatch.swift`): Verifies settled generation before and after tree walks, discarding stale snapshots if background Git operations land during the walk, backed by bounded single-retry fallback.
+
+### Providers & Reliability
+- Crash Approval Drainage & Session Teardown (`ACPSession.swift`, `ClaudeSession.swift`, `CodexSession.swift`): Automatically resolves stranded tool approvals, drops orphaned permission requests, fails running turns with `.failed` status, and reconciles archive confirmation on unexpected provider disconnects.
+- Generation-Guarded Credits Polling (`ProviderRegistry.swift`, `ProviderRegistry+Accounts.swift`, `ProviderRegistry+CLIUpdates.swift`): Guarded provider credit balance and account queries with generation sequences and a 25-second watchdog timer, preventing slow out-of-order balance fetches from overwriting newer post-spend balances.
+- IDE Empty State Polish (`IDESectionView.swift`): Added empty workspace placeholder with project-opening controls when no directory is open, improved tab selection indicators, and refined diff drawer toggling.
+
 ## [1.1.19] - 2026-11-13
 
 ### New features

@@ -48,6 +48,16 @@ extension ProviderRegistry {
     func refreshAccounts(_ provider: ProviderKind, force: Bool = true) async {
         guard provider.supportsAccounts else { return }
         if !force, let fetched = accountsFetchedAt[provider], Date.now.timeIntervalSince(fetched) < 60 { return }
+        // The timestamp is stamped before the sweep, which is what makes the "fresh within
+        // a minute" guard on the next ask work; while the sweep is out, a second call for
+        // the same provider awaits it here rather than stamping again and starting an
+        // unbounded parallel sweep.
+        if loadingAccounts.contains(provider) {
+            while loadingAccounts.contains(provider) { try? await Task.sleep(for: .milliseconds(500)) }
+            return
+        }
+        loadingAccounts.insert(provider)
+        defer { loadingAccounts.remove(provider) }
         accountsFetchedAt[provider] = .now
         await LoginEnvironment.load()
         let list = accounts.accounts(for: provider)
@@ -60,8 +70,10 @@ extension ProviderRegistry {
 
     func refreshAccount(_ account: ProviderAccount) async {
         guard let executable = executable(for: account.provider) else { return }
+        // Check and set on the live row, not on a copy made before the wait: a caller that
+        // started while this one was still settling its guard must not double-start.
+        guard accountState(account.id).isChecking == false else { return }
         var state = accountState(account.id)
-        guard !state.isChecking else { return }
         state.isChecking = true
         accountStates[account.id] = state
         defer { accountStates[account.id]?.isChecking = false }
@@ -127,7 +139,14 @@ extension ProviderRegistry {
                 try? await Task.sleep(for: .seconds(3))
                 guard let self, !Task.isCancelled else { return }
                 guard let current = self.accounts.account(account.id),
-                      let executable = self.executable(for: current.provider) else { break }
+                      let executable = self.executable(for: current.provider) else {
+                    // The account vanished or its CLI disappeared: there is no live watch
+                    // to clear the wait, so drop that account's sign-in watch state now
+                    // rather than leave `isWaitingForSignIn` stuck with nothing watching.
+                    self.accountStates[account.id]?.isWaitingForSignIn = false
+                    self.accountSignInWatches[account.id] = nil
+                    break
+                }
                 let auth = await Self.auth(current.provider, executable, self.environment(for: current.provider, account: current))
                 if case .signedIn = auth {
                     self.accountStates[account.id]?.isWaitingForSignIn = false

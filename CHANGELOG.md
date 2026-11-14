@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The umbrella version tracks cross-project work. Each subproject (Ensembyte-swift,
 Ensembyte-rust) keeps its own changelog for platform-specific changes.
 
+## [1.1.20] - 2026-11-14
+
+Ensembyte 1.1.20 enhances multi-agent reliability and system robustness in `Ensembyte-swift`—adding accurate dual-clock attribution for Hydra turn budgeting versus watchdog stalls, volume inode tracking for Git index rewrite detection, double-generation verification against tree walk race conditions, orphaned tool approval cleanup on provider crashes, and atomic generation guards for credit balance polling.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **Hydra Turn Budgeting & Dual-Clock Attribution (`AppModel+Hydra.swift`, `ThreadRuntime.swift`, `Hydra.swift`)**: Head cards and persisted history now explicitly distinguish whether a head was stopped by the watchdog stall timer (`HydraWatchdog.stalledNote`) or by turn budget exhaustion (`HydraBudget.stoppedNote`), eliminating misleading activity labels and ensuring clear diagnosis in multi-agent runs.
+- **Capture Run Isolation (`AppModel+Hydra.swift`)**: Prohibits launching real Hydra heads during automated tour and capture runs (`CaptureRun.isEnabled`), writing an inline timeline note instead so work stays in-thread without spawning worktrees or mutating capture storage.
+- **Unified Quiescence Core (`ThreadRuntime.swift`)**: Consolidated dispersed idle, revert, prompt-queue, and Hydra batch checks into a single canonical `isQuiescent` property used across history archiving, merge readiness, and auto-continuation.
+- **Git Working Tree Inode Rewrite Detection (`WorkingTreeWatch.swift`)**: Extended `IndexStamp` to track volume file-identifiers (`inode` via `.fileIdentifierKey`), detecting Git index file rewrites even when file size and mtime are identical.
+- **Tree Walk Double-Generation Verification (`WorkingTreeWatch.swift`)**: Enforces pre- and post-walk generation verification during tree captures, discarding race-condition snapshots if background Git operations land during the walk, backed by bounded single-retry fallback.
+- **Provider Connection Crash Teardown & Approval Drainage (`ACPSession.swift`, `ClaudeSession.swift`, `CodexSession.swift`)**: Automatically resolves stranded tool approvals, drops orphaned permission requests, fails running turns with `.failed` status, and reconciles archive confirmation on unexpected connection drops.
+- **Provider Credits Read-Generation Guards (`ProviderRegistry.swift`, `ProviderRegistry+Accounts.swift`, `ProviderRegistry+CLIUpdates.swift`)**: Guarded provider credit balance and account queries with generation sequences and a 25-second watchdog timer, preventing slow out-of-order balance fetches from overwriting newer post-spend balances.
+- **IDE Empty State Polish (`IDESectionView.swift`)**: Added empty workspace placeholder with project-opening controls when no directory is open, improved tab selection indicators, and refined diff drawer toggling.
+
+## [1.1.19] - 2026-11-13
+
+Ensembyte 1.1.19 introduces IDE Mode in `Ensembyte-swift` with an editable code view, live file tree, working-tree changes tab, and embedded terminal pane directly beside the conversation, alongside disk-drift detection for agent edits, workspace persistence across relaunches, and Fable 5.2 catalog consolidation.
+
+### macOS Updates (`Ensembyte-swift/`)
+- **IDE Mode (`IDESectionView`, `IDEEditorStore`, `IDEFileTree`, `IDEFileIO`)**: A third docked column toggled from chat chrome, featuring a searchable file tree with per-type icons, an editable code editor with unsaved markers and Cmd-S save, and a working-tree Changes tab with live unified diffs.
+- **Agent-Edit Safety in the IDE Editor (`IDEEditorStore.checkDiskDrift`)**: Open buffers actively track disk state; when an agent modifies a file mid-edit, a conflict banner lets users choose between "Reload" or "Keep my edits", while clean buffers silently follow agent writes.
+- **Terminal Tab in the IDE Pane (`IDESectionView+Terminal.swift`)**: Hosts the thread shell directly beside the code view with restart controls and exited-shell indicators, shared with the chat terminal.
+- **Pane State Persistence (`IDEEditorStore+Persistence.swift`)**: Open files, tab selection, and dirty flags persist under Application Support across application relaunches.
+- **Fable 5.2 Model Picker Consolidation (`ProviderRegistry.swift`, `CommandCodeAPI.swift`)**: Folded seeded Fable row and live CLI catalog into one unified Fable 5.2 entry, aliasing legacy `claude-fable-5-1` identifiers.
+- **Status Bar & Diff Summaries (`IDESectionView.swift`, `HydraCookbook.swift`)**: Added editor status bar showing language and line counts, aggregated `+N / -M` line summaries across modified files, and updated Hydra recipes to Fable 5.2.
+
 ## [1.1.18] - 2026-11-12
 
 Ensembyte 1.1.18 strengthens secret hygiene and GitHub App identity across both clients—fixing the `ensembyte[bot]` user ID (`352044576`), adding automatic `Co-authored-by` git-hook attribution, eliminating plaintext credential fallbacks, hardening MCP proxy/OAuth handling, stabilizing provider lifecycle polling, and isolating per-directory Git status caching in `Ensembyte-swift`.

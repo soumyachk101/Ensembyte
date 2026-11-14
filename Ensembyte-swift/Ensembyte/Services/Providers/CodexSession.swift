@@ -1356,8 +1356,24 @@ final class CodexSession: ProviderSession {
         finalErrors.removeAll()
         lastAgentMessage = nil
         turnID = nil
+        // A head still running a turn will never report its own end on a dead
+        // connection; end it here so the head does not await a .agentFinished that
+        // cannot come. Heads that already finished keep their (cleared) marker and
+        // are dropped without a duplicate event.
+        let error = TextCleanup.lastLines(tail)
+        for head in headThreads where headTurns[head] != nil {
+            onEvent?(.agentFinished(agentID: head, status: .failed, summary: error))
+        }
+        headTurns.removeAll()
+        headThreads.removeAll()
+        // The archive was marked locally before the connection died but its
+        // confirmation never arrived; reconcile it so a resumed head does not
+        // treat it as unconfirmed.
+        if historyArchived, !archiveConfirmed {
+            archiveConfirmed = true
+        }
         guard !isStopping else { return }
-        onEvent?(.exited(error: TextCleanup.lastLines(tail)))
+        onEvent?(.exited(error: error))
     }
 
     private func policySettings(_ mode: RuntimeMode) -> PolicySettings {

@@ -510,6 +510,15 @@ extension AppModel {
             runtime(for: parentID).appendHydraNote("This thread is in single-agent mode, so no heads go out: the work stays in this thread.")
             return nil
         }
+        // A capture run is recorded with its defaults wiped, and nothing on the head-launch
+        // path reads CaptureRun: ungated, a lead whose capture state has hydra on would
+        // spawn real heads, run real worktrees and land real patches into the capture's
+        // storage folder. So a capture never launches a real head; the head's place in the
+        // lead's timeline is a note, and this is the one point every launch goes through.
+        guard !CaptureRun.isEnabled else {
+            runtime(for: parentID).appendHydraNote("This app is in a capture run, so no heads go out: the work stays in this thread.")
+            return nil
+        }
         guard let head = insertHydraHead(from: parentID, task: task, origin: origin, batchID: batchID, preferredIndex: preferredIndex, project: project, profile: profile) else { return nil }
         Task { await startEnsembyteHead(head.id, attachments: attachments, brief: brief) }
         return head
@@ -726,9 +735,15 @@ extension AppModel {
             $0.finishedAt = .now
             if let landing { $0.landing = landing }
             if let live {
-                if let activity = live.hydraActivity { $0.activity = activity }
+                // The clock that actually stopped the head wins: its reason lands on
+                // the record instead of the other clock's "Thinking for N min…" label,
+                // which may still be showing. A head that finished on its own carries
+                // only the live label, as before.
+                if let reason = live.hydraLastStopReason ?? live.hydraActivity { $0.activity = reason }
                 $0.toolCalls = max($0.toolCalls, live.hydraToolCalls)
                 $0.tokens = max($0.tokens, live.hydraTokens)
+                // The reason has landed; a next turn of this head's starts without it.
+                live.hydraLastStopReason = nil
             }
         }
         // Opt-in: a finished head leaves the panel on its own, for the sidebar under its
@@ -1192,6 +1207,11 @@ extension AppModel {
             if idle >= HydraWatchdog.stalledAfter, headRuntime.hydraEditCount == 0, HydraWatchdog.toolCounts[head.id] == tools {
                 HydraWatchdog.stalledHeadIDs.insert(head.id)
                 HydraWatchdog.labelled.remove(head.id)
+                // The watchdog clock is what stopped this head: it writes the shared stop
+                // reason and pulls the "Thinking for N min…" label it had put on, so the
+                // row and the finished record show the stall, not the budget clock.
+                headRuntime.hydraLastStopReason = HydraWatchdog.stalledNote
+                if let activity = headRuntime.hydraActivity, activity.hasPrefix("Thinking for ") { headRuntime.hydraActivity = nil }
                 stopHydraHead(head.id)
                 continue
             }

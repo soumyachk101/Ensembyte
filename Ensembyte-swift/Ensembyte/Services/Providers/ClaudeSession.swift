@@ -730,7 +730,19 @@ final class ClaudeSession: ProviderSession {
         let reason = launchError ?? TextCleanup.lastLines(tail)
         launchError = reason
         pendingControl.failAll(ProviderError.failed(reason ?? "Claude exited."))
+        // A turn still live when the connection died ends here, not in `handleResult`:
+        // release its approvals and report its end so the runtime books the checkpoint.
+        // A clean user-initiated stop (`isStopping`) already closed the turn via
+        // `interrupt()`; a launch that never started is `start()`'s to throw.
+        let turnLive = turnActive
         turnActive = false
+        if turnLive, isStarted, !isStopping {
+            for requestID in pendingTools.keys { onEvent?(.requestResolved(id: requestID)) }
+            pendingTools.removeAll()
+            toolNames.removeAll()
+            mainStream = StreamState()
+            onEvent?(.turnCompleted(status: .failed, error: TextCleanup.lastLines(tail) ?? "Claude exited."))
+        }
         // A launch that failed is reported by `start()` throwing; only a session that
         // ran says it exited.
         guard !isStopping, isStarted else { return }

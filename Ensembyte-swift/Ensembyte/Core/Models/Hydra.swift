@@ -205,6 +205,9 @@ enum HydraBudget {
     /// What a stopped head gets to write its report in.
     static let reportSeconds: TimeInterval = 3 * 60
 
+    /// What a budget-stopped head's record and row show for why it stopped: the two clocks
+    /// that stop a head each write their own stop note, so the screen says which one did.
+    static let stoppedNote = "Stopped: its turn ran over its time budget; Ensembyte asked it for its report. Send it on from the panel to give it more time."
     static let pacingNote = "[Ensembyte] You have run \(pacingTools) tools without changing a file. If the task is research, reply with your findings now. Otherwise act on what you know: make the change, or reply with what blocks you."
     static let wrapUpNote = "[Ensembyte] Your budget is nearly spent. Finish now: complete the smallest correct version of the task, then reply with your report."
     static let finalNote = "[Ensembyte] Your budget is spent and your tools are gone. Reply now with your report: what you changed, how far it got, and what is left."

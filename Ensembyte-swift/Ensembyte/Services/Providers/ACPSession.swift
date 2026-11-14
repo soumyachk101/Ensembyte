@@ -630,7 +630,14 @@ final class ACPSession: ProviderSession {
 
     private func handleClose(_ tail: String) {
         if promptActive {
+            // finishPrompt releases every pending approval and ends the turn the same
+            // way a clean stop would, so a dead connection strands no approval or turn.
             finishPrompt(nil, error: ProviderError.failed(TextCleanup.lastLines(tail) ?? "The agent exited."))
+        } else if !pendingPermissions.isEmpty {
+            // A permission card that outlived its prompt (its turn already ended) still
+            // holds the runtime's approvals open; release it on a dead connection.
+            for key in pendingPermissions.keys { onEvent?(.requestResolved(id: key)) }
+            pendingPermissions.removeAll()
         }
         guard !isStopping else { return }
         onEvent?(.exited(error: TextCleanup.lastLines(tail)))
